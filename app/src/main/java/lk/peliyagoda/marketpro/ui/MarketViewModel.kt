@@ -26,9 +26,12 @@ class MarketViewModel(private val repository: MarketRepository) : ViewModel() {
     private val purchaseWriteMutex = Mutex()
     val date = MutableStateFlow(LocalDate.now())
     val items = repository.items.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val categories = repository.categories.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val requisitions = date.flatMapLatest { repository.requirements(it.toString()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val purchases = date.flatMapLatest { repository.purchases(it.toString()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val additions = date.flatMapLatest { repository.additions(it.toString()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     init {
@@ -42,6 +45,15 @@ class MarketViewModel(private val repository: MarketRepository) : ViewModel() {
         viewModelScope.launch {
             val outcome = runCatching { withContext(Dispatchers.IO) { work() } }
             result(outcome)
+        }
+    }
+
+    fun addCategory(name: String, done: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val ok = runCatching {
+                withContext(Dispatchers.IO) { repository.addCategory(name) }
+            }.getOrDefault(false)
+            done(ok)
         }
     }
 
@@ -86,6 +98,14 @@ class MarketViewModel(private val repository: MarketRepository) : ViewModel() {
         val dateSnapshot = date.value.toString()
         doWork({ purchaseWriteMutex.withLock {
             repository.savePurchase(dateSnapshot, itemId, grams, cents)
+        } }, done)
+    }
+
+    fun addPurchaseAddition(itemId: Long, grams: Long, priceCentsPerKg: Long,
+                            done: (Result<Unit>) -> Unit) {
+        val day = date.value.toString()
+        doWork({ purchaseWriteMutex.withLock {
+            repository.addPurchaseAddition(day, itemId, grams, priceCentsPerKg)
         } }, done)
     }
 
