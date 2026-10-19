@@ -96,14 +96,18 @@ fun MarketProApp(vm: MarketViewModel) {
         val snackbar = remember { SnackbarHostState() }
         val date by vm.date.collectAsState()
         val items by vm.items.collectAsState()
+        val categoriesDb by vm.categories.collectAsState()
+        val categories = categoriesDb.map { it.name }.ifEmpty { listOf("Vegetables", "Fruits") }
         val reqs by vm.requisitions.collectAsState()
         val purchases by vm.purchases.collectAsState()
-        val rows = remember(date, items, reqs, purchases) {
+        val additions by vm.additions.collectAsState()
+        val rows = remember(date, items, reqs, purchases, additions) {
             // Prevent mixing stale StateFlow emissions when the day is changed rapidly.
             consolidate(
                 items,
                 reqs.filter { it.businessDate == date.toString() },
-                purchases.filter { it.businessDate == date.toString() }
+                purchases.filter { it.businessDate == date.toString() },
+                additions.filter { it.businessDate == date.toString() }
             )
         }
         var tab by remember { mutableIntStateOf(0) }
@@ -183,11 +187,13 @@ fun MarketProApp(vm: MarketViewModel) {
 
         if (catalogOpen) CatalogSheet(
             items = items,
+            categories = categories,
             onClose = { catalogOpen = false },
             add = { name, category -> vm.addItem(name, category) {
                 message(if (it) "Item added" else "Item already exists or name is invalid")
             } },
-            rename = { id, newName, done -> vm.renameItem(id, newName, done) }
+            rename = { id, newName, done -> vm.renameItem(id, newName, done) },
+            addCategory = { name, done -> vm.addCategory(name, done) }
         )
 
         Scaffold(
@@ -279,11 +285,11 @@ fun MarketProApp(vm: MarketViewModel) {
         ) { innerPadding ->
             Box(Modifier.fillMaxSize().padding(innerPadding)) {
                 when (tab) {
-                    0 -> DashboardScreen(date, rows, onExport = {
+                    0 -> DashboardScreen(date, rows, categories, onExport = {
                         pendingCsv = marketCsv(date.toString(), rows)
                         csvSaver.launch("Market-${date}.csv")
                     })
-                    1 -> KitchensScreen(items, reqs, vm, ::message)
+                    1 -> KitchensScreen(items, categories, reqs, vm, ::message)
                     else -> MarketScreen(rows, vm, ::message)
                 }
             }
