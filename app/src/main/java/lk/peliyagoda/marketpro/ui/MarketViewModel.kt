@@ -23,6 +23,7 @@ import java.time.LocalDate
 class MarketViewModel(private val repository: MarketRepository) : ViewModel() {
     // Serialize rapid edits and deletions so the newest quantity always wins.
     private val requirementWriteMutex = Mutex()
+    private val purchaseWriteMutex = Mutex()
     val date = MutableStateFlow(LocalDate.now())
     val items = repository.items.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val requisitions = date.flatMapLatest { repository.requirements(it.toString()) }
@@ -83,7 +84,9 @@ class MarketViewModel(private val repository: MarketRepository) : ViewModel() {
 
     fun savePurchase(itemId: Long, grams: Long, cents: Long, done: (Result<Unit>) -> Unit) {
         val dateSnapshot = date.value.toString()
-        doWork({ repository.savePurchase(dateSnapshot, itemId, grams, cents) }, done)
+        doWork({ purchaseWriteMutex.withLock {
+            repository.savePurchase(dateSnapshot, itemId, grams, cents)
+        } }, done)
     }
 
     fun prepareBackup(done: (Result<String>) -> Unit) {

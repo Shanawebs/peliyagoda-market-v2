@@ -47,6 +47,7 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -59,6 +60,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import lk.peliyagoda.marketpro.data.ItemEntity
 import lk.peliyagoda.marketpro.data.MarketConstants
@@ -107,19 +109,19 @@ private fun EmptyState(title: String, detail: String) {
 @Composable
 private fun StatusTag(row: ConsolidatedRow) {
     val status = when {
-        row.purchase == null -> "PENDING"
+        row.purchase == null || row.purchasedGrams == 0L -> "PENDING"
         row.varianceGrams > 0 -> "EXTRA +${MarketMath.kg(row.varianceGrams)} kg"
         row.varianceGrams < 0 -> "SHORT ${MarketMath.kg(-row.varianceGrams)} kg"
         else -> "MATCHED"
     }
     val color = when {
-        row.purchase == null -> ProColors.muted
+        row.purchase == null || row.purchasedGrams == 0L -> ProColors.muted
         row.varianceGrams > 0 -> ProColors.teal
         row.varianceGrams < 0 -> ProColors.red
         else -> ProColors.green
     }
     val bg = when {
-        row.purchase == null -> Color(0xFFE8EDF0)
+        row.purchase == null || row.purchasedGrams == 0L -> Color(0xFFE8EDF0)
         row.varianceGrams > 0 -> Color(0xFFE2F3FB)
         row.varianceGrams < 0 -> Color(0xFFFFE8EA)
         else -> Color(0xFFE4F5EA)
@@ -299,7 +301,7 @@ private fun RequirementCard(
 ) {
     // Keep the typing draft stable across database Flow updates.
     var gramsText by remember(entry.businessDate, entry.kitchen, entry.itemId) {
-        mutableStateOf(MarketMath.editKg(entry.quantityGrams))
+        mutableStateOf(MarketMath.editKgOrBlank(entry.quantityGrams))
     }
     var confirmDelete by remember { mutableStateOf(false) }
     if (confirmDelete) AlertDialog(
@@ -312,7 +314,7 @@ private fun RequirementCard(
             onDelete()
         }) { Text("Remove", color = ProColors.red) } }
     )
-    val gramsValue = if (gramsText.isBlank()) 0L else MarketMath.parseGrams(gramsText)
+    val gramsValue = MarketMath.parseBlankGrams(gramsText)
     val invalid = gramsValue == null || gramsValue > 1_000_000_000
     SectionCard {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
@@ -328,10 +330,11 @@ private fun RequirementCard(
                 value = gramsText,
                 onValueChange = { input ->
                     gramsText = input
-                    val parsed = if (input.isBlank()) 0L else MarketMath.parseGrams(input)
+                    val parsed = MarketMath.parseBlankGrams(input)
                     if (parsed != null && parsed <= 1_000_000_000) onSave(parsed)
                 },
                 label = { Text("Require") },
+                textStyle = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
                 suffix = { Text("kg") },
                 shape = RoundedCornerShape(12.dp),
                 singleLine = true,
@@ -415,27 +418,32 @@ private fun ItemPickerSheet(
 
 @Composable
 fun MarketScreen(rows: List<ConsolidatedRow>, vm: MarketViewModel, message: (String) -> Unit) {
+    val date by vm.date.collectAsState()
     val totalRequired = rows.sumOf { it.requiredGrams }
     val totalPurchased = rows.sumOf { it.purchasedGrams }
     val totalBill = rows.sumOf { it.lineCents }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         item {
-            Surface(color = Color(0xFFEAE9FB), shape = RoundedCornerShape(20.dp)) {
-                Column(Modifier.fillMaxWidth().padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Surface(color = Color(0xFFEAE9FB), shape = RoundedCornerShape(19.dp)) {
+                Column(
+                    Modifier.fillMaxWidth().padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Text("Market purchase & billing", style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold, color = ProColors.navy)
-                    Text("Save purchased quantities and market prices for each item.",
+                        fontWeight = FontWeight.ExtraBold, color = ProColors.navy)
+                    Text("Enter quantities and prices • Saves automatically",
                         color = ProColors.muted, style = MaterialTheme.typography.bodySmall)
                     Text("Rs. ${MarketMath.lkr(totalBill)}", color = ProColors.purple,
                         style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Required: ${MarketMath.kg(totalRequired)} kg")
-                        Text("Bought: ${MarketMath.kg(totalPurchased)} kg")
+                        Text("Required: ${MarketMath.kg(totalRequired)} kg",
+                            fontWeight = FontWeight.SemiBold)
+                        Text("Bought: ${MarketMath.kg(totalPurchased)} kg",
+                            fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -444,62 +452,116 @@ fun MarketScreen(rows: List<ConsolidatedRow>, vm: MarketViewModel, message: (Str
             EmptyState("No purchasing items", "Enter requirements in Kitchens first.")
         }
         lazyItems(rows, key = { it.item.id }) { row ->
-            PurchaseCard(row, onSave = { grams, price ->
-                vm.savePurchase(row.item.id, grams, price) { result ->
-                    message(if (result.isSuccess) "Purchase saved" else "Could not save purchase")
+            PurchaseCard(
+                row = row,
+                date = date.toString(),
+                onSave = { grams, cents ->
+                    vm.savePurchase(row.item.id, grams, cents) { result ->
+                        if (result.isFailure) message("Could not auto-save purchase")
+                    }
                 }
-            }, message = message)
+            )
         }
     }
 }
 
 @Composable
 private fun PurchaseCard(
-    row: ConsolidatedRow, onSave: (Long, Long) -> Unit, message: (String) -> Unit
+    row: ConsolidatedRow,
+    date: String,
+    onSave: (Long, Long) -> Unit
 ) {
-    var purchased by remember(row.item.id, row.purchase?.quantityGrams) {
-        mutableStateOf(row.purchase?.let { MarketMath.editKg(it.quantityGrams) } ?: "0")
+    // Don't re-key these drafts on Room's incoming purchase totals: a database
+    // emission while typing must never reset the keyboard field or caret.
+    var purchased by remember(date, row.item.id) {
+        mutableStateOf(MarketMath.editKgOrBlank(row.purchase?.quantityGrams ?: 0L))
     }
-    var price by remember(row.item.id, row.purchase?.priceCentsPerKg) {
-        mutableStateOf(row.purchase?.let { MarketMath.editPrice(it.priceCentsPerKg) } ?: "0")
+    var price by remember(date, row.item.id) {
+        mutableStateOf(MarketMath.editPriceOrBlank(row.purchase?.priceCentsPerKg ?: 0L))
     }
-    SectionCard {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically) {
+    fun autoSaveIfValid(qtyText: String, priceText: String) {
+        val grams = MarketMath.parseBlankGrams(qtyText)
+        val cents = MarketMath.parseBlankPriceCents(priceText)
+        if (grams != null && cents != null &&
+            grams <= 1_000_000_000 && cents <= 1_000_000_000) {
+            onSave(grams, cents)
+        }
+    }
+    val qty = MarketMath.parseBlankGrams(purchased)
+    val rate = MarketMath.parseBlankPriceCents(price)
+    val qtyInvalid = qty == null || qty > 1_000_000_000
+    val rateInvalid = rate == null || rate > 1_000_000_000
+    val preview = if (!qtyInvalid && !rateInvalid) {
+        MarketMath.billCents(qty!!, rate!!)
+    } else row.lineCents
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF4FAFD)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 Column(Modifier.weight(1f)) {
                     Text(row.item.name, style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold)
-                    Text("Required ${MarketMath.kg(row.requiredGrams)} kg", color = ProColors.teal,
+                        fontWeight = FontWeight.ExtraBold, color = ProColors.navy,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text("Required: ${MarketMath.kg(row.requiredGrams)} kg",
+                        color = ProColors.teal, fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.bodySmall)
                 }
                 StatusTag(row)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                OutlinedTextField(value = purchased, onValueChange = { purchased = it },
-                    modifier = Modifier.weight(1f), label = { Text("Bought kg") },
-                    shape = RoundedCornerShape(12.dp),
-                    singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
-                OutlinedTextField(value = price, onValueChange = { price = it },
-                    modifier = Modifier.weight(1f), label = { Text("Rs. / kg") },
-                    shape = RoundedCornerShape(12.dp),
-                    singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                OutlinedTextField(
+                    value = purchased,
+                    onValueChange = { input ->
+                        purchased = input
+                        autoSaveIfValid(input, price)
+                    },
+                    modifier = Modifier.weight(1f),
+                    label = { Text("Purchased") },
+                    suffix = { Text("kg") },
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(
+                        fontWeight = FontWeight.SemiBold),
+                    shape = RoundedCornerShape(11.dp),
+                    isError = qtyInvalid,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                )
+                OutlinedTextField(
+                    value = price,
+                    onValueChange = { input ->
+                        price = input
+                        autoSaveIfValid(purchased, input)
+                    },
+                    modifier = Modifier.weight(1f),
+                    label = { Text("Market Price") },
+                    prefix = { Text("Rs.") },
+                    suffix = { Text("/kg") },
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(
+                        fontWeight = FontWeight.SemiBold),
+                    shape = RoundedCornerShape(11.dp),
+                    isError = rateInvalid,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                )
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically) {
-                Column {
-                    Text("Line total", style = MaterialTheme.typography.labelSmall, color = ProColors.muted)
-                    Text("Rs. ${MarketMath.lkr(row.lineCents)}", color = ProColors.purple,
-                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                }
-                Button(onClick = {
-                    val grams = MarketMath.parseGrams(purchased)
-                    val cents = MarketMath.parsePriceCents(price)
-                    if (grams == null || cents == null || grams > 1_000_000_000 || cents > 1_000_000_000) {
-                        message("Enter valid quantities (3 decimals) and prices (2 decimals)")
-                    } else onSave(grams, cents)
-                }) { Text("Save purchase") }
-            }
+            Text(
+                "Subtotal: Rs. ${MarketMath.lkr(preview)}",
+                modifier = Modifier.fillMaxWidth(),
+                color = ProColors.purple,
+                textAlign = TextAlign.End,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.ExtraBold
+            )
         }
     }
 }

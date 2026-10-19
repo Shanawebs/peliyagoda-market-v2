@@ -31,6 +31,11 @@ object MarketMath {
 
     fun kg(grams: Long): String = number("#,##0.00#", BigDecimal.valueOf(grams, 3))
     fun editKg(grams: Long): String = BigDecimal.valueOf(grams, 3).stripTrailingZeros().toPlainString()
+    /** Use blank fields for unset/zero amounts, while retaining zero in the database. */
+    fun editKgOrBlank(grams: Long): String = if (grams == 0L) "" else editKg(grams)
+    fun parseBlankGrams(text: String): Long? = if (text.isBlank()) 0L else parseGrams(text)
     fun lkr(cents: Long): String = number("#,##0.00", BigDecimal.valueOf(cents, 2))
     fun editPrice(cents: Long): String = BigDecimal.valueOf(cents, 2).stripTrailingZeros().toPlainString()
+    fun editPriceOrBlank(cents: Long): String = if (cents == 0L) "" else editPrice(cents)
+    fun parseBlankPriceCents(text: String): Long? = if (text.isBlank()) 0L else parsePriceCents(text)
 }

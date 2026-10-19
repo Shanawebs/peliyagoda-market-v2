@@ -72,7 +72,12 @@ class MarketRepository(private val db: MarketDatabase) {
 
     suspend fun savePurchase(date: String, id: Long, grams: Long, centsPerKg: Long) {
         require(grams in 0..1_000_000_000 && centsPerKg in 0..1_000_000_000)
-        dao.savePurchase(PurchaseEntity(date, id, grams, centsPerKg))
+        if (grams == 0L && centsPerKg == 0L) {
+            // Entirely empty purchase is pending, not a falsely completed/short item.
+            dao.deletePurchase(date, id)
+        } else {
+            dao.savePurchase(PurchaseEntity(date, id, grams, centsPerKg))
+        }
     }
 
     suspend fun exportBackup(): String {

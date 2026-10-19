@@ -80,6 +80,9 @@ interface MarketDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun savePurchase(entry: PurchaseEntity)
 
+    @Query("DELETE FROM purchases WHERE businessDate = :date AND itemId = :itemId")
+    suspend fun deletePurchase(date: String, itemId: Long)
+
     @Query("SELECT * FROM items ORDER BY id")
     suspend fun allItems(): List<ItemEntity>
 

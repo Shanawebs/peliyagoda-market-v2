@@ -26,6 +26,19 @@ class MarketMathTest {
         assertEquals(423_000L, 195_000L + 228_000L)
     }
 
+    @Test fun blankInputsAreZeroButFieldsStayVisuallyEmpty() {
+        assertEquals("", MarketMath.editKgOrBlank(0))
+        assertEquals("", MarketMath.editPriceOrBlank(0))
+        assertEquals(0L, MarketMath.parseBlankGrams(""))
+        assertEquals(0L, MarketMath.parseBlankPriceCents(" "))
+        assertEquals("1.25", MarketMath.editKgOrBlank(1250))
+        assertEquals("150.5", MarketMath.editPriceOrBlank(15050))
+        assertEquals(1250L, MarketMath.parseBlankGrams("1.250"))
+        assertEquals(15050L, MarketMath.parseBlankPriceCents("150.50"))
+        assertNull(MarketMath.parseBlankGrams("0.0001"))
+        assertNull(MarketMath.parseBlankPriceCents("1.234"))
+    }
+
     @Test fun roundSmallAmountsCorrectly() {
         assertEquals(1L, MarketMath.billCents(5, 100)) // 5g at Rs 1/kg => half cent -> 1 cent
     }
