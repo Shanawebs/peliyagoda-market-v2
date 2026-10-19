@@ -15,10 +15,14 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MarketViewModel(private val repository: MarketRepository) : ViewModel() {
+    // Serialize rapid edits and deletions so the newest quantity always wins.
+    private val requirementWriteMutex = Mutex()
     val date = MutableStateFlow(LocalDate.now())
     val items = repository.items.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val requisitions = date.flatMapLatest { repository.requirements(it.toString()) }
@@ -49,6 +53,15 @@ class MarketViewModel(private val repository: MarketRepository) : ViewModel() {
         }
     }
 
+    fun renameItem(id: Long, name: String, done: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val success = runCatching {
+                withContext(Dispatchers.IO) { repository.renameItem(id, name) }
+            }.getOrDefault(false)
+            done(success)
+        }
+    }
+
     fun addRequirements(kitchen: String, itemIds: Set<Long>, done: (Result<Unit>) -> Unit = {}) {
         val dateSnapshot = date.value.toString()
         doWork({ repository.addRequirements(dateSnapshot, kitchen, itemIds) }, done)
@@ -56,12 +69,16 @@ class MarketViewModel(private val repository: MarketRepository) : ViewModel() {
 
     fun saveRequirement(kitchen: String, itemId: Long, grams: Long, done: (Result<Unit>) -> Unit) {
         val dateSnapshot = date.value.toString()
-        doWork({ repository.saveRequirement(dateSnapshot, kitchen, itemId, grams) }, done)
+        doWork({ requirementWriteMutex.withLock {
+            repository.saveRequirement(dateSnapshot, kitchen, itemId, grams)
+        } }, done)
     }
 
     fun removeRequirement(kitchen: String, itemId: Long, done: (Result<Unit>) -> Unit) {
         val dateSnapshot = date.value.toString()
-        doWork({ repository.deleteRequirement(dateSnapshot, kitchen, itemId) }, done)
+        doWork({ requirementWriteMutex.withLock {
+            repository.deleteRequirement(dateSnapshot, kitchen, itemId)
+        } }, done)
     }
 
     fun savePurchase(itemId: Long, grams: Long, cents: Long, done: (Result<Unit>) -> Unit) {

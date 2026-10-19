@@ -62,6 +62,9 @@ interface MarketDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertItem(item: ItemEntity): Long
 
+    @Query("UPDATE items SET name = :name WHERE id = :id")
+    suspend fun renameItem(id: Long, name: String): Int
+
     @Query("SELECT * FROM requisitions WHERE businessDate = :date")
     fun observeRequisitions(date: String): Flow<List<RequisitionEntity>>
 

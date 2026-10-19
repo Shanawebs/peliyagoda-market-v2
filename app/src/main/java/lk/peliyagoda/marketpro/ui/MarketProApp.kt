@@ -186,7 +186,8 @@ fun MarketProApp(vm: MarketViewModel) {
             onClose = { catalogOpen = false },
             add = { name, category -> vm.addItem(name, category) {
                 message(if (it) "Item added" else "Item already exists or name is invalid")
-            } }
+            } },
+            rename = { id, newName, done -> vm.renameItem(id, newName, done) }
         )
 
         Scaffold(

@@ -22,6 +22,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
@@ -258,12 +259,11 @@ fun KitchensScreen(
                         RequirementCard(
                             item = item, entry = entry,
                             onSave = { grams -> vm.saveRequirement(kitchen, item.id, grams) { result ->
-                                message(if (result.isSuccess) "Quantity saved" else "Could not save quantity")
+                                if (result.isFailure) message("Could not auto-save quantity")
                             } },
                             onDelete = { vm.removeRequirement(kitchen, item.id) { result ->
                                 message(if (result.isSuccess) "Item removed" else "Could not remove item")
-                            } },
-                            message = message
+                            } }
                         )
                     }
                 }
@@ -294,16 +294,17 @@ fun KitchensScreen(
 
 @Composable
 private fun RequirementCard(
-    item: ItemEntity, entry: RequisitionEntity, onSave: (Long) -> Unit,
-    onDelete: () -> Unit, message: (String) -> Unit
+    item: ItemEntity, entry: RequisitionEntity,
+    onSave: (Long) -> Unit, onDelete: () -> Unit
 ) {
-    var gramsText by remember(entry.itemId, entry.kitchen, entry.quantityGrams) {
+    // Keep the typing draft stable across database Flow updates.
+    var gramsText by remember(entry.businessDate, entry.kitchen, entry.itemId) {
         mutableStateOf(MarketMath.editKg(entry.quantityGrams))
     }
     var confirmDelete by remember { mutableStateOf(false) }
     if (confirmDelete) AlertDialog(
         onDismissRequest = { confirmDelete = false },
-        title = { Text("Remove ${item.name}?") },
+        title = { Text("Remove " + item.name + "?") },
         text = { Text("This kitchen's requirement for this date will be removed. Other kitchens are unaffected.") },
         dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
         confirmButton = { TextButton(onClick = {
@@ -311,30 +312,36 @@ private fun RequirementCard(
             onDelete()
         }) { Text("Remove", color = ProColors.red) } }
     )
+    val gramsValue = if (gramsText.isBlank()) 0L else MarketMath.parseGrams(gramsText)
+    val invalid = gramsValue == null || gramsValue > 1_000_000_000
     SectionCard {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(item.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text(item.category, style = MaterialTheme.typography.labelMedium, color = ProColors.muted)
-                }
-                IconButton(onClick = { confirmDelete = true }) {
-                    Icon(Icons.Default.DeleteOutline, contentDescription = "Remove item", tint = ProColors.red)
-                }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            Column(Modifier.weight(1.15f)) {
+                Text(item.name, style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold, maxLines = 2,
+                    overflow = TextOverflow.Ellipsis)
+                Text(item.category, style = MaterialTheme.typography.labelSmall,
+                    color = ProColors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Row(verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(
-                    value = gramsText, onValueChange = { gramsText = it },
-                    label = { Text("Required (kg)") }, singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier.weight(1f), supportingText = { Text("Up to 3 decimal places") }
-                )
-                Button(onClick = {
-                    val grams = MarketMath.parseGrams(gramsText)
-                    if (grams == null || grams > 1_000_000_000) message("Enter a valid quantity (max 3 decimals)")
-                    else onSave(grams)
-                }) { Text("Save") }
+            OutlinedTextField(
+                value = gramsText,
+                onValueChange = { input ->
+                    gramsText = input
+                    val parsed = if (input.isBlank()) 0L else MarketMath.parseGrams(input)
+                    if (parsed != null && parsed <= 1_000_000_000) onSave(parsed)
+                },
+                label = { Text("Require") },
+                suffix = { Text("kg") },
+                shape = RoundedCornerShape(12.dp),
+                singleLine = true,
+                isError = invalid,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.weight(1f)
+            )
+            IconButton(onClick = { confirmDelete = true }) {
+                Icon(Icons.Default.DeleteOutline,
+                    contentDescription = "Remove " + item.name, tint = ProColors.red)
             }
         }
     }
@@ -471,9 +478,11 @@ private fun PurchaseCard(
             Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                 OutlinedTextField(value = purchased, onValueChange = { purchased = it },
                     modifier = Modifier.weight(1f), label = { Text("Bought kg") },
+                    shape = RoundedCornerShape(12.dp),
                     singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
                 OutlinedTextField(value = price, onValueChange = { price = it },
                     modifier = Modifier.weight(1f), label = { Text("Rs. / kg") },
+                    shape = RoundedCornerShape(12.dp),
                     singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
@@ -497,19 +506,68 @@ private fun PurchaseCard(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CatalogSheet(items: List<ItemEntity>, onClose: () -> Unit, add: (String, String) -> Unit) {
+fun CatalogSheet(
+    items: List<ItemEntity>, onClose: () -> Unit,
+    add: (String, String) -> Unit,
+    rename: (Long, String, (Boolean) -> Unit) -> Unit
+) {
     var name by remember { mutableStateOf("") }
     var category by remember { mutableStateOf(MarketConstants.VEGETABLES) }
     var search by remember { mutableStateOf("") }
+    var editing by remember { mutableStateOf<ItemEntity?>(null) }
+    var editedName by remember { mutableStateOf("") }
+    var renameError by remember { mutableStateOf(false) }
+    var renameSaving by remember { mutableStateOf(false) }
+    editing?.let { item ->
+        AlertDialog(
+            onDismissRequest = { if (!renameSaving) editing = null },
+            title = { Text("Rename " + item.name) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Past requisitions and purchases will remain linked to this item.")
+                    OutlinedTextField(
+                        value = editedName,
+                        onValueChange = { editedName = it; renameError = false },
+                        label = { Text("Item name") },
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true,
+                        isError = renameError,
+                        supportingText = {
+                            if (renameError) Text("This name exists already or could not be saved.")
+                        }
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { editing = null }, enabled = !renameSaving) { Text("Cancel") }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        renameSaving = true
+                        rename(item.id, editedName) { ok ->
+                            renameSaving = false
+                            if (ok) { editing = null; renameError = false }
+                            else renameError = true
+                        }
+                    },
+                    enabled = !renameSaving && editedName.trim().isNotEmpty() &&
+                        editedName.trim().length <= 80
+                ) { Text(if (renameSaving) "Saving…" else "Save name") }
+            }
+        )
+    }
     ModalBottomSheet(onDismissRequest = onClose) {
-        Column(Modifier.fillMaxWidth().fillMaxHeight(0.88f).padding(horizontal = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(
+            Modifier.fillMaxWidth().fillMaxHeight(0.88f).padding(horizontal = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
             Text("Master item catalog", style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold)
-            Text("Add vegetables or fruits for any kitchen.", color = ProColors.muted)
+            Text("Add or rename vegetables and fruits.", color = ProColors.muted)
             OutlinedTextField(value = name, onValueChange = { name = it },
                 modifier = Modifier.fillMaxWidth(), label = { Text("New item name") },
-                singleLine = true)
+                shape = RoundedCornerShape(12.dp), singleLine = true)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 MarketConstants.categories.forEach { cat ->
@@ -517,29 +575,40 @@ fun CatalogSheet(items: List<ItemEntity>, onClose: () -> Unit, add: (String, Str
                         label = { Text(cat) })
                 }
                 Spacer(Modifier.weight(1f))
-                Button(onClick = {
-                    add(name, category)
-                    name = ""
-                }, enabled = name.isNotBlank()) {
+                Button(onClick = { add(name, category); name = "" }, enabled = name.isNotBlank()) {
                     Icon(Icons.Default.Add, contentDescription = null)
                     Text(" Add")
                 }
             }
             HorizontalDivider()
             OutlinedTextField(value = search, onValueChange = { search = it },
-                modifier = Modifier.fillMaxWidth(), leadingIcon = {
-                    Icon(Icons.Default.Search, contentDescription = null)
-                }, placeholder = { Text("Find an item") }, singleLine = true)
+                modifier = Modifier.fillMaxWidth(),
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                placeholder = { Text("Find an item") },
+                shape = RoundedCornerShape(12.dp), singleLine = true)
             Text("${items.size} catalog items", color = ProColors.muted,
                 style = MaterialTheme.typography.labelMedium)
             LazyColumn(modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(bottom = 24.dp)) {
                 lazyItems(items.filter { it.name.contains(search, true) }, key = { it.id }) { item ->
-                    Row(Modifier.fillMaxWidth().padding(vertical = 11.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(item.name, style = MaterialTheme.typography.bodyLarge)
-                        Text(item.category, color = ProColors.muted,
-                            style = MaterialTheme.typography.bodySmall)
+                    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(item.name, style = MaterialTheme.typography.bodyLarge)
+                            Text(item.category, color = ProColors.muted,
+                                style = MaterialTheme.typography.bodySmall)
+                        }
+                        IconButton(onClick = {
+                            editing = item
+                            editedName = item.name
+                            renameError = false
+                            renameSaving = false
+                        }) {
+                            Icon(Icons.Default.Edit,
+                                contentDescription = "Rename " + item.name,
+                                tint = ProColors.teal)
+                        }
                     }
                     HorizontalDivider(color = ProColors.pale)
                 }

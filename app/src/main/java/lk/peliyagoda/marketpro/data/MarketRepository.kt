@@ -36,6 +36,19 @@ class MarketRepository(private val db: MarketDatabase) {
         return dao.insertItem(ItemEntity(name = cleaned, category = category)) > 0
     }
 
+    /** Rename without changing the item ID or any linked requisition/purchase records. */
+    suspend fun renameItem(id: Long, name: String): Boolean {
+        val clean = name.trim().replace(Regex("\\s+"), " ")
+        if (clean.isEmpty() || clean.length > 80) return false
+        return db.withTransaction {
+            val existing = dao.allItems()
+            if (existing.none { it.id == id } ||
+                existing.any { it.id != id && it.name.equals(clean, ignoreCase = true) }) {
+                false
+            } else dao.renameItem(id, clean) == 1
+        }
+    }
+
     suspend fun addRequirements(date: String, kitchen: String, ids: Set<Long>) {
         require(kitchen in MarketConstants.kitchens)
         require(LocalDate.parse(date) <= LocalDate.now().plusYears(10))
