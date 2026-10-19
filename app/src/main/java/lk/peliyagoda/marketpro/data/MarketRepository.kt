@@ -10,10 +10,13 @@ import java.time.OffsetDateTime
 class MarketRepository(private val db: MarketDatabase) {
     private val dao = db.dao()
     val items: Flow<List<ItemEntity>> = dao.observeItems()
+    val categories: Flow<List<CategoryEntity>> = dao.observeCategories()
     fun requirements(date: String) = dao.observeRequisitions(date)
     fun purchases(date: String) = dao.observePurchases(date)
+    fun additions(date: String) = dao.observeAdditions(date)
 
     suspend fun seedCatalogOnce() {
+        MarketConstants.categories.forEach { dao.insertCategory(CategoryEntity(it)) }
         if (dao.itemCount() != 0) return
         val vegetables = listOf(
             "Beans", "Beetroot", "Big Onion", "Brinjal", "Cabbage", "Carrot",
@@ -29,9 +32,18 @@ class MarketRepository(private val db: MarketDatabase) {
                 + fruits.map { ItemEntity(name = it, category = MarketConstants.FRUITS) })
     }
 
+    suspend fun addCategory(name: String): Boolean {
+        val clean = name.trim().replace(Regex("\\s+"), " ")
+        if (clean.isBlank() || clean.length > 40 || clean.equals("All", true)) return false
+        return db.withTransaction {
+            if (dao.allCategories().any { it.name.equals(clean, true) }) false
+            else dao.insertCategory(CategoryEntity(clean)) > 0
+        }
+    }
+
     suspend fun addItem(name: String, category: String): Boolean {
         val cleaned = name.trim().replace(Regex("\\s+"), " ")
-        if (cleaned.isBlank() || cleaned.length > 80 || category !in MarketConstants.categories) return false
+        if (cleaned.isBlank() || cleaned.length > 80 || dao.allCategories().none { it.name == category }) return false
         if (dao.allItems().any { it.name.equals(cleaned, ignoreCase = true) }) return false
         return dao.insertItem(ItemEntity(name = cleaned, category = category)) > 0
     }
@@ -80,11 +92,28 @@ class MarketRepository(private val db: MarketDatabase) {
         }
     }
 
+    suspend fun addPurchaseAddition(date: String, id: Long, grams: Long, centsPerKg: Long) {
+        require(grams in 1..1_000_000_000 && centsPerKg in 0..1_000_000_000)
+        require(dao.allItems().any { it.id == id })
+        dao.insertAddition(PurchaseAdditionEntity(
+            businessDate = date, itemId = id, quantityGrams = grams, priceCentsPerKg = centsPerKg
+        ))
+    }
+
     suspend fun exportBackup(): String {
         val root = JSONObject()
         root.put("format", "peliyagoda-market-pro")
-        root.put("schemaVersion", 1)
+        root.put("schemaVersion", 2)
         root.put("createdAt", OffsetDateTime.now().toString())
+        root.put("categories", JSONArray().apply {
+            dao.allCategories().forEach { put(it.name) }
+        })
+        root.put("additions", JSONArray().apply {
+            dao.allAdditions().forEach { put(JSONObject().apply {
+                put("id", it.id); put("date", it.businessDate); put("itemId", it.itemId)
+                put("grams", it.quantityGrams); put("priceCentsPerKg", it.priceCentsPerKg)
+            }) }
+        })
         root.put("items", JSONArray().apply {
             dao.allItems().forEach { put(JSONObject().apply {
                 put("id", it.id); put("name", it.name); put("category", it.category)
@@ -109,12 +138,14 @@ class MarketRepository(private val db: MarketDatabase) {
     suspend fun restoreBackup(json: String) {
         val root = JSONObject(json)
         require(root.optString("format") == "peliyagoda-market-pro") { "Not a Market Pro backup" }
-        require(root.optInt("schemaVersion") == 1) { "Unsupported backup version" }
+        val backupVersion = root.optInt("schemaVersion")
+        require(backupVersion == 1 || backupVersion == 2) { "Unsupported backup version" }
         val itemArray = root.getJSONArray("items")
         val reqArray = root.getJSONArray("requisitions")
         val purchaseArray = root.getJSONArray("purchases")
+        val additionsArray = if (backupVersion == 2) root.getJSONArray("additions") else JSONArray()
         require(itemArray.length() <= 100_000 && reqArray.length() <= 500_000 &&
-                purchaseArray.length() <= 500_000) { "Backup too large" }
+                purchaseArray.length() <= 500_000 && additionsArray.length() <= 500_000) { "Backup too large" }
         val restoredItems = ArrayList<ItemEntity>(itemArray.length())
         for (i in 0 until itemArray.length()) {
             val obj = itemArray.getJSONObject(i)
@@ -124,11 +155,24 @@ class MarketRepository(private val db: MarketDatabase) {
                 category = obj.getString("category")
             )
             require(item.id > 0 && item.name.isNotBlank() && item.name.length <= 80)
-            require(item.category in MarketConstants.categories)
+            require(item.category.isNotBlank() && item.category.length <= 40)
             restoredItems.add(item)
         }
         require(restoredItems.map { it.id }.distinct().size == restoredItems.size)
         require(restoredItems.map { it.name.lowercase() }.distinct().size == restoredItems.size)
+        val categoryNames = linkedSetOf(MarketConstants.VEGETABLES, MarketConstants.FRUITS)
+        if (backupVersion == 2) {
+            val array = root.getJSONArray("categories")
+            require(array.length() <= 1000)
+            for (i in 0 until array.length()) {
+                val name = array.getString(i)
+                require(name.isNotBlank() && name.length <= 40)
+                require(!categoryNames.any { it.equals(name, true) })
+                categoryNames.add(name)
+            }
+        }
+        restoredItems.forEach { categoryNames.add(it.category) }
+        require(categoryNames.size <= 1000)
         val idSet = restoredItems.map { it.id }.toSet()
         fun readDate(obj: JSONObject) = obj.getString("date").also { LocalDate.parse(it) }
         val restoredRequirements = ArrayList<RequisitionEntity>(reqArray.length())
@@ -162,13 +206,32 @@ class MarketRepository(private val db: MarketDatabase) {
         require(restoredPurchases.map { it.businessDate to it.itemId }
             .distinct().size == restoredPurchases.size)
 
+        val restoredAdditions = ArrayList<PurchaseAdditionEntity>()
+        for (i in 0 until additionsArray.length()) {
+            val obj = additionsArray.getJSONObject(i)
+            val lot = PurchaseAdditionEntity(
+                id = obj.getLong("id"), businessDate = readDate(obj),
+                itemId = obj.getLong("itemId"), quantityGrams = obj.getLong("grams"),
+                priceCentsPerKg = obj.getLong("priceCentsPerKg")
+            )
+            require(lot.id > 0 && lot.itemId in idSet &&
+                lot.quantityGrams in 1..1_000_000_000 &&
+                lot.priceCentsPerKg in 0..1_000_000_000)
+            restoredAdditions.add(lot)
+        }
+        require(restoredAdditions.map { it.id }.distinct().size == restoredAdditions.size)
+
         db.withTransaction {
+            dao.clearAdditions()
             dao.clearPurchases()
             dao.clearRequisitions()
             dao.clearItems()
+            dao.clearCategories()
+            dao.restoreCategories(categoryNames.map { CategoryEntity(it) })
             dao.restoreItems(restoredItems)
             dao.restoreRequisitions(restoredRequirements)
             dao.restorePurchases(restoredPurchases)
+            dao.restoreAdditions(restoredAdditions)
         }
     }
 }
