@@ -164,14 +164,17 @@ class MarketRepository(private val db: MarketDatabase) {
         if (backupVersion == 2) {
             val array = root.getJSONArray("categories")
             require(array.length() <= 1000)
+            val seen = mutableSetOf<String>()
             for (i in 0 until array.length()) {
                 val name = array.getString(i)
                 require(name.isNotBlank() && name.length <= 40)
-                require(!categoryNames.any { it.equals(name, true) })
-                categoryNames.add(name)
+                require(seen.add(name.lowercase())) { "Repeated category" }
+                if (!categoryNames.any { it.equals(name, true) }) categoryNames.add(name)
             }
         }
-        restoredItems.forEach { categoryNames.add(it.category) }
+        restoredItems.forEach { item ->
+            if (!categoryNames.any { it.equals(item.category, true) }) categoryNames.add(item.category)
+        }
         require(categoryNames.size <= 1000)
         val idSet = restoredItems.map { it.id }.toSet()
         fun readDate(obj: JSONObject) = obj.getString("date").also { LocalDate.parse(it) }
