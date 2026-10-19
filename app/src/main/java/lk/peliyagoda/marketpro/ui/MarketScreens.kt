@@ -553,7 +553,11 @@ fun MarketScreen(rows: List<ConsolidatedRow>, vm: MarketViewModel, message: (Str
                     vm.savePurchase(row.item.id, grams, cents) { result ->
                         if (result.isFailure) message("Could not auto-save purchase")
                     }
-                }
+                },
+                onAdd = { grams, cents, done ->
+                    vm.addPurchaseAddition(row.item.id, grams, cents, done)
+                },
+                message = message
             )
         }
     }
@@ -563,10 +567,10 @@ fun MarketScreen(rows: List<ConsolidatedRow>, vm: MarketViewModel, message: (Str
 private fun PurchaseCard(
     row: ConsolidatedRow,
     date: String,
-    onSave: (Long, Long) -> Unit
+    onSave: (Long, Long) -> Unit,
+    onAdd: (Long, Long, (Result<Unit>) -> Unit) -> Unit,
+    message: (String) -> Unit
 ) {
-    // Don't re-key these drafts on Room's incoming purchase totals: a database
-    // emission while typing must never reset the keyboard field or caret.
     var purchased by remember(date, row.item.id) {
         mutableStateOf(MarketMath.editKgOrBlank(row.purchase?.quantityGrams ?: 0L))
     }
@@ -586,8 +590,77 @@ private fun PurchaseCard(
     val qtyInvalid = qty == null || qty > 1_000_000_000
     val rateInvalid = rate == null || rate > 1_000_000_000
     val preview = if (!qtyInvalid && !rateInvalid) {
-        MarketMath.billCents(qty!!, rate!!)
+        MarketMath.billCents(qty!!, rate!!) + row.additionalCents
     } else row.lineCents
+    var addOpen by remember(date, row.item.id) { mutableStateOf(false) }
+    var additionalQty by remember(date, row.item.id) { mutableStateOf("") }
+    var additionalPrice by remember(date, row.item.id) { mutableStateOf("") }
+    var savingAddition by remember(date, row.item.id) { mutableStateOf(false) }
+    val shortGrams = (row.requiredGrams - row.purchasedGrams).coerceAtLeast(0)
+
+    if (addOpen) {
+        val extraGrams = MarketMath.parseGrams(additionalQty)
+        val extraPrice = MarketMath.parsePriceCents(additionalPrice)
+        AlertDialog(
+            onDismissRequest = { if (!savingAddition) addOpen = false },
+            title = { Text("Additional purchase • " + row.item.name) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Still required: ${MarketMath.kg(shortGrams)} kg")
+                    Text("This creates a separate purchase record at its own market price.",
+                        style = MaterialTheme.typography.bodySmall, color = ProColors.muted)
+                    OutlinedTextField(
+                        value = additionalQty,
+                        onValueChange = { additionalQty = it },
+                        label = { Text("Additional quantity (kg)") },
+                        suffix = { Text("kg") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(11.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                    )
+                    OutlinedTextField(
+                        value = additionalPrice,
+                        onValueChange = { additionalPrice = it },
+                        label = { Text("Price for this purchase") },
+                        prefix = { Text("Rs.") },
+                        suffix = { Text("/kg") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(11.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(enabled = !savingAddition, onClick = { addOpen = false }) {
+                    Text("Cancel")
+                }
+            },
+            confirmButton = {
+                Button(
+                    enabled = !savingAddition && extraGrams != null &&
+                        extraGrams > 0 && extraGrams <= 1_000_000_000 &&
+                        extraPrice != null && extraPrice <= 1_000_000_000,
+                    onClick = {
+                        val grams = extraGrams ?: return@Button
+                        val cents = extraPrice ?: return@Button
+                        savingAddition = true
+                        onAdd(grams, cents) { result ->
+                            savingAddition = false
+                            if (result.isSuccess) {
+                                addOpen = false
+                                additionalQty = ""
+                                additionalPrice = ""
+                                message("Additional purchase saved")
+                            } else {
+                                message("Could not save additional purchase")
+                            }
+                        }
+                    }
+                ) { Text(if (savingAddition) "Saving…" else "Add purchase") }
+            }
+        )
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -595,25 +668,31 @@ private fun PurchaseCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
-            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 14.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(11.dp),
+                color = Color(0xFFE1F3F8)
             ) {
-                Column(Modifier.weight(1f)) {
-                    Text(row.item.name, style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.ExtraBold, color = ProColors.navy,
-                        maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text("Required: ${MarketMath.kg(row.requiredGrams)} kg",
-                        color = ProColors.teal, fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.bodySmall)
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(row.item.name, style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.ExtraBold, color = ProColors.navy,
+                            maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text("Required: ${MarketMath.kg(row.requiredGrams)} kg",
+                            color = ProColors.teal, fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                    StatusTag(row)
                 }
-                StatusTag(row)
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = purchased,
                     onValueChange = { input ->
@@ -648,14 +727,38 @@ private fun PurchaseCard(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
                 )
             }
-            Text(
-                "Subtotal: Rs. ${MarketMath.lkr(preview)}",
-                modifier = Modifier.fillMaxWidth(),
-                color = ProColors.purple,
-                textAlign = TextAlign.End,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.ExtraBold
-            )
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                if (shortGrams > 0L) {
+                    IconButton(onClick = { addOpen = true }) {
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = ProColors.teal
+                        ) {
+                            Icon(Icons.Default.Add,
+                                contentDescription = "Add purchase for " + row.item.name,
+                                tint = Color.White,
+                                modifier = Modifier.padding(7.dp))
+                        }
+                    }
+                } else {
+                    Spacer(Modifier.width(44.dp))
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("Subtotal: Rs. ${MarketMath.lkr(preview)}",
+                        color = ProColors.purple,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold)
+                    if (row.additions.isNotEmpty()) {
+                        Text("${row.additions.size} extra purchase(s) • Total ${MarketMath.kg(row.purchasedGrams)} kg",
+                            color = ProColors.muted,
+                            style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
         }
     }
 }
