@@ -111,19 +111,19 @@ private fun EmptyState(title: String, detail: String) {
 @Composable
 private fun StatusTag(row: ConsolidatedRow) {
     val status = when {
-        row.purchase == null || row.purchasedGrams == 0L -> "PENDING"
+        row.purchasedGrams == 0L -> "PENDING"
         row.varianceGrams > 0 -> "EXTRA +${MarketMath.kg(row.varianceGrams)} kg"
-        row.varianceGrams < 0 -> "SHORT ${MarketMath.kg(-row.varianceGrams)} kg"
+        row.varianceGrams < 0 -> "SHORTAGE (-${MarketMath.kg(-row.varianceGrams)} kg)"
         else -> "MATCHED"
     }
     val color = when {
-        row.purchase == null || row.purchasedGrams == 0L -> ProColors.muted
+        row.purchasedGrams == 0L -> ProColors.muted
         row.varianceGrams > 0 -> ProColors.teal
         row.varianceGrams < 0 -> ProColors.red
         else -> ProColors.green
     }
     val bg = when {
-        row.purchase == null || row.purchasedGrams == 0L -> Color(0xFFE8EDF0)
+        row.purchasedGrams == 0L -> Color(0xFFE8EDF0)
         row.varianceGrams > 0 -> Color(0xFFE2F3FB)
         row.varianceGrams < 0 -> Color(0xFFFFE8EA)
         else -> Color(0xFFE4F5EA)
