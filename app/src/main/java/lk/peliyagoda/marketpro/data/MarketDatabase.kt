@@ -11,6 +11,8 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
 object MarketConstants {
@@ -22,6 +24,18 @@ object MarketConstants {
     val kitchens = listOf(MAIN, INDIAN, PASTRY)
     val categories = listOf(VEGETABLES, FRUITS)
 }
+
+@Entity(tableName = "categories")
+data class CategoryEntity(@PrimaryKey val name: String)
+
+@Entity(tableName = "purchase_additions", indices = [Index("businessDate"), Index("itemId")])
+data class PurchaseAdditionEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val businessDate: String,
+    val itemId: Long,
+    val quantityGrams: Long,
+    val priceCentsPerKg: Long
+)
 
 @Entity(tableName = "items", indices = [Index(value = ["name"], unique = true)])
 data class ItemEntity(
@@ -50,6 +64,36 @@ data class PurchaseEntity(
 
 @Dao
 interface MarketDao {
+    @Query("SELECT * FROM categories ORDER BY name COLLATE NOCASE")
+    fun observeCategories(): Flow<List<CategoryEntity>>
+
+    @Query("SELECT * FROM categories ORDER BY name COLLATE NOCASE")
+    suspend fun allCategories(): List<CategoryEntity>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertCategory(category: CategoryEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun restoreCategories(entries: List<CategoryEntity>)
+
+    @Query("DELETE FROM categories")
+    suspend fun clearCategories()
+
+    @Query("SELECT * FROM purchase_additions WHERE businessDate = :date ORDER BY id")
+    fun observeAdditions(date: String): Flow<List<PurchaseAdditionEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertAddition(entry: PurchaseAdditionEntity): Long
+
+    @Query("SELECT * FROM purchase_additions ORDER BY id")
+    suspend fun allAdditions(): List<PurchaseAdditionEntity>
+
+    @Query("DELETE FROM purchase_additions")
+    suspend fun clearAdditions()
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun restoreAdditions(entries: List<PurchaseAdditionEntity>)
+
     @Query("SELECT * FROM items ORDER BY name COLLATE NOCASE")
     fun observeItems(): Flow<List<ItemEntity>>
 
@@ -112,21 +156,35 @@ interface MarketDao {
 }
 
 @Database(
-    entities = [ItemEntity::class, RequisitionEntity::class, PurchaseEntity::class],
-    version = 1,
+    entities = [
+        ItemEntity::class, RequisitionEntity::class, PurchaseEntity::class,
+        CategoryEntity::class, PurchaseAdditionEntity::class
+    ],
+    version = 2,
     exportSchema = false
 )
 abstract class MarketDatabase : RoomDatabase() {
     abstract fun dao(): MarketDao
 
     companion object {
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `categories` (`name` TEXT NOT NULL, PRIMARY KEY(`name`))")
+                db.execSQL("INSERT OR IGNORE INTO categories(name) VALUES ('Vegetables'), ('Fruits')")
+                db.execSQL("INSERT OR IGNORE INTO categories(name) SELECT DISTINCT category FROM items")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `purchase_additions` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `businessDate` TEXT NOT NULL, `itemId` INTEGER NOT NULL, `quantityGrams` INTEGER NOT NULL, `priceCentsPerKg` INTEGER NOT NULL)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_purchase_additions_businessDate` ON `purchase_additions` (`businessDate`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_purchase_additions_itemId` ON `purchase_additions` (`itemId`)")
+            }
+        }
+
         @Volatile private var instance: MarketDatabase? = null
         fun get(context: Context): MarketDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 MarketDatabase::class.java,
                 "peliyagoda-market-pro.db"
-            ).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2).build().also { instance = it }
         }
     }
 }
