@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items as lazyItems
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -40,6 +41,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
@@ -133,7 +135,7 @@ private fun StatusTag(row: ConsolidatedRow) {
 }
 
 @Composable
-fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, onExport: () -> Unit) {
+fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, categories: List<String>, onExport: () -> Unit) {
     var filter by rememberSaveable { mutableStateOf("All") }
     val shown = rows.filter { filter == "All" || it.item.category == filter }
     val totalReq = rows.sumOf { it.requiredGrams }
@@ -171,10 +173,10 @@ fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, onExport: () -
             }
         }
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("All", MarketConstants.VEGETABLES, MarketConstants.FRUITS).forEach { c ->
-                    FilterChip(selected = filter == c, onClick = { filter = c },
-                        label = { Text(if (c == "All") "All" else c) })
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                item { FilterChip(selected = filter == "All", onClick = { filter = "All" }, label = { Text("All") }) }
+                lazyItems(categories) { c ->
+                    FilterChip(selected = filter == c, onClick = { filter = c }, label = { Text(c) })
                 }
             }
         }
@@ -207,8 +209,36 @@ fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, onExport: () -
                                 Text("${MarketMath.kg(row.purchasedGrams)} kg", fontWeight = FontWeight.SemiBold)
                             }
                         }
-                        Text("Main ${MarketMath.kg(row.mainGrams)}  •  Indian ${MarketMath.kg(row.indianGrams)}  •  Pastry ${MarketMath.kg(row.pastryGrams)} kg",
-                            style = MaterialTheme.typography.bodySmall, color = ProColors.muted)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf(
+                                "Main" to row.mainGrams,
+                                "Indian" to row.indianGrams,
+                                "Pastry" to row.pastryGrams
+                            ).forEach { (label, grams) ->
+                                Surface(
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = ProColors.pale
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 9.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text(label, color = ProColors.teal,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold, maxLines = 1)
+                                        Text("${MarketMath.kg(grams)} kg",
+                                            color = ProColors.navy,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -218,7 +248,7 @@ fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, onExport: () -
 
 @Composable
 fun KitchensScreen(
-    items: List<ItemEntity>, requirements: List<RequisitionEntity>,
+    items: List<ItemEntity>, categories: List<String>, requirements: List<RequisitionEntity>,
     vm: MarketViewModel, message: (String) -> Unit
 ) {
     var kitchenIndex by rememberSaveable { mutableIntStateOf(0) }
@@ -283,6 +313,8 @@ fun KitchensScreen(
     if (pickerOpen) ItemPickerSheet(
         kitchen = kitchen,
         allItems = items,
+        categories = categories,
+        addCategory = { name, done -> vm.addCategory(name, done) },
         existingIds = current.map { it.itemId }.toSet(),
         onDismiss = { pickerOpen = false },
         onConfirm = { ids ->
@@ -350,10 +382,72 @@ private fun RequirementCard(
     }
 }
 
+@Composable
+private fun CategoryStrip(
+    categories: List<String>,
+    selected: String,
+    onSelect: (String) -> Unit,
+    onCreate: (String, (Boolean) -> Unit) -> Unit
+) {
+    var adding by remember { mutableStateOf(false) }
+    var name by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    if (adding) {
+        AlertDialog(
+            onDismissRequest = { if (!busy) adding = false },
+            title = { Text("New item category") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Create a new category for vegetables, fruits, or other market items.")
+                    OutlinedTextField(
+                        value = name, onValueChange = { name = it; error = false },
+                        label = { Text("Category name") },
+                        singleLine = true, isError = error
+                    )
+                    if (error) Text("Category already exists or is invalid", color = ProColors.red)
+                }
+            },
+            dismissButton = {
+                TextButton(enabled = !busy, onClick = { adding = false }) { Text("Cancel") }
+            },
+            confirmButton = {
+                Button(enabled = !busy && name.trim().isNotEmpty() && name.trim().length <= 40,
+                    onClick = {
+                        busy = true
+                        val proposed = name.trim()
+                        onCreate(proposed) { created ->
+                            busy = false
+                            if (created) {
+                                onSelect(proposed)
+                                adding = false
+                                name = ""
+                            } else error = true
+                        }
+                    }) { Text(if (busy) "Saving…" else "Add category") }
+            }
+        )
+    }
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        lazyItems(categories) { c ->
+            FilterChip(selected = selected == c, onClick = { onSelect(c) }, label = { Text(c) })
+        }
+        item {
+            OutlinedButton(onClick = { name = ""; error = false; adding = true }) {
+                Icon(Icons.Default.Add, contentDescription = null)
+                Spacer(Modifier.width(4.dp))
+                Text("Category")
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ItemPickerSheet(
     kitchen: String, allItems: List<ItemEntity>, existingIds: Set<Long>,
+    categories: List<String>,
+    addCategory: (String, (Boolean) -> Unit) -> Unit,
     onDismiss: () -> Unit, onConfirm: (Set<Long>) -> Unit
 ) {
     var search by remember { mutableStateOf("") }
@@ -373,12 +467,12 @@ private fun ItemPickerSheet(
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 placeholder = { Text("Search master catalog") }
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MarketConstants.categories.forEach { cat ->
-                    FilterChip(selected = category == cat, onClick = { category = cat },
-                        label = { Text(cat) })
-                }
-            }
+            CategoryStrip(
+                categories = categories,
+                selected = category,
+                onSelect = { category = it },
+                onCreate = addCategory
+            )
             Text("Selected: ${selected.size}", color = ProColors.teal,
                 style = MaterialTheme.typography.labelLarge)
             LazyColumn(modifier = Modifier.weight(1f)) {
@@ -569,9 +663,10 @@ private fun PurchaseCard(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CatalogSheet(
-    items: List<ItemEntity>, onClose: () -> Unit,
+    items: List<ItemEntity>, categories: List<String>, onClose: () -> Unit,
     add: (String, String) -> Unit,
-    rename: (Long, String, (Boolean) -> Unit) -> Unit
+    rename: (Long, String, (Boolean) -> Unit) -> Unit,
+    addCategory: (String, (Boolean) -> Unit) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
     var category by remember { mutableStateOf(MarketConstants.VEGETABLES) }
@@ -632,16 +727,15 @@ fun CatalogSheet(
                 shape = RoundedCornerShape(12.dp), singleLine = true)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                MarketConstants.categories.forEach { cat ->
-                    FilterChip(selected = category == cat, onClick = { category = cat },
-                        label = { Text(cat) })
-                }
-                Spacer(Modifier.weight(1f))
                 Button(onClick = { add(name, category); name = "" }, enabled = name.isNotBlank()) {
                     Icon(Icons.Default.Add, contentDescription = null)
-                    Text(" Add")
+                    Text(" Add Item")
                 }
             }
+            CategoryStrip(
+                categories = categories, selected = category,
+                onSelect = { category = it }, onCreate = addCategory
+            )
             HorizontalDivider()
             OutlinedTextField(value = search, onValueChange = { search = it },
                 modifier = Modifier.fillMaxWidth(),
