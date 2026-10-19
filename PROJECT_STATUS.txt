@@ -1,0 +1,4 @@
+Source project created 2026-10-19
+Status: SOURCE-READY; BUILD NOT VERIFIED
+Reason: Android SDK, Android Gradle Plugin/Gradle toolchain not installed and internet resolution restricted.
+Do not advertise this ZIP as a tested APK.
