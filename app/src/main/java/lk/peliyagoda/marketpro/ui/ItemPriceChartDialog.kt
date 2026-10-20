@@ -272,7 +272,7 @@ private fun TrendPanel(
                 style = MaterialTheme.typography.titleSmall, maxLines = 1)
             Row(Modifier.fillMaxWidth().weight(1f)) {
                 // This axis never moves when the user swipes a chart.
-                Canvas(Modifier.width(46.dp).fillMaxHeight()) {
+                Canvas(Modifier.width(33.dp).fillMaxHeight()) {
                     val top = 24.dp.toPx()
                     val bottom = size.height - 24.dp.toPx()
                     val span = (bottom - top).coerceAtLeast(1f)
@@ -287,7 +287,7 @@ private fun TrendPanel(
                         val label = if (money) "%.0f".format(java.util.Locale.US, v)
                             else "%.1f".format(java.util.Locale.US, v)
                         drawContext.canvas.nativeCanvas.drawText(
-                            label, size.width - 3.dp.toPx(), y + 4.dp.toPx(), font
+                            label, size.width - 1.dp.toPx(), y + 4.dp.toPx(), font
                         )
                     }
                 }
