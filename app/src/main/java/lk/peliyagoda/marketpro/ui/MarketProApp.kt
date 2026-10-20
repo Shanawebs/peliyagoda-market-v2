@@ -364,7 +364,7 @@ fun MarketProApp(vm: MarketViewModel) {
                 when (tab) {
                     0 -> DashboardScreen(date, rows, categories, onExport = { pdfDialogOpen = true })
                     1 -> KitchensScreen(items, categories, reqs, vm, ::message)
-                    else -> MarketScreen(rows, vm, ::message)
+                    else -> MarketScreen(rows, categories, vm, ::message)
                 }
             }
         }
