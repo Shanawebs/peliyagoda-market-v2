@@ -184,7 +184,7 @@ fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, categories: Li
                     OutlinedButton(onClick = onExport) {
                         Icon(Icons.Default.FileDownload, contentDescription = null)
                         Spacer(Modifier.width(5.dp))
-                        Text("CSV")
+                        Text("Excel")
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
