@@ -25,6 +25,7 @@ class MarketViewModel(private val repository: MarketRepository) : ViewModel() {
     // Serialize rapid edits and deletions so the newest quantity always wins.
     private val requirementWriteMutex = Mutex()
     private val purchaseWriteMutex = Mutex()
+    private val cashWriteMutex = Mutex()
     val chartItemId = MutableStateFlow<Long?>(null)
     val chartHistory = chartItemId.flatMapLatest { id ->
         if (id == null) kotlinx.coroutines.flow.flowOf(emptyList<PurchaseHistoryLot>())
@@ -45,6 +46,8 @@ class MarketViewModel(private val repository: MarketRepository) : ViewModel() {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val additions = date.flatMapLatest { repository.additions(it.toString()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val dailyCashReceived = date.flatMapLatest { repository.cashReceived(it.toString()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     init {
         viewModelScope.launch(Dispatchers.IO) { repository.seedCatalogOnce() }
@@ -128,6 +131,13 @@ class MarketViewModel(private val repository: MarketRepository) : ViewModel() {
             purchaseWriteMutex.withLock {
                 repository.editPurchaseAddition(day, itemId, lotId, grams, priceCentsPerKg)
             }
+        }, done)
+    }
+
+    fun saveCashReceived(amountCents: Long, done: (Result<Unit>) -> Unit = {}) {
+        val day = date.value.toString()
+        doWork({
+            cashWriteMutex.withLock { repository.saveCashReceived(day, amountCents) }
         }, done)
     }
 
