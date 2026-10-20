@@ -99,6 +99,12 @@ fun MarketProApp(vm: MarketViewModel) {
         val scope = rememberCoroutineScope()
         val snackbar = remember { SnackbarHostState() }
         val date by vm.date.collectAsState()
+        val recordedDateStrings by vm.recordedDates.collectAsState()
+        val recordedDateSet = remember(recordedDateStrings) {
+            recordedDateStrings.mapNotNull {
+                runCatching { LocalDate.parse(it) }.getOrNull()
+            }.toSet()
+        }
         val items by vm.items.collectAsState()
         val categoriesDb by vm.categories.collectAsState()
         val categories = categoriesDb.map { it.name }.ifEmpty { listOf("Vegetables", "Fruits") }
@@ -231,21 +237,15 @@ fun MarketProApp(vm: MarketViewModel) {
         }
 
         if (calendarOpen) {
-            val picker = rememberDatePickerState(
-                initialSelectedDateMillis = date.toEpochDay() * 86_400_000L
-            )
-            DatePickerDialog(
-                onDismissRequest = { calendarOpen = false },
-                confirmButton = {
-                    TextButton(onClick = {
-                        picker.selectedDateMillis?.let {
-                            vm.setDate(Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate())
-                        }
-                        calendarOpen = false
-                    }) { Text("Select") }
+            RecordCalendarDialog(
+                selected = date,
+                recordedDays = recordedDateSet,
+                onSelect = { picked ->
+                    vm.setDate(picked)
+                    calendarOpen = false
                 },
-                dismissButton = { TextButton(onClick = { calendarOpen = false }) { Text("Cancel") } }
-            ) { DatePicker(state = picker) }
+                onDismiss = { calendarOpen = false }
+            )
         }
 
         if (catalogOpen) CatalogSheet(
