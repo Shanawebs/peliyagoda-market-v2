@@ -1111,11 +1111,23 @@ fun CatalogSheet(
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 placeholder = { Text("Find an item") },
                 shape = RoundedCornerShape(12.dp), singleLine = true)
-            Text("${items.size} catalog items", color = ProColors.muted,
+            val filteredItems = items.filter { item ->
+                item.category == category && item.name.contains(search, ignoreCase = true)
+            }
+            Text("${filteredItems.size} ${category} item(s)", color = ProColors.muted,
                 style = MaterialTheme.typography.labelMedium)
             LazyColumn(modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(bottom = 24.dp)) {
-                lazyItems(items.filter { it.name.contains(search, true) }, key = { it.id }) { item ->
+                if (filteredItems.isEmpty()) {
+                    item {
+                        Text(
+                            "No items in this category. Add an item above.",
+                            color = ProColors.muted,
+                            modifier = Modifier.padding(vertical = 16.dp)
+                        )
+                    }
+                }
+                lazyItems(filteredItems, key = { it.id }) { item ->
                     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically) {
