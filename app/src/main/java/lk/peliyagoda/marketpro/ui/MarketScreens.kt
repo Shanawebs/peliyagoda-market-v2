@@ -684,6 +684,8 @@ fun MarketScreen(
     message: (String) -> Unit,
     listState: LazyListState,
     filter: String,
+    restoreItemId: Long?,
+    restoreItemOffset: Int,
     onFilterChange: (String) -> Unit
 ) {
     val date by vm.date.collectAsState()
@@ -721,6 +723,17 @@ fun MarketScreen(
         latestPhotoByItem,
         nowMs
     )
+    // Runs only on the Market tab's next entry, not during continuous scrolling.
+    // Rows have stable item-ID keys, so live reorder also preserves visible cards.
+    LaunchedEffect(listState) {
+        if (restoreItemId != null) {
+            val position = shown.indexOfFirst { it.item.id == restoreItemId }
+            if (position >= 0) {
+                // +2 accounts for the summary and the pinned filter header.
+                listState.scrollToItem(position + 2, restoreItemOffset.coerceAtLeast(0))
+            }
+        }
+    }
     val totalRequired = rows.sumOf { it.requiredGrams }
     val totalPurchased = rows.sumOf { it.purchasedGrams }
     val totalBill = rows.sumOf { it.lineCents }
