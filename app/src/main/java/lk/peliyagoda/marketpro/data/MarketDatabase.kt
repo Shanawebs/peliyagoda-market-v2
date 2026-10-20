@@ -28,6 +28,13 @@ object MarketConstants {
 @Entity(tableName = "categories")
 data class CategoryEntity(@PrimaryKey val name: String)
 
+/** Date-specific cash entrusted for market shopping, stored in integer cents. */
+@Entity(tableName = "daily_cash_received")
+data class DailyCashReceivedEntity(
+    @PrimaryKey val businessDate: String,
+    val amountCents: Long
+)
+
 @Entity(tableName = "purchase_additions", indices = [Index("businessDate"), Index("itemId")])
 data class PurchaseAdditionEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -72,6 +79,22 @@ data class PurchaseHistoryLot(
 
 @Dao
 interface MarketDao {
+    @Query("SELECT * FROM daily_cash_received WHERE businessDate = :date LIMIT 1")
+    fun observeCashReceived(date: String): Flow<DailyCashReceivedEntity?>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertCashReceived(entry: DailyCashReceivedEntity)
+
+    @Query("SELECT * FROM daily_cash_received ORDER BY businessDate ASC")
+    suspend fun allCashReceived(): List<DailyCashReceivedEntity>
+
+    @Query("DELETE FROM daily_cash_received")
+    suspend fun clearCashReceived()
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun restoreCashReceived(entries: List<DailyCashReceivedEntity>)
+
+
     @Query("""
         SELECT businessDate, quantityGrams, priceCentsPerKg, 0 AS lotSequence
         FROM purchases
@@ -204,9 +227,10 @@ interface MarketDao {
 @Database(
     entities = [
         ItemEntity::class, RequisitionEntity::class, PurchaseEntity::class,
-        CategoryEntity::class, PurchaseAdditionEntity::class
+        CategoryEntity::class, PurchaseAdditionEntity::class,
+        DailyCashReceivedEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class MarketDatabase : RoomDatabase() {
@@ -224,13 +248,24 @@ abstract class MarketDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Additive-only: preserve every existing kitchen, item, purchase and photo.
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `daily_cash_received` " +
+                        "(`businessDate` TEXT NOT NULL, `amountCents` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`businessDate`))"
+                )
+            }
+        }
+
         @Volatile private var instance: MarketDatabase? = null
         fun get(context: Context): MarketDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 MarketDatabase::class.java,
                 "peliyagoda-market-pro.db"
-            ).addMigrations(MIGRATION_1_2).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
         }
     }
 }
