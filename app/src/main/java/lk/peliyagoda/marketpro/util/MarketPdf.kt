@@ -25,6 +25,9 @@ data class CompletedCategoryGroup(
     val rows: List<ConsolidatedRow>
 ) {
     val subtotalCents: Long get() = rows.sumOf { it.lineCents }
+    /** Numbering is local to each category, starting again at 1. */
+    fun numberedRows(): List<Pair<Int, ConsolidatedRow>> =
+        rows.mapIndexed { index, row -> (index + 1) to row }
 }
 
 fun completedCategoryGroups(rows: List<ConsolidatedRow>): List<CompletedCategoryGroup> =
@@ -164,7 +167,6 @@ object MarketPdf {
 
         try {
             nextPage()
-            var number = 0
             for (group in groups) {
                 ensure(56f)
                 val headerY = y
@@ -175,8 +177,7 @@ object MarketPdf {
                 drawWrapped(c(), group.name, LEFT + 11f, headerY + 6f,
                     400, paint(17f, teal, true))
                 y += 39f
-                for (row in group.rows) {
-                    number++
+                for ((number, row) in group.numberedRows()) {
                     val namePaint = paint(17f, navy, true)
                     val nameWidth = 253
                     val nameLayout = StaticLayout.Builder.obtain(
