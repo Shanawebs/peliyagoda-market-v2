@@ -11,6 +11,7 @@ class MarketRepository(private val db: MarketDatabase) {
     private val dao = db.dao()
     val items: Flow<List<ItemEntity>> = dao.observeItems()
     val categories: Flow<List<CategoryEntity>> = dao.observeCategories()
+    val recordedDates: Flow<List<String>> = dao.observeDatesWithData()
     fun requirements(date: String) = dao.observeRequisitions(date)
     fun purchases(date: String) = dao.observePurchases(date)
     fun additions(date: String) = dao.observeAdditions(date)
