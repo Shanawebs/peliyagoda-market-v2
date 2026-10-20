@@ -2,7 +2,7 @@ name: Build Peliyagoda Market V2 APK
 
 on:
   push:
-    branches: [main, feature/v210-chart-layout-polish]
+    branches: [main, feature/v211-market-filters-and-spacing]
   workflow_dispatch:
 
 permissions:
