@@ -27,8 +27,8 @@ fun completedPurchaseTotal(rows: List<ConsolidatedRow>): Long =
 object MarketPdf {
     private const val PAGE_W = 595
     private const val PAGE_H = 842
-    private const val LEFT = 36f
-    private const val RIGHT = 559f
+    private const val LEFT = 40f
+    private const val RIGHT = 528f
     private const val BOTTOM = 788f
     private val navy = Color.rgb(16, 42, 55)
     private val muted = Color.rgb(75, 98, 110)
@@ -104,23 +104,23 @@ object MarketPdf {
 
         try {
             nextPage()
-            val heading = paint(11f, navy, true)
-            // Stable A-Z item order and explicit final costs, including additional lots.
+             // Stable A-Z item order and explicit final costs, including additional lots.
             for ((index, row) in completed.withIndex()) {
-                val namePaint = paint(14f, navy, true)
-                val availableNameWidth = 300
+                val namePaint = paint(18f, navy, true)
+                val availableNameWidth = 255
                 val namelayout = StaticLayout.Builder.obtain(
                     row.item.name, 0, row.item.name.length, namePaint,
                     availableNameWidth
                 ).setIncludePad(false).build()
-                val rowHeight = maxOf(87f, namelayout.height.toFloat() + 50f)
+                // Tighter cards; preserve enough height for long Sinhala item names.
+                val rowHeight = maxOf(76f, namelayout.height.toFloat() + 47f)
                 if (y + rowHeight > BOTTOM) nextPage()
 
                 val c = canvas()
-                c.drawRoundRect(LEFT, y, RIGHT, y + rowHeight - 8f,
+                c.drawRoundRect(LEFT, y, RIGHT, y + rowHeight - 5f,
                     9f, 9f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = light })
 
-                val top = y + 11f
+                val top = y + 10f
                 val title = (index + 1).toString() + ". " + row.item.name
                 val titleHeight = drawWrapped(
                     c, title, LEFT + 11f, top, availableNameWidth, namePaint
@@ -128,17 +128,21 @@ object MarketPdf {
                 c.drawText(
                     "Required: " + MarketMath.kg(row.requiredGrams) + " kg" +
                         "  |  Bought: " + MarketMath.kg(row.purchasedGrams) + " kg",
-                    LEFT + 11f, top + titleHeight + 17f, paint(10f, muted)
+                    LEFT + 11f, top + titleHeight + 19f, paint(13f, muted, true)
                 )
                 c.drawText(
-                    "Final cost", RIGHT - 12f, y + 23f,
-                    paint(10f, muted).apply { textAlign = Paint.Align.RIGHT }
+                    "Final cost", RIGHT - 12f, y + 25f,
+                    paint(12f, muted, true).apply { textAlign = Paint.Align.RIGHT }
                 )
-                c.drawText(
-                    "Rs. " + MarketMath.lkr(row.lineCents),
-                    RIGHT - 12f, y + 44f,
-                    paint(15f, teal, true).apply { textAlign = Paint.Align.RIGHT }
-                )
+                val costText = "Rs. " + MarketMath.lkr(row.lineCents)
+                val costPaint = paint(19f, teal, true).apply {
+                    textAlign = Paint.Align.RIGHT
+                }
+                if (costPaint.measureText(costText) > 178f) {
+                    costPaint.textSize = (19f * 178f /
+                        costPaint.measureText(costText)).coerceAtLeast(12f)
+                }
+                c.drawText(costText, RIGHT - 12f, y + 52f, costPaint)
                 y += rowHeight
             }
             if (y + 102f > BOTTOM) nextPage()
