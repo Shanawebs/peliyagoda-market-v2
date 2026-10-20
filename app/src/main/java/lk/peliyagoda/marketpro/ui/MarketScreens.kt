@@ -291,7 +291,6 @@ fun KitchensScreen(
                 Tab(
                     selected = kitchenIndex == index,
                     onClick = { kitchenIndex = index },
-                    modifier = Modifier.weight(1f),
                     text = {
                         Text(
                             displayNames[index],
