@@ -125,10 +125,15 @@ object MarketPdf {
                 val titleHeight = drawWrapped(
                     c, title, LEFT + 11f, top, availableNameWidth, namePaint
                 )
+                val qtyText = "Required: " + MarketMath.kg(row.requiredGrams) +
+                    " kg  |  Bought: " + MarketMath.kg(row.purchasedGrams) + " kg"
+                val qtyPaint = paint(13f, muted, true)
+                if (qtyPaint.measureText(qtyText) > availableNameWidth.toFloat()) {
+                    qtyPaint.textSize = (13f * availableNameWidth /
+                        qtyPaint.measureText(qtyText)).coerceAtLeast(9.5f)
+                }
                 c.drawText(
-                    "Required: " + MarketMath.kg(row.requiredGrams) + " kg" +
-                        "  |  Bought: " + MarketMath.kg(row.purchasedGrams) + " kg",
-                    LEFT + 11f, top + titleHeight + 19f, paint(13f, muted, true)
+                    qtyText, LEFT + 11f, top + titleHeight + 19f, qtyPaint
                 )
                 c.drawText(
                     "Final cost", RIGHT - 12f, y + 25f,
