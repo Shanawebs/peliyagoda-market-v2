@@ -109,6 +109,16 @@ class MarketViewModel(private val repository: MarketRepository) : ViewModel() {
         } }, done)
     }
 
+    fun editPurchaseAddition(itemId: Long, lotId: Long, grams: Long, priceCentsPerKg: Long,
+                             done: (Result<Unit>) -> Unit = {}) {
+        val day = date.value.toString()
+        doWork({
+            purchaseWriteMutex.withLock {
+                repository.editPurchaseAddition(day, itemId, lotId, grams, priceCentsPerKg)
+            }
+        }, done)
+    }
+
     fun prepareBackup(done: (Result<String>) -> Unit) {
         viewModelScope.launch {
             done(runCatching { withContext(Dispatchers.IO) { repository.exportBackup() } })
