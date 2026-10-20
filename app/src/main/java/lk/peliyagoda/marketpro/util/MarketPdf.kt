@@ -190,7 +190,7 @@ object MarketPdf {
                         LEFT, y, RIGHT, y + height - 4f, 8f, 8f,
                         Paint(Paint.ANTI_ALIAS_FLAG).apply { color = light }
                     )
-                    val title = "$" + "{number}. " + "$" + "{row.item.name}"
+                    val title = number.toString() + ". " + row.item.name
                     val titleHeight = drawWrapped(c(), title, LEFT + 11f, y + 7f,
                         nameWidth, namePaint)
                     val qty = "Required: " + MarketMath.kg(row.requiredGrams) +
