@@ -116,6 +116,15 @@ interface MarketDao {
     @Query("SELECT * FROM purchase_additions WHERE businessDate = :date ORDER BY id")
     fun observeAdditions(date: String): Flow<List<PurchaseAdditionEntity>>
 
+    @Query("SELECT * FROM purchases WHERE businessDate = :date AND itemId = :itemId LIMIT 1")
+    suspend fun purchaseForItem(date: String, itemId: Long): PurchaseEntity?
+
+    @Query("SELECT COALESCE(SUM(quantityGrams), 0) FROM requisitions WHERE businessDate = :date AND itemId = :itemId")
+    suspend fun requirementGramsForItem(date: String, itemId: Long): Long
+
+    @Query("SELECT COALESCE(SUM(quantityGrams), 0) FROM purchase_additions WHERE businessDate = :date AND itemId = :itemId")
+    suspend fun additionalGramsForItem(date: String, itemId: Long): Long
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertAddition(entry: PurchaseAdditionEntity): Long
 
