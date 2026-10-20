@@ -681,6 +681,8 @@ fun MarketScreen(
     rows: List<ConsolidatedRow>,
     categories: List<String>,
     vm: MarketViewModel,
+    cashReceivedCents: Long,
+    onSaveCash: (Long) -> Unit,
     message: (String) -> Unit,
     listState: LazyListState,
     filter: String,
@@ -691,6 +693,61 @@ fun MarketScreen(
     val date by vm.date.collectAsState()
     val context = LocalContext.current
     val businessDate = date.toString()
+    var cashDialogOpen by remember(businessDate) { mutableStateOf(false) }
+    // Day-specific popup, editable after close/reopen; blank is saved as zero.
+    if (cashDialogOpen) {
+        var cashDraft by remember(businessDate) {
+            mutableStateOf(MarketMath.editPriceOrBlank(cashReceivedCents))
+        }
+        val parsed = MarketMath.parseBlankPriceCents(cashDraft)
+        val valid = parsed != null && parsed in 0L..9_999_999_999L
+        AlertDialog(
+            onDismissRequest = { cashDialogOpen = false },
+            title = { Text("Cash Received", fontWeight = FontWeight.ExtraBold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Cash amount received for " + businessDate,
+                        color = ProColors.muted)
+                    OutlinedTextField(
+                        value = cashDraft,
+                        onValueChange = { value ->
+                            if (value.length <= 14) {
+                                cashDraft = value
+                                MarketMath.parseBlankPriceCents(value)
+                                    ?.takeIf { it in 0L..9_999_999_999L }
+                                    ?.let(onSaveCash)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Cash Received (Rs.)") },
+                        prefix = { Text("Rs. ") },
+                        isError = !valid,
+                        supportingText = {
+                            Text(if (valid) "Saves automatically. Clear to reset to zero."
+                            else "Enter a valid amount with up to 2 decimals.")
+                        },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                    )
+                    Text("Total spent: Rs. " + MarketMath.lkr(rows.sumOf { it.lineCents }),
+                        color = ProColors.muted)
+                    Text(
+                        "Cash balance: Rs. " +
+                            MarketMath.lkr((parsed?.takeIf { valid } ?: cashReceivedCents) -
+                                rows.sumOf { it.lineCents }),
+                        color = if ((parsed?.takeIf { valid } ?: cashReceivedCents) >=
+                            rows.sumOf { it.lineCents }) ProColors.green else ProColors.red,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { cashDialogOpen = false }) {
+                    Text("Close")
+                }
+            }
+        )
+    }
     var photoVersion by remember(businessDate) { mutableIntStateOf(0) }
     var nowMs by remember(businessDate) {
         mutableLongStateOf(System.currentTimeMillis())
@@ -753,8 +810,35 @@ fun MarketScreen(
                         fontWeight = FontWeight.ExtraBold, color = ProColors.navy)
                     Text("Enter quantities and prices • Saves automatically",
                         color = ProColors.muted, style = MaterialTheme.typography.bodySmall)
-                    Text("Rs. ${MarketMath.lkr(totalBill)}", color = ProColors.purple,
-                        style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            "Rs. ${MarketMath.lkr(totalBill)}",
+                            modifier = Modifier.weight(1f),
+                            color = ProColors.purple,
+                            style = MaterialTheme.typography.headlineSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                        Surface(
+                            onClick = { cashDialogOpen = true },
+                            color = Color(0xFF8B1E23),
+                            shape = RoundedCornerShape(22.dp)
+                        ) {
+                            Text(
+                                "Cash Received",
+                                modifier = Modifier.padding(horizontal = 11.dp, vertical = 10.dp),
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.ExtraBold,
+                                maxLines = 1
+                            )
+                        }
+                    }
                     Row(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
