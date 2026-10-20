@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBackIosNew
@@ -51,6 +52,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -120,7 +122,16 @@ fun MarketProApp(vm: MarketViewModel) {
                 additions.filter { it.businessDate == date.toString() }
             )
         }
-        var tab by remember { mutableIntStateOf(0) }
+        var tab by rememberSaveable { mutableIntStateOf(0) }
+        // Hoist Market's scroll state out of the tab-specific composition:
+        // switching Dashboard/Kitchens/Market must NOT reset item position.
+        // A new date intentionally creates a fresh scroll/filter state.
+        val marketListState = rememberSaveable(
+            date.toString(), saver = LazyListState.Saver
+        ) { LazyListState() }
+        var marketFilter by rememberSaveable(date.toString()) {
+            mutableStateOf("All")
+        }
         var catalogOpen by remember { mutableStateOf(false) }
         var chartOpen by remember { mutableStateOf(false) }
         val priceHistory by vm.chartHistory.collectAsState()
@@ -364,7 +375,20 @@ fun MarketProApp(vm: MarketViewModel) {
                 when (tab) {
                     0 -> DashboardScreen(date, rows, categories, onExport = { pdfDialogOpen = true })
                     1 -> KitchensScreen(items, categories, reqs, vm, ::message)
-                    else -> MarketScreen(rows, categories, vm, ::message)
+                    else -> MarketScreen(
+                        rows = rows,
+                        categories = categories,
+                        vm = vm,
+                        message = ::message,
+                        listState = marketListState,
+                        filter = marketFilter,
+                        onFilterChange = { category ->
+                            if (marketFilter != category) {
+                                marketFilter = category
+                                scope.launch { marketListState.scrollToItem(1) }
+                            }
+                        }
+                    )
                 }
             }
         }
