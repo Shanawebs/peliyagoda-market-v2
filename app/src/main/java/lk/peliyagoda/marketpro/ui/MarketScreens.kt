@@ -178,7 +178,8 @@ private fun CategoryChip(category: String, active: Boolean, onClick: () -> Unit)
 @Composable
 fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, categories: List<String>, onExport: () -> Unit) {
     var filter by rememberSaveable(date.toString()) { mutableStateOf("All") }
-    val listState = rememberLazyListState()
+    // Dashboard uses a separate list position for each chosen business date.
+    val listState = remember(date) { LazyListState() }
     val scope = rememberCoroutineScope()
     fun chooseCategory(category: String) {
         if (filter != category) {
