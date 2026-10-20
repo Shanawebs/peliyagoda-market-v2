@@ -56,8 +56,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -74,6 +77,8 @@ import lk.peliyagoda.marketpro.data.PurchaseAdditionEntity
 import lk.peliyagoda.marketpro.data.RequisitionEntity
 import lk.peliyagoda.marketpro.util.ConsolidatedRow
 import lk.peliyagoda.marketpro.util.MarketMath
+import lk.peliyagoda.marketpro.util.sortedMarketPurchases
+import lk.peliyagoda.marketpro.util.nextMarketSortRefreshMs
 import java.time.LocalDate
 
 @Composable
@@ -649,8 +654,40 @@ fun MarketScreen(
 ) {
     val date by vm.date.collectAsState()
     var filter by rememberSaveable { mutableStateOf("All") }
-    // Filter only the displayed cards; totals always reflect all categories.
-    val shown = rows.filter { filter == "All" || it.item.category == filter }
+    val context = LocalContext.current
+    val businessDate = date.toString()
+    var photoVersion by remember(businessDate) { mutableIntStateOf(0) }
+    var nowMs by remember(businessDate) {
+        mutableLongStateOf(System.currentTimeMillis())
+    }
+    // Photos are private on this device. Read only the selected business date,
+    // and recompute after saving a photo or after purchase records change.
+    val latestPhotoByItem = remember(businessDate, rows, photoVersion) {
+        rows.mapNotNull { row ->
+            InvoicePhotoStore.photos(context, businessDate, row.item.id)
+                .maxOfOrNull { it.lastModified() }
+                ?.let { row.item.id to it }
+        }.toMap()
+    }
+    LaunchedEffect(businessDate, rows, latestPhotoByItem) {
+        // No background service/polling: schedule only the next 60-second
+        // threshold, then update the order while the screen is active.
+        while (true) {
+            val current = System.currentTimeMillis()
+            nowMs = current
+            val due = nextMarketSortRefreshMs(rows, latestPhotoByItem, current)
+                ?: break
+            delay((due - current).coerceAtLeast(1L))
+        }
+    }
+    // Only reorder visible cards, not totals, source records, or other tabs.
+    // Unfinished/awaiting-invoice rows stay on top; fully verified rows move
+    // to the bottom after the one-minute delay. Both sections stay A–Z.
+    val shown = sortedMarketPurchases(
+        rows.filter { filter == "All" || it.item.category == filter },
+        latestPhotoByItem,
+        nowMs
+    )
     val totalRequired = rows.sumOf { it.requiredGrams }
     val totalPurchased = rows.sumOf { it.purchasedGrams }
     val totalBill = rows.sumOf { it.lineCents }
@@ -741,6 +778,7 @@ fun MarketScreen(
                         if (result.isFailure) message("Could not save additional purchase change")
                     }
                 },
+                onPhotoSaved = { photoVersion++ },
                 message = message
             )
         }
@@ -754,6 +792,7 @@ private fun PurchaseCard(
     onSave: (Long, Long) -> Unit,
     onAdd: (Long, Long, (Result<Unit>) -> Unit) -> Unit,
     onEdit: (Long, Long, Long) -> Unit,
+    onPhotoSaved: () -> Unit,
     message: (String) -> Unit
 ) {
     var purchased by remember(date, row.item.id) {
@@ -966,6 +1005,7 @@ private fun PurchaseCard(
                     businessDate = date,
                     itemId = row.item.id,
                     itemName = row.item.name,
+                    onPhotoSaved = onPhotoSaved,
                     message = message
                 )
                 Spacer(Modifier.weight(1f))
