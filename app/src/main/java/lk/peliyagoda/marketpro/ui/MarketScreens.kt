@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -41,6 +42,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
@@ -1071,9 +1073,16 @@ fun CatalogSheet(
             }
         )
     }
-    ModalBottomSheet(onDismissRequest = onClose) {
+    // Full height while focused, and inset above the IME so the results list
+    // remains visible and scrollable instead of collapsing behind the keyboard.
+    val catalogSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onClose,
+        sheetState = catalogSheetState,
+        modifier = Modifier.imePadding()
+    ) {
         Column(
-            Modifier.fillMaxWidth().fillMaxHeight(0.88f).padding(horizontal = 18.dp),
+            Modifier.fillMaxWidth().fillMaxHeight(0.97f).padding(horizontal = 18.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text("Master item catalog", style = MaterialTheme.typography.titleLarge,
