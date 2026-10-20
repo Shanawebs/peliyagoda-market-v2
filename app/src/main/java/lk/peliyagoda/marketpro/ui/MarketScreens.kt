@@ -81,6 +81,7 @@ import lk.peliyagoda.marketpro.data.PurchaseAdditionEntity
 import lk.peliyagoda.marketpro.data.RequisitionEntity
 import lk.peliyagoda.marketpro.util.ConsolidatedRow
 import lk.peliyagoda.marketpro.util.MarketMath
+import lk.peliyagoda.marketpro.util.CashAmountFormatter
 import lk.peliyagoda.marketpro.util.PurchaseEntryRules
 import lk.peliyagoda.marketpro.util.sortedMarketPurchases
 import lk.peliyagoda.marketpro.util.nextMarketSortRefreshMs
@@ -710,7 +711,11 @@ fun MarketScreen(
                         color = ProColors.muted)
                     OutlinedTextField(
                         value = cashDraft,
-                        onValueChange = { value ->
+                        onValueChange = { displayed ->
+                            // A pasted "1,000.50" is normalized to a comma-free
+                            // editing value; the visual transform adds separators
+                            // without altering what is saved to Room.
+                            val value = CashAmountFormatter.cleanInput(displayed)
                             if (value.length <= 14) {
                                 cashDraft = value
                                 MarketMath.parseBlankPriceCents(value)
@@ -721,6 +726,7 @@ fun MarketScreen(
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text("Cash Received (Rs.)") },
                         prefix = { Text("Rs. ") },
+                        visualTransformation = CashThousandsVisualTransformation,
                         isError = !valid,
                         supportingText = {
                             Text(if (valid) "Saves automatically. Clear to reset to zero."
