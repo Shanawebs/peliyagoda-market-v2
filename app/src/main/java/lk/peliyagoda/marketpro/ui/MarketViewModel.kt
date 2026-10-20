@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import lk.peliyagoda.marketpro.data.ItemEntity
 import lk.peliyagoda.marketpro.data.MarketRepository
 import lk.peliyagoda.marketpro.data.PurchaseEntity
+import lk.peliyagoda.marketpro.data.PurchaseHistoryLot
 import lk.peliyagoda.marketpro.data.RequisitionEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -24,6 +25,14 @@ class MarketViewModel(private val repository: MarketRepository) : ViewModel() {
     // Serialize rapid edits and deletions so the newest quantity always wins.
     private val requirementWriteMutex = Mutex()
     private val purchaseWriteMutex = Mutex()
+    val chartItemId = MutableStateFlow<Long?>(null)
+    val chartHistory = chartItemId.flatMapLatest { id ->
+        if (id == null) kotlinx.coroutines.flow.flowOf(emptyList<PurchaseHistoryLot>())
+        else repository.purchaseHistory(id)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun selectChartItem(id: Long?) { chartItemId.value = id }
+
     val date = MutableStateFlow(LocalDate.now())
     val items = repository.items.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val categories = repository.categories.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
