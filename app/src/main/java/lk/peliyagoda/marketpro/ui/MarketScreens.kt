@@ -115,13 +115,13 @@ private fun EmptyState(title: String, detail: String) {
 private fun StatusTag(row: ConsolidatedRow) {
     val status = when {
         row.purchasedGrams == 0L -> "PENDING"
-        row.varianceGrams > 0 -> "EXTRA +${MarketMath.kg(row.varianceGrams)} kg"
+        row.varianceGrams > 0 -> "COMPLETED +${MarketMath.kg(row.varianceGrams)}"
         row.varianceGrams < 0 -> "SHORTAGE (-${MarketMath.kg(-row.varianceGrams)} kg)"
         else -> "COMPLETED"
     }
     val color = when {
         row.purchasedGrams == 0L -> Color(0xFF475569) // dark gray
-        row.varianceGrams > 0 -> Color(0xFF075985)    // dark blue
+        row.varianceGrams > 0 -> Color(0xFF166534)    // completed with surplus
         row.varianceGrams < 0 -> Color(0xFF991B1B)    // dark red
         else -> Color(0xFF166534)                      // dark green
     }
@@ -185,7 +185,7 @@ fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, categories: Li
                     OutlinedButton(onClick = onExport) {
                         Icon(Icons.Default.FileDownload, contentDescription = null)
                         Spacer(Modifier.width(5.dp))
-                        Text("Excel")
+                        Text("PDF")
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -243,7 +243,7 @@ fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, categories: Li
                             listOf(
                                 "Main" to row.mainGrams,
                                 "Indian" to row.indianGrams,
-                                "Pastry" to row.pastryGrams
+                                "Bar/Pastry" to row.pastryGrams
                             ).forEach { (label, grams) ->
                                 Surface(
                                     modifier = Modifier.weight(1f),
@@ -286,9 +286,22 @@ fun KitchensScreen(
     val itemMap = items.associateBy { it.id }
     Column(Modifier.fillMaxSize()) {
         TabRow(selectedTabIndex = kitchenIndex, containerColor = Color.White) {
-            MarketConstants.kitchens.forEachIndexed { index, name ->
-                Tab(selected = kitchenIndex == index, onClick = { kitchenIndex = index },
-                    text = { Text(name, maxLines = 2, minLines = 2, style = MaterialTheme.typography.labelMedium) })
+            val displayNames = listOf("Main", "Indian", "Bar/Pastry")
+            MarketConstants.kitchens.forEachIndexed { index, _ ->
+                Tab(
+                    selected = kitchenIndex == index,
+                    onClick = { kitchenIndex = index },
+                    modifier = Modifier.weight(1f),
+                    text = {
+                        Text(
+                            displayNames[index],
+                            maxLines = 1,
+                            fontWeight = FontWeight.ExtraBold,
+                            style = MaterialTheme.typography.titleSmall,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                )
             }
         }
         Box(Modifier.fillMaxSize()) {
