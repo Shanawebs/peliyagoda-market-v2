@@ -101,6 +101,7 @@ fun InvoicePhotoControl(
     businessDate: String,
     itemId: Long,
     itemName: String,
+    onPhotoSaved: () -> Unit = {},
     message: (String) -> Unit
 ) {
     val context = LocalContext.current
@@ -117,8 +118,12 @@ fun InvoicePhotoControl(
         val file = pendingPath.takeIf { it.isNotBlank() }?.let(::File)
         pendingPath = ""
         if (ok && file != null && file.exists() && file.length() > 0L) {
+            // Persist the completion-photo timestamp on the original file,
+            // so the 1-minute delay survives navigation and app restarts.
+            file.setLastModified(System.currentTimeMillis())
             refresh++
             photoDialog = true
+            onPhotoSaved()
             message("Full-resolution invoice photo saved")
         } else {
             // Camera cancellations must not leave empty placeholder JPEG files.
