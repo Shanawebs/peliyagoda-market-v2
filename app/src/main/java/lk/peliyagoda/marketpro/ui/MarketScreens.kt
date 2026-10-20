@@ -91,7 +91,8 @@ private fun SectionCard(modifier: Modifier = Modifier, content: @Composable () -
 @Composable
 private fun Metric(label: String, value: String, modifier: Modifier = Modifier, accent: Color = ProColors.teal) {
     Surface(modifier, shape = RoundedCornerShape(16.dp), color = Color.White, tonalElevation = 1.dp) {
-        Column(Modifier.padding(13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(label, style = MaterialTheme.typography.labelMedium, color = ProColors.muted)
             Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold,
                 color = accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -175,7 +176,7 @@ fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, categories: Li
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween) {
                     Column(Modifier.weight(1f)) {
@@ -198,13 +199,12 @@ fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, categories: Li
                     Metric("Estimated bill", "Rs. ${MarketMath.lkr(totalCents)}", Modifier.weight(1f), ProColors.purple)
                     Metric("Item count", "${rows.size}", Modifier.weight(1f), ProColors.navy)
                 }
-            }
-        }
-        item {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                item { CategoryChip(category = "All", active = filter == "All", onClick = { filter = "All" }) }
-                lazyItems(categories) { c ->
-                    CategoryChip(category = c, active = filter == c, onClick = { filter = c })
+                // Keep filters directly below the second metric row; no large gap.
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item { CategoryChip(category = "All", active = filter == "All", onClick = { filter = "All" }) }
+                    lazyItems(categories) { c ->
+                        CategoryChip(category = c, active = filter == c, onClick = { filter = c })
+                    }
                 }
             }
         }
@@ -641,8 +641,16 @@ private fun ItemPickerSheet(
 }
 
 @Composable
-fun MarketScreen(rows: List<ConsolidatedRow>, vm: MarketViewModel, message: (String) -> Unit) {
+fun MarketScreen(
+    rows: List<ConsolidatedRow>,
+    categories: List<String>,
+    vm: MarketViewModel,
+    message: (String) -> Unit
+) {
     val date by vm.date.collectAsState()
+    var filter by rememberSaveable { mutableStateOf("All") }
+    // Filter only the displayed cards; totals always reflect all categories.
+    val shown = rows.filter { filter == "All" || it.item.category == filter }
     val totalRequired = rows.sumOf { it.requiredGrams }
     val totalPurchased = rows.sumOf { it.purchasedGrams }
     val totalBill = rows.sumOf { it.lineCents }
@@ -692,10 +700,31 @@ fun MarketScreen(rows: List<ConsolidatedRow>, vm: MarketViewModel, message: (Str
                 }
             }
         }
-        if (rows.isEmpty()) item {
-            EmptyState("No purchasing items", "Enter requirements in Kitchens first.")
+        item {
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(horizontal = 2.dp)
+            ) {
+                item {
+                    CategoryChip(category = "All", active = filter == "All") {
+                        filter = "All"
+                    }
+                }
+                lazyItems(categories) { category ->
+                    CategoryChip(category = category, active = filter == category) {
+                        filter = category
+                    }
+                }
+            }
         }
-        lazyItems(rows, key = { it.item.id }) { row ->
+        if (shown.isEmpty()) item {
+            EmptyState(
+                if (rows.isEmpty()) "No purchasing items" else "No items in $filter",
+                if (rows.isEmpty()) "Enter requirements in Kitchens first."
+                else "Select another category to view purchasing items."
+            )
+        }
+        lazyItems(shown, key = { it.item.id }) { row ->
             PurchaseCard(
                 row = row,
                 date = date.toString(),
