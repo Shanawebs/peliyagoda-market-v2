@@ -12,7 +12,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CompletedPurchaseReportTest {
-    @Test fun includesMatchedAndExtraButNotShortagePendingOrZeroRequired() {
+    @Test fun includesMatchedExtraAndUnrequestedPurchasesButNotShortageOrPending() {
         val day = "2026-10-20"
         val items = listOf(
             ItemEntity(1, "Green Chilli", "Vegetables"),
@@ -36,9 +36,9 @@ class CompletedPurchaseReportTest {
         val extra = listOf(PurchaseAdditionEntity(11, day, 1, 2_000, 15_000))
         val rows = consolidate(items, requisitions, purchases, extra)
         val completed = completedPurchases(rows)
-        assertEquals(setOf("Green Chilli", "කැරට්"), completed.map { it.item.name }.toSet())
-        assertEquals(2, completed.size)
-        assertEquals(185_000L, completedPurchaseTotal(rows)) // 1000+300+550 LKR
+        assertEquals(setOf("Green Chilli", "කැරට්", "No Required"), completed.map { it.item.name }.toSet())
+        assertEquals(3, completed.size)
+        assertEquals(215_000L, completedPurchaseTotal(rows)) // Rs. 1000+300+550+300
     }
 
     @Test fun emptyWhenNoFullyPurchasedItems() {
