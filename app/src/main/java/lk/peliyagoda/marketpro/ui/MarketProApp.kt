@@ -122,6 +122,8 @@ fun MarketProApp(vm: MarketViewModel) {
         }
         var tab by remember { mutableIntStateOf(0) }
         var catalogOpen by remember { mutableStateOf(false) }
+        var chartOpen by remember { mutableStateOf(false) }
+        val priceHistory by vm.chartHistory.collectAsState()
         var menuOpen by remember { mutableStateOf(false) }
         var calendarOpen by remember { mutableStateOf(false) }
         var pendingXlsx by remember { mutableStateOf<ByteArray?>(null) }
@@ -248,6 +250,17 @@ fun MarketProApp(vm: MarketViewModel) {
             )
         }
 
+        if (chartOpen) ItemPriceChartDialog(
+            categories = categories,
+            items = items,
+            history = priceHistory,
+            onPickItem = { id -> vm.selectChartItem(id) },
+            onDismiss = {
+                chartOpen = false
+                vm.selectChartItem(null)
+            }
+        )
+
         if (catalogOpen) CatalogSheet(
             items = items,
             categories = categories,
@@ -282,8 +295,10 @@ fun MarketProApp(vm: MarketViewModel) {
                                 Icon(Icons.Filled.MoreVert, contentDescription = "More options")
                             }
                             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                                DropdownMenuItem(text = { Text("Manage master items") }, onClick = {
-                                    menuOpen = false; catalogOpen = true
+                                DropdownMenuItem(text = { Text("Items Price Chart") }, onClick = {
+                                    menuOpen = false
+                                    vm.selectChartItem(null)
+                                    chartOpen = true
                                 })
                                 DropdownMenuItem(text = { Text("Export Excel (.xlsx)") }, onClick = {
                                     menuOpen = false
