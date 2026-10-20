@@ -62,8 +62,28 @@ data class PurchaseEntity(
     val priceCentsPerKg: Long
 )
 
+/** One original purchase or an additional purchase at its own actual unit rate. */
+data class PurchaseHistoryLot(
+    val businessDate: String,
+    val quantityGrams: Long,
+    val priceCentsPerKg: Long,
+    val lotSequence: Long
+)
+
 @Dao
 interface MarketDao {
+    @Query("""
+        SELECT businessDate, quantityGrams, priceCentsPerKg, 0 AS lotSequence
+        FROM purchases
+        WHERE itemId = :itemId AND quantityGrams > 0
+        UNION ALL
+        SELECT businessDate, quantityGrams, priceCentsPerKg, id AS lotSequence
+        FROM purchase_additions
+        WHERE itemId = :itemId AND quantityGrams > 0
+        ORDER BY businessDate ASC, lotSequence ASC
+    """)
+    fun observePurchaseHistory(itemId: Long): Flow<List<PurchaseHistoryLot>>
+
     /**
      * Dates with actual entered quantities/prices. Observable across ALL days,
      * not just the currently selected day. No schema migration needed.
