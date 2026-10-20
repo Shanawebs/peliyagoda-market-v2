@@ -60,8 +60,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import lk.peliyagoda.marketpro.util.consolidate
-import lk.peliyagoda.marketpro.util.marketCsv
+import lk.peliyagoda.marketpro.util.MarketXlsx
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -114,18 +116,38 @@ fun MarketProApp(vm: MarketViewModel) {
         var catalogOpen by remember { mutableStateOf(false) }
         var menuOpen by remember { mutableStateOf(false) }
         var calendarOpen by remember { mutableStateOf(false) }
-        var pendingCsv by remember { mutableStateOf("") }
+        var pendingXlsx by remember { mutableStateOf<ByteArray?>(null) }
         var pendingBackup by remember { mutableStateOf("") }
         var restoreText by remember { mutableStateOf<String?>(null) }
 
         fun message(value: String) { scope.launch { snackbar.showSnackbar(value) } }
 
-        val csvSaver = rememberLauncherForActivityResult(
-            ActivityResultContracts.CreateDocument("text/csv")
+        val excelSaver = rememberLauncherForActivityResult(
+            ActivityResultContracts.CreateDocument(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
         ) { uri ->
-            if (uri != null) {
-                val saved = runCatching { saveText(context, uri, "\uFEFF" + pendingCsv) }.isSuccess
-                message(if (saved) "CSV saved successfully" else "Could not save CSV")
+            val data = pendingXlsx
+            pendingXlsx = null
+            if (uri != null && data != null) {
+                val saved = runCatching {
+                    context.contentResolver.openOutputStream(uri)?.use { it.write(data) }
+                        ?: error("Could not open destination")
+                }.isSuccess
+                message(if (saved) "Unicode Excel report saved (.xlsx)" else "Excel export failed")
+            }
+        }
+        fun exportExcel() {
+            // Generate the workbook off the UI thread for large daily reports.
+            val day = date.toString()
+            val snapshot = rows.toList()
+            scope.launch {
+                runCatching {
+                    withContext(Dispatchers.Default) { MarketXlsx.create(day, snapshot) }
+                }.onSuccess { bytes ->
+                    pendingXlsx = bytes
+                    excelSaver.launch("Market-" + day + ".xlsx")
+                }.onFailure { message("Could not create Excel report") }
             }
         }
         val backupSaver = rememberLauncherForActivityResult(
@@ -222,10 +244,9 @@ fun MarketProApp(vm: MarketViewModel) {
                                 DropdownMenuItem(text = { Text("Manage master items") }, onClick = {
                                     menuOpen = false; catalogOpen = true
                                 })
-                                DropdownMenuItem(text = { Text("Export CSV") }, onClick = {
+                                DropdownMenuItem(text = { Text("Export Excel (.xlsx)") }, onClick = {
                                     menuOpen = false
-                                    pendingCsv = marketCsv(date.toString(), rows)
-                                    csvSaver.launch("Market-${date}.csv")
+                                    exportExcel()
                                 })
                                 DropdownMenuItem(text = { Text("Backup all records (JSON)") }, onClick = {
                                     menuOpen = false
@@ -285,10 +306,7 @@ fun MarketProApp(vm: MarketViewModel) {
         ) { innerPadding ->
             Box(Modifier.fillMaxSize().padding(innerPadding)) {
                 when (tab) {
-                    0 -> DashboardScreen(date, rows, categories, onExport = {
-                        pendingCsv = marketCsv(date.toString(), rows)
-                        csvSaver.launch("Market-${date}.csv")
-                    })
+                    0 -> DashboardScreen(date, rows, categories, onExport = { exportExcel() })
                     1 -> KitchensScreen(items, categories, reqs, vm, ::message)
                     else -> MarketScreen(rows, vm, ::message)
                 }
