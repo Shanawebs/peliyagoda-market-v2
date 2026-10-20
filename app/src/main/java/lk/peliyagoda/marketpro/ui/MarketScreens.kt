@@ -562,9 +562,17 @@ private fun ItemPickerSheet(
     val filtered = allItems.filter {
         it.category == category && it.name.contains(search, ignoreCase = true)
     }
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).fillMaxHeight(0.86f),
-            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    // Open at full height immediately rather than the default half-expanded state.
+    val pickerSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = pickerSheetState,
+        modifier = Modifier.imePadding()
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp).fillMaxHeight(0.97f),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             Text("Select items • $kitchen", style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold)
             OutlinedTextField(
@@ -655,11 +663,31 @@ fun MarketScreen(rows: List<ConsolidatedRow>, vm: MarketViewModel, message: (Str
                         color = ProColors.muted, style = MaterialTheme.typography.bodySmall)
                     Text("Rs. ${MarketMath.lkr(totalBill)}", color = ProColors.purple,
                         style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Required: ${MarketMath.kg(totalRequired)} kg",
-                            fontWeight = FontWeight.SemiBold)
-                        Text("Bought: ${MarketMath.kg(totalPurchased)} kg",
-                            fontWeight = FontWeight.SemiBold)
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Required", color = ProColors.muted,
+                                style = MaterialTheme.typography.labelMedium)
+                            Text("${MarketMath.kg(totalRequired)} kg",
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                color = ProColors.navy,
+                                fontWeight = FontWeight.ExtraBold,
+                                style = MaterialTheme.typography.titleSmall)
+                        }
+                        Column(Modifier.weight(1f),
+                            horizontalAlignment = Alignment.End) {
+                            Text("Bought", color = ProColors.muted,
+                                style = MaterialTheme.typography.labelMedium)
+                            Text("${MarketMath.kg(totalPurchased)} kg",
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                color = ProColors.navy,
+                                fontWeight = FontWeight.ExtraBold,
+                                style = MaterialTheme.typography.titleSmall)
+                        }
                     }
                 }
             }
