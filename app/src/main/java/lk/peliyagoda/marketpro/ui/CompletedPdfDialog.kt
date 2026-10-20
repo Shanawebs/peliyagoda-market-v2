@@ -31,7 +31,7 @@ import lk.peliyagoda.marketpro.util.MarketMath
 import lk.peliyagoda.marketpro.util.completedPurchases
 import java.time.LocalDate
 
-/** Purchase completion here means bought > 0 and bought >= required > 0. */
+/** Purchase completion here means bought > 0 and bought >= required. */
 @Composable
 fun CompletedPdfDialog(
     date: LocalDate,
@@ -55,7 +55,7 @@ fun CompletedPdfDialog(
                 if (completed.isEmpty()) {
                     Text(
                         "No completed purchases on this date. A completed item must have a " +
-                            "required quantity and purchased quantity equal to or above it.",
+                            "purchased quantity equal to or above the required quantity.",
                         color = ProColors.muted
                     )
                 } else {
