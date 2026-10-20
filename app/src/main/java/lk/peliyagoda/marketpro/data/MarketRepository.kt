@@ -15,6 +15,7 @@ class MarketRepository(private val db: MarketDatabase) {
     fun requirements(date: String) = dao.observeRequisitions(date)
     fun purchases(date: String) = dao.observePurchases(date)
     fun additions(date: String) = dao.observeAdditions(date)
+    fun purchaseHistory(itemId: Long) = dao.observePurchaseHistory(itemId)
 
     suspend fun seedCatalogOnce() {
         MarketConstants.categories.forEach { dao.insertCategory(CategoryEntity(it)) }
