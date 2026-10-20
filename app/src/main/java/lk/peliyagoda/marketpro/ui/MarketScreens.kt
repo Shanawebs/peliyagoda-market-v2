@@ -35,6 +35,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -49,6 +50,7 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -135,6 +137,29 @@ private fun StatusTag(row: ConsolidatedRow) {
 }
 
 @Composable
+private fun CategoryChip(category: String, active: Boolean, onClick: () -> Unit) {
+    // A distinct dark selected state with white lettering also for custom categories.
+    val selectedBg = when (category) {
+        MarketConstants.VEGETABLES -> Color(0xFF166534)
+        MarketConstants.FRUITS -> Color(0xFF5B21B6)
+        "All" -> ProColors.navy
+        else -> ProColors.teal
+    }
+    FilterChip(
+        selected = active,
+        onClick = onClick,
+        label = {
+            Text(category, color = if (active) Color.White else ProColors.navy,
+                fontWeight = if (active) FontWeight.Bold else FontWeight.Medium)
+        },
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = selectedBg,
+            selectedLabelColor = Color.White
+        )
+    )
+}
+
+@Composable
 fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, categories: List<String>, onExport: () -> Unit) {
     var filter by rememberSaveable { mutableStateOf("All") }
     val shown = rows.filter { filter == "All" || it.item.category == filter }
@@ -174,9 +199,9 @@ fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, categories: Li
         }
         item {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                item { FilterChip(selected = filter == "All", onClick = { filter = "All" }, label = { Text("All") }) }
+                item { CategoryChip(category = "All", active = filter == "All", onClick = { filter = "All" }) }
                 lazyItems(categories) { c ->
-                    FilterChip(selected = filter == c, onClick = { filter = c }, label = { Text(c) })
+                    CategoryChip(category = c, active = filter == c, onClick = { filter = c })
                 }
             }
         }
@@ -189,8 +214,9 @@ fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, categories: Li
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween) {
                             Column(Modifier.weight(1f)) {
-                                Text(row.item.name, fontWeight = FontWeight.Bold,
-                                    style = MaterialTheme.typography.titleMedium)
+                                Text(row.item.name, fontWeight = FontWeight.ExtraBold,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 Text(row.item.category, color = ProColors.muted,
                                     style = MaterialTheme.typography.bodySmall)
                             }
@@ -315,6 +341,7 @@ fun KitchensScreen(
         allItems = items,
         categories = categories,
         addCategory = { name, done -> vm.addCategory(name, done) },
+        addMasterItem = { name, cat, done -> vm.addItem(name, cat, done) },
         existingIds = current.map { it.itemId }.toSet(),
         onDismiss = { pickerOpen = false },
         onConfirm = { ids ->
@@ -430,7 +457,7 @@ private fun CategoryStrip(
     }
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         lazyItems(categories) { c ->
-            FilterChip(selected = selected == c, onClick = { onSelect(c) }, label = { Text(c) })
+            CategoryChip(category = c, active = selected == c, onClick = { onSelect(c) })
         }
         item {
             OutlinedButton(onClick = { name = ""; error = false; adding = true }) {
@@ -448,11 +475,75 @@ private fun ItemPickerSheet(
     kitchen: String, allItems: List<ItemEntity>, existingIds: Set<Long>,
     categories: List<String>,
     addCategory: (String, (Boolean) -> Unit) -> Unit,
+    addMasterItem: (String, String, (Boolean) -> Unit) -> Unit,
     onDismiss: () -> Unit, onConfirm: (Set<Long>) -> Unit
 ) {
     var search by remember { mutableStateOf("") }
     var category by remember { mutableStateOf(MarketConstants.VEGETABLES) }
     var selected by remember { mutableStateOf(setOf<Long>()) }
+    var newItemDialog by remember { mutableStateOf(false) }
+    var newItemName by remember { mutableStateOf("") }
+    var newItemError by remember { mutableStateOf(false) }
+    var newItemBusy by remember { mutableStateOf(false) }
+    var pendingAutoSelect by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(allItems, pendingAutoSelect) {
+        val target = pendingAutoSelect
+        if (target != null) {
+            val created = allItems.firstOrNull {
+                it.category == category && it.name.equals(target, ignoreCase = true)
+            }
+            if (created != null) {
+                selected = selected + created.id
+                pendingAutoSelect = null
+            }
+        }
+    }
+    if (newItemDialog) {
+        AlertDialog(
+            onDismissRequest = { if (!newItemBusy) newItemDialog = false },
+            title = { Text("Add new master item") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Category: $category", color = ProColors.teal,
+                        fontWeight = FontWeight.Bold)
+                    OutlinedTextField(
+                        value = newItemName,
+                        onValueChange = { newItemName = it; newItemError = false },
+                        label = { Text("New item name") },
+                        isError = newItemError,
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    if (newItemError) {
+                        Text("Item already exists or name is invalid", color = ProColors.red)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    enabled = !newItemBusy && newItemName.trim().isNotBlank() &&
+                        newItemName.trim().length <= 80,
+                    onClick = {
+                        val newName = newItemName.trim()
+                        newItemBusy = true
+                        addMasterItem(newName, category) { saved ->
+                            newItemBusy = false
+                            if (saved) {
+                                pendingAutoSelect = newName
+                                search = ""
+                                newItemDialog = false
+                                newItemName = ""
+                            } else newItemError = true
+                        }
+                    }
+                ) { Text(if (newItemBusy) "Adding…" else "Add item") }
+            },
+            dismissButton = {
+                TextButton(enabled = !newItemBusy,
+                    onClick = { newItemDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
     val filtered = allItems.filter {
         it.category == category && it.name.contains(search, ignoreCase = true)
     }
@@ -473,8 +564,24 @@ private fun ItemPickerSheet(
                 onSelect = { category = it },
                 onCreate = addCategory
             )
-            Text("Selected: ${selected.size}", color = ProColors.teal,
-                style = MaterialTheme.typography.labelLarge)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Selected: ${selected.size}", color = ProColors.teal,
+                    style = MaterialTheme.typography.labelLarge)
+                Spacer(Modifier.weight(1f))
+                Button(
+                    onClick = {
+                        newItemName = ""
+                        newItemError = false
+                        newItemDialog = true
+                    }
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Text(" Add Item")
+                }
+            }
             LazyColumn(modifier = Modifier.weight(1f)) {
                 lazyItems(filtered, key = { it.id }) { item ->
                     val alreadyAdded = item.id in existingIds
