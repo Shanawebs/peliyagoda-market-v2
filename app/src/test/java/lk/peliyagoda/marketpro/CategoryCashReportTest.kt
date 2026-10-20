@@ -44,6 +44,17 @@ class CategoryCashReportTest {
         assertEquals(27_000L, completedPurchaseTotal(data))
     }
 
+    @Test fun itemNumberingRestartsAtOneForEveryCategory() {
+        val groups = completedCategoryGroups(data)
+        assertEquals(listOf(1), groups[0].numberedRows().map { it.first })
+        assertEquals(listOf(1, 2), groups[1].numberedRows().map { it.first })
+        assertEquals(listOf(1), groups[2].numberedRows().map { it.first })
+        assertEquals(
+            listOf("Apple", "Banana"),
+            groups[1].numberedRows().map { it.second.item.name }
+        )
+    }
+
     @Test fun cashBalanceDeductsAllActualSpendIncludingShortage() {
         assertEquals(28_500L, totalMarketSpentCents(data)) // 270+15
         assertEquals(71_500L, cashBalanceCents(100_000L, data))
