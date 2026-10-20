@@ -68,6 +68,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import lk.peliyagoda.marketpro.data.ItemEntity
 import lk.peliyagoda.marketpro.data.MarketConstants
+import lk.peliyagoda.marketpro.data.PurchaseAdditionEntity
 import lk.peliyagoda.marketpro.data.RequisitionEntity
 import lk.peliyagoda.marketpro.util.ConsolidatedRow
 import lk.peliyagoda.marketpro.util.MarketMath
@@ -664,6 +665,11 @@ fun MarketScreen(rows: List<ConsolidatedRow>, vm: MarketViewModel, message: (Str
                 onAdd = { grams, cents, done ->
                     vm.addPurchaseAddition(row.item.id, grams, cents, done)
                 },
+                onEdit = { lotId, grams, cents ->
+                    vm.editPurchaseAddition(row.item.id, lotId, grams, cents) { result ->
+                        if (result.isFailure) message("Could not save additional purchase change")
+                    }
+                },
                 message = message
             )
         }
@@ -676,6 +682,7 @@ private fun PurchaseCard(
     date: String,
     onSave: (Long, Long) -> Unit,
     onAdd: (Long, Long, (Result<Unit>) -> Unit) -> Unit,
+    onEdit: (Long, Long, Long) -> Unit,
     message: (String) -> Unit
 ) {
     var purchased by remember(date, row.item.id) {
@@ -834,70 +841,45 @@ private fun PurchaseCard(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
                 )
             }
+            if (row.purchase != null) {
+                // Cost of the ORIGINAL purchase, without any later priced additions.
+                val originalCents = if (!qtyInvalid && !rateInvalid) {
+                    MarketMath.billCents(qty!!, rate!!)
+                } else {
+                    MarketMath.billCents(
+                        row.purchase.quantityGrams, row.purchase.priceCentsPerKg
+                    )
+                }
+                Text(
+                    "Initial cost: Rs. ${MarketMath.lkr(originalCents)}",
+                    modifier = Modifier.fillMaxWidth(),
+                    color = ProColors.purple,
+                    textAlign = TextAlign.End,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            }
             if (row.additions.isNotEmpty()) {
                 HorizontalDivider(color = ProColors.pale)
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Additional purchases (${row.additions.size})",
-                        color = ProColors.teal, fontWeight = FontWeight.ExtraBold,
-                        style = MaterialTheme.typography.labelLarge)
-                    Spacer(Modifier.weight(1f))
-                    Text("Total: ${MarketMath.kg(row.purchasedGrams)} kg",
-                        color = ProColors.muted, fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.labelSmall)
-                }
+                Text(
+                    "Additional purchases (${row.additions.size})",
+                    color = ProColors.teal,
+                    fontWeight = FontWeight.ExtraBold,
+                    style = MaterialTheme.typography.labelLarge
+                )
                 row.additions.forEachIndexed { index, lot ->
-                    Column(
-                        modifier = Modifier.fillMaxWidth()
-                            .background(Color(0xFFE9F4F9), RoundedCornerShape(12.dp))
-                            .padding(horizontal = 9.dp, vertical = 9.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text("Additional purchase ${index + 1}",
-                            color = ProColors.teal, fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.labelMedium)
-                        Row(Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedTextField(
-                                value = MarketMath.editKg(lot.quantityGrams),
-                                onValueChange = {},
-                                modifier = Modifier.weight(1f),
-                                label = { Text("Extra Qty") },
-                                suffix = { Text("kg") },
-                                readOnly = true,
-                                singleLine = true,
-                                shape = RoundedCornerShape(11.dp),
-                                textStyle = MaterialTheme.typography.bodyLarge.copy(
-                                    fontWeight = FontWeight.Bold)
-                            )
-                            OutlinedTextField(
-                                value = MarketMath.editPrice(lot.priceCentsPerKg),
-                                onValueChange = {},
-                                modifier = Modifier.weight(1f),
-                                label = { Text("Extra Price") },
-                                prefix = { Text("Rs.") },
-                                suffix = { Text("/kg") },
-                                readOnly = true,
-                                singleLine = true,
-                                shape = RoundedCornerShape(11.dp),
-                                textStyle = MaterialTheme.typography.bodyLarge.copy(
-                                    fontWeight = FontWeight.Bold)
-                            )
-                        }
-                        Text(
-                            "Additional cost: Rs. ${MarketMath.lkr(MarketMath.billCents(lot.quantityGrams, lot.priceCentsPerKg))}",
-                            modifier = Modifier.fillMaxWidth(),
-                            textAlign = TextAlign.End,
-                            color = ProColors.purple,
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.labelMedium
-                        )
-                    }
+                    AdditionalPurchaseEditor(
+                        lot = lot,
+                        ordinal = index + 1,
+                        date = date,
+                        onEdit = { grams, cents -> onEdit(lot.id, grams, cents) }
+                    )
                 }
             }
             Row(
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 if (shortGrams > 0L) {
                     IconButton(onClick = { addOpen = true }) {
@@ -908,15 +890,118 @@ private fun PurchaseCard(
                                 modifier = Modifier.padding(7.dp))
                         }
                     }
-                } else {
-                    Spacer(Modifier.width(44.dp))
                 }
-                Text("Subtotal: Rs. ${MarketMath.lkr(preview)}",
+                InvoicePhotoControl(
+                    businessDate = date,
+                    itemId = row.item.id,
+                    itemName = row.item.name,
+                    message = message
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    "Subtotal: Rs. ${MarketMath.lkr(preview)}",
+                    modifier = Modifier.weight(3f, fill = false),
                     color = ProColors.purple,
+                    textAlign = TextAlign.End,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.ExtraBold)
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 2
+                )
             }
         }
+    }
+}
+
+/**
+ * A saved additional lot stays editable at all times.
+ * Draft inputs use stable (day, lot ID) keys so Room Flow updates cannot move
+ * the cursor or overwrite unfinished keyboard input.
+ */
+@Composable
+private fun AdditionalPurchaseEditor(
+    lot: PurchaseAdditionEntity,
+    ordinal: Int,
+    date: String,
+    onEdit: (Long, Long) -> Unit
+) {
+    var quantity by remember(date, lot.id) {
+        mutableStateOf(MarketMath.editKg(lot.quantityGrams))
+    }
+    var rate by remember(date, lot.id) {
+        mutableStateOf(MarketMath.editPriceOrBlank(lot.priceCentsPerKg))
+    }
+    fun persistIfValid(kg: String, price: String) {
+        val grams = MarketMath.parseGrams(kg)
+        val cents = MarketMath.parseBlankPriceCents(price)
+        if (grams != null && grams in 1..1_000_000_000 &&
+            cents != null && cents in 0..1_000_000_000) {
+            onEdit(grams, cents)
+        }
+    }
+    val grams = MarketMath.parseGrams(quantity)
+    val cents = MarketMath.parseBlankPriceCents(rate)
+    val gramsInvalid = quantity.isNotBlank() && (grams == null || grams !in 1..1_000_000_000)
+    val centsInvalid = cents == null || cents !in 0..1_000_000_000
+    val amount = if (grams != null && grams in 1..1_000_000_000 &&
+        cents != null && cents in 0..1_000_000_000
+    ) MarketMath.billCents(grams, cents) else MarketMath.billCents(
+        lot.quantityGrams, lot.priceCentsPerKg
+    )
+    Column(
+        modifier = Modifier.fillMaxWidth()
+            .background(Color(0xFFE9F4F9), RoundedCornerShape(12.dp))
+            .padding(horizontal = 9.dp, vertical = 9.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(
+            "Additional purchase $ordinal",
+            color = ProColors.teal,
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.labelMedium
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = quantity,
+                onValueChange = { input ->
+                    quantity = input
+                    persistIfValid(input, rate)
+                },
+                modifier = Modifier.weight(1f),
+                label = { Text("Extra Qty") },
+                suffix = { Text("kg") },
+                singleLine = true,
+                isError = gramsInvalid,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                shape = RoundedCornerShape(11.dp),
+                textStyle = MaterialTheme.typography.bodyLarge.copy(
+                    fontWeight = FontWeight.Bold)
+            )
+            OutlinedTextField(
+                value = rate,
+                onValueChange = { input ->
+                    rate = input
+                    persistIfValid(quantity, input)
+                },
+                modifier = Modifier.weight(1f),
+                label = { Text("Extra Price") },
+                prefix = { Text("Rs.") },
+                suffix = { Text("/kg") },
+                singleLine = true,
+                isError = centsInvalid,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                shape = RoundedCornerShape(11.dp),
+                textStyle = MaterialTheme.typography.bodyLarge.copy(
+                    fontWeight = FontWeight.Bold)
+            )
+        }
+        Text(
+            "Additional cost: Rs. ${MarketMath.lkr(amount)}",
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = TextAlign.End,
+            color = ProColors.purple,
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.labelMedium
+        )
     }
 }
 
