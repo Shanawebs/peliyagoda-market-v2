@@ -2,7 +2,7 @@ name: Build Peliyagoda Market V2 APK
 
 on:
   push:
-    branches: [main, feature/v25-unicode-xlsx-and-catalog]
+    branches: [main, feature/v26-editable-lots-invoice-camera]
   workflow_dispatch:
 
 permissions:
