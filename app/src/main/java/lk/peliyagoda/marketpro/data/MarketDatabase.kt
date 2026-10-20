@@ -85,6 +85,9 @@ interface MarketDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertAddition(entry: PurchaseAdditionEntity): Long
 
+    @Query("UPDATE purchase_additions SET quantityGrams = :grams, priceCentsPerKg = :priceCents WHERE id = :lotId AND businessDate = :date AND itemId = :itemId")
+    suspend fun updateAddition(lotId: Long, date: String, itemId: Long, grams: Long, priceCents: Long): Int
+
     @Query("SELECT * FROM purchase_additions ORDER BY id")
     suspend fun allAdditions(): List<PurchaseAdditionEntity>
 
