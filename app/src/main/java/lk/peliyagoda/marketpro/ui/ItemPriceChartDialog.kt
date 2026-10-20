@@ -189,33 +189,39 @@ fun ItemPriceChartDialog(
                                 color = ProColors.muted,
                                 style = MaterialTheme.typography.labelSmall)
                         }
-                        // One horizontal scroll container keeps both price and quantity
-                        // traces aligned to the same visible dates.
                         BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
-                            val fullWidth = maxOf(maxWidth, ((visibleTrend.size - 1) * 88 + 130).dp)
-                            Column(
-                                modifier = Modifier.horizontalScroll(scrollState),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
+                            // Prevent the lower quantity graph from being squeezed out.
+                            val gap = 9.dp
+                            val panelHeight = (maxHeight - gap) / 2
+                            Column(verticalArrangement = Arrangement.spacedBy(gap)) {
                                 TrendPanel(
                                     title = "Price trend • Rs./kg",
                                     points = visibleTrend,
                                     metric = { it.weightedPriceCentsPerKg / 100f },
                                     color = ProColors.teal,
-                                    width = fullWidth,
-                                    money = true
+                                    height = panelHeight,
+                                    money = true,
+                                    offset = scrollOffset,
+                                    onDrag = { delta, maximum ->
+                                        scrollOffset = (if (scrollOffset == Float.MAX_VALUE) maximum
+                                            else scrollOffset - delta).coerceIn(0f, maximum)
+                                    }
                                 )
                                 TrendPanel(
                                     title = "Purchased quantity • kg",
                                     points = visibleTrend,
                                     metric = { it.quantityGrams / 1000f },
                                     color = ProColors.purple,
-                                    width = fullWidth,
-                                    money = false
+                                    height = panelHeight,
+                                    money = false,
+                                    offset = scrollOffset,
+                                    onDrag = { delta, maximum ->
+                                        scrollOffset = (if (scrollOffset == Float.MAX_VALUE) maximum
+                                            else scrollOffset - delta).coerceIn(0f, maximum)
+                                    }
                                 )
                             }
                         }
-
                     }
                 }
                 Spacer(Modifier.height(2.dp))
