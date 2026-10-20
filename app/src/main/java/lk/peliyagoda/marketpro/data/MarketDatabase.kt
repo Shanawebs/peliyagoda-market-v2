@@ -64,6 +64,20 @@ data class PurchaseEntity(
 
 @Dao
 interface MarketDao {
+    /**
+     * Dates with actual entered quantities/prices. Observable across ALL days,
+     * not just the currently selected day. No schema migration needed.
+     */
+    @Query("""
+        SELECT businessDate FROM requisitions WHERE quantityGrams > 0
+        UNION
+        SELECT businessDate FROM purchases WHERE quantityGrams > 0 OR priceCentsPerKg > 0
+        UNION
+        SELECT businessDate FROM purchase_additions WHERE quantityGrams > 0
+        ORDER BY businessDate
+    """)
+    fun observeDatesWithData(): Flow<List<String>>
+
     @Query("SELECT * FROM categories ORDER BY name COLLATE NOCASE")
     fun observeCategories(): Flow<List<CategoryEntity>>
 
