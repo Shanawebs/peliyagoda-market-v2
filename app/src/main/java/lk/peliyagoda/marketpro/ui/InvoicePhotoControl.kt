@@ -141,15 +141,14 @@ fun InvoicePhotoControl(
     }
 
     // Never draw images inside the purchase card, only the compact camera action.
-    OutlinedButton(onClick = {
+    IconButton(onClick = {
         if (photos.isEmpty()) captureOriginal() else photoDialog = true
     }) {
         Icon(
             if (photos.isEmpty()) Icons.Default.CameraAlt else Icons.Default.PhotoLibrary,
-            contentDescription = "Invoice photos for $itemName"
+            contentDescription = "Invoice photos (${photos.size}) for $itemName",
+            tint = ProColors.teal
         )
-        Spacer(Modifier.width(4.dp))
-        Text(if (photos.isEmpty()) "Invoice" else "Photos (${photos.size})")
     }
 
     if (photoDialog) {
