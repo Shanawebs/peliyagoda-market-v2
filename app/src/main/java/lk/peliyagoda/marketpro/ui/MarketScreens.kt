@@ -77,6 +77,7 @@ import lk.peliyagoda.marketpro.data.PurchaseAdditionEntity
 import lk.peliyagoda.marketpro.data.RequisitionEntity
 import lk.peliyagoda.marketpro.util.ConsolidatedRow
 import lk.peliyagoda.marketpro.util.MarketMath
+import lk.peliyagoda.marketpro.util.PurchaseEntryRules
 import lk.peliyagoda.marketpro.util.sortedMarketPurchases
 import lk.peliyagoda.marketpro.util.nextMarketSortRefreshMs
 import java.time.LocalDate
@@ -817,10 +818,36 @@ private fun PurchaseCard(
         MarketMath.billCents(qty!!, rate!!) + row.additionalCents
     } else row.lineCents
     var addOpen by remember(date, row.item.id) { mutableStateOf(false) }
+    var showInitialPurchaseHelp by remember(date, row.item.id) { mutableStateOf(false) }
     var additionalQty by remember(date, row.item.id) { mutableStateOf("") }
     var additionalPrice by remember(date, row.item.id) { mutableStateOf("") }
     var savingAddition by remember(date, row.item.id) { mutableStateOf(false) }
     val shortGrams = (row.requiredGrams - row.purchasedGrams).coerceAtLeast(0)
+    // Confirm initial purchase AND market price are entered before allowing '+'.
+    val mayAdd = PurchaseEntryRules.canAddAnotherPurchase(
+        MarketMath.parseBlankGrams(purchased),
+        MarketMath.parseBlankPriceCents(price),
+        row.requiredGrams, row.purchasedGrams
+    )
+    if (showInitialPurchaseHelp) {
+        AlertDialog(
+            onDismissRequest = { showInitialPurchaseHelp = false },
+            title = { Text("Enter the initial purchase first") },
+            text = {
+                Text(
+                    "Please enter the original Purchased quantity and Market Price first. " +
+                        "Use + Add Purchase only if there is still a shortage.\n\n" +
+                        "මුලින් Purchased Qty සහ Market Price ඇතුළත් කරන්න. " +
+                        "හිඟ ප්‍රමාණයක් තිබේ නම් පමණක් + භාවිත කරන්න."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showInitialPurchaseHelp = false }) {
+                    Text("OK")
+                }
+            }
+        )
+    }
 
     if (addOpen) {
         val extraGrams = MarketMath.parseGrams(additionalQty)
@@ -863,7 +890,7 @@ private fun PurchaseCard(
                 Button(
                     enabled = !savingAddition && extraGrams != null &&
                         extraGrams > 0 && extraGrams <= 1_000_000_000 &&
-                        extraPrice != null && extraPrice <= 1_000_000_000,
+                        extraPrice != null && extraPrice > 0 && extraPrice <= 1_000_000_000,
                     onClick = {
                         val grams = extraGrams ?: return@Button
                         val cents = extraPrice ?: return@Button
@@ -992,7 +1019,9 @@ private fun PurchaseCard(
                 horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 if (shortGrams > 0L) {
-                    IconButton(onClick = { addOpen = true }) {
+                    IconButton(onClick = {
+                        if (mayAdd) addOpen = true else showInitialPurchaseHelp = true
+                    }) {
                         Surface(shape = RoundedCornerShape(50), color = ProColors.teal) {
                             Icon(Icons.Default.Add,
                                 contentDescription = "Add purchase for " + row.item.name,
@@ -1036,28 +1065,27 @@ private fun AdditionalPurchaseEditor(
     onEdit: (Long, Long) -> Unit
 ) {
     var quantity by remember(date, lot.id) {
-        mutableStateOf(MarketMath.editKg(lot.quantityGrams))
+        mutableStateOf(MarketMath.editKgOrBlank(lot.quantityGrams))
     }
     var rate by remember(date, lot.id) {
         mutableStateOf(MarketMath.editPriceOrBlank(lot.priceCentsPerKg))
     }
     fun persistIfValid(kg: String, price: String) {
-        val grams = MarketMath.parseGrams(kg)
+        // Blank quantity/price means zero, saved immediately with the lot ID retained.
+        val grams = MarketMath.parseBlankGrams(kg)
         val cents = MarketMath.parseBlankPriceCents(price)
-        if (grams != null && grams in 1..1_000_000_000 &&
+        if (grams != null && grams in 0..1_000_000_000 &&
             cents != null && cents in 0..1_000_000_000) {
             onEdit(grams, cents)
         }
     }
-    val grams = MarketMath.parseGrams(quantity)
+    val grams = MarketMath.parseBlankGrams(quantity)
     val cents = MarketMath.parseBlankPriceCents(rate)
-    val gramsInvalid = quantity.isNotBlank() && (grams == null || grams !in 1..1_000_000_000)
+    val gramsInvalid = grams == null || grams !in 0..1_000_000_000
     val centsInvalid = cents == null || cents !in 0..1_000_000_000
-    val amount = if (grams != null && grams in 1..1_000_000_000 &&
-        cents != null && cents in 0..1_000_000_000
-    ) MarketMath.billCents(grams, cents) else MarketMath.billCents(
-        lot.quantityGrams, lot.priceCentsPerKg
-    )
+    val amount = if (!gramsInvalid && !centsInvalid) {
+        MarketMath.billCents(grams!!, cents!!)
+    } else MarketMath.billCents(lot.quantityGrams, lot.priceCentsPerKg)
     Column(
         modifier = Modifier.fillMaxWidth()
             .background(Color(0xFFE9F4F9), RoundedCornerShape(12.dp))
