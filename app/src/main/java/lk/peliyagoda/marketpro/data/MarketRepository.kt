@@ -1,5 +1,6 @@
 package lk.peliyagoda.marketpro.data
 
+import lk.peliyagoda.marketpro.util.PurchaseEntryRules
 import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
 import org.json.JSONArray
@@ -95,16 +96,31 @@ class MarketRepository(private val db: MarketDatabase) {
     }
 
     suspend fun addPurchaseAddition(date: String, id: Long, grams: Long, centsPerKg: Long) {
-        require(grams in 1..1_000_000_000 && centsPerKg in 0..1_000_000_000)
-        require(dao.allItems().any { it.id == id })
-        dao.insertAddition(PurchaseAdditionEntity(
-            businessDate = date, itemId = id, quantityGrams = grams, priceCentsPerKg = centsPerKg
-        ))
+        require(grams in 1..1_000_000_000 && centsPerKg in 1..1_000_000_000)
+        // The UI check also runs here in one transaction to guard against a
+        // stale screen, rapid edits, and multiple extra-lot taps.
+        db.withTransaction {
+            require(dao.allItems().any { it.id == id })
+            val initial = dao.purchaseForItem(date, id)
+            val required = dao.requirementGramsForItem(date, id)
+            val totalBought = (initial?.quantityGrams ?: 0L) +
+                dao.additionalGramsForItem(date, id)
+            check(PurchaseEntryRules.canAddAnotherPurchase(
+                initial?.quantityGrams, initial?.priceCentsPerKg, required, totalBought
+            )) {
+                "Enter the initial purchased quantity and market price first. " +
+                    "An additional purchase is allowed only for a shortage."
+            }
+            dao.insertAddition(PurchaseAdditionEntity(
+                businessDate = date, itemId = id,
+                quantityGrams = grams, priceCentsPerKg = centsPerKg
+            ))
+        }
     }
 
     /** Preserve lot IDs: records remain individually priced and editable. */
     suspend fun editPurchaseAddition(date: String, itemId: Long, lotId: Long, grams: Long, centsPerKg: Long) {
-        require(grams in 1..1_000_000_000 && centsPerKg in 0..1_000_000_000)
+        require(grams in 0..1_000_000_000 && centsPerKg in 0..1_000_000_000)
         check(dao.updateAddition(lotId, date, itemId, grams, centsPerKg) == 1) {
             "Additional purchase no longer exists"
         }
@@ -228,7 +244,7 @@ class MarketRepository(private val db: MarketDatabase) {
                 priceCentsPerKg = obj.getLong("priceCentsPerKg")
             )
             require(lot.id > 0 && lot.itemId in idSet &&
-                lot.quantityGrams in 1..1_000_000_000 &&
+                lot.quantityGrams in 0..1_000_000_000 &&
                 lot.priceCentsPerKg in 0..1_000_000_000)
             restoredAdditions.add(lot)
         }
