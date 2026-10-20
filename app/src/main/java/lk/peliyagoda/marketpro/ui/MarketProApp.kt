@@ -113,6 +113,9 @@ fun MarketProApp(vm: MarketViewModel) {
         val reqs by vm.requisitions.collectAsState()
         val purchases by vm.purchases.collectAsState()
         val additions by vm.additions.collectAsState()
+        val dailyCash by vm.dailyCashReceived.collectAsState()
+        val cashReceivedCents = dailyCash
+            ?.takeIf { it.businessDate == date.toString() }?.amountCents ?: 0L
         val rows = remember(date, items, reqs, purchases, additions) {
             // Prevent mixing stale StateFlow emissions when the day is changed rapidly.
             consolidate(
@@ -150,6 +153,7 @@ fun MarketProApp(vm: MarketViewModel) {
         var pdfDialogOpen by remember { mutableStateOf(false) }
         var pendingPdfDate by remember { mutableStateOf("") }
         var pendingPdfRows by remember { mutableStateOf<List<ConsolidatedRow>>(emptyList()) }
+        var pendingPdfCashCents by remember { mutableStateOf(0L) }
         var pendingBackup by remember { mutableStateOf("") }
         var restoreText by remember { mutableStateOf<String?>(null) }
 
@@ -188,14 +192,16 @@ fun MarketProApp(vm: MarketViewModel) {
         ) { uri ->
             val day = pendingPdfDate
             val snapshot = pendingPdfRows
+            val cashSnapshot = pendingPdfCashCents
             pendingPdfDate = ""
             pendingPdfRows = emptyList()
+            pendingPdfCashCents = 0L
             if (uri != null && day.isNotBlank() && snapshot.isNotEmpty()) {
                 scope.launch {
                     runCatching {
                         withContext(Dispatchers.IO) {
                             context.contentResolver.openOutputStream(uri)?.use { output ->
-                                MarketPdf.write(day, snapshot, output)
+                                MarketPdf.write(day, snapshot, cashSnapshot, output)
                             } ?: error("Cannot open PDF destination")
                         }
                     }.onSuccess { message("Completed purchase PDF saved") }
@@ -209,10 +215,14 @@ fun MarketProApp(vm: MarketViewModel) {
             CompletedPdfDialog(
                 date = date,
                 rows = rows,
+                cashReceivedCents = cashReceivedCents,
                 onClose = { pdfDialogOpen = false },
-                onSavePdf = { completed ->
+                onSavePdf = { _ ->
                     pendingPdfDate = date.toString()
-                    pendingPdfRows = completed.toList()
+                    // Save ALL rows to reconcile actual cash spent, but PDF
+                    // group rows only if COMPLETED.
+                    pendingPdfRows = rows.toList()
+                    pendingPdfCashCents = cashReceivedCents
                     pdfDialogOpen = false
                     pdfSaver.launch("Completed-Purchases-" + date + ".pdf")
                 }
@@ -403,6 +413,12 @@ fun MarketProApp(vm: MarketViewModel) {
                         rows = rows,
                         categories = categories,
                         vm = vm,
+                        cashReceivedCents = cashReceivedCents,
+                        onSaveCash = { cents ->
+                            vm.saveCashReceived(cents) { result ->
+                                if (result.isFailure) message("Could not save Cash Received")
+                            }
+                        },
                         message = ::message,
                         listState = marketListState,
                         filter = marketFilter,
