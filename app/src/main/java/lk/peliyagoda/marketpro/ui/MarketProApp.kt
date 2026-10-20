@@ -61,6 +61,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import lk.peliyagoda.marketpro.util.consolidate
 import lk.peliyagoda.marketpro.util.MarketXlsx
+import lk.peliyagoda.marketpro.util.MarketPdf
+import lk.peliyagoda.marketpro.util.ConsolidatedRow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -117,6 +119,9 @@ fun MarketProApp(vm: MarketViewModel) {
         var menuOpen by remember { mutableStateOf(false) }
         var calendarOpen by remember { mutableStateOf(false) }
         var pendingXlsx by remember { mutableStateOf<ByteArray?>(null) }
+        var pdfDialogOpen by remember { mutableStateOf(false) }
+        var pendingPdfDate by remember { mutableStateOf("") }
+        var pendingPdfRows by remember { mutableStateOf<List<ConsolidatedRow>>(emptyList()) }
         var pendingBackup by remember { mutableStateOf("") }
         var restoreText by remember { mutableStateOf<String?>(null) }
 
@@ -150,6 +155,42 @@ fun MarketProApp(vm: MarketViewModel) {
                 }.onFailure { message("Could not create Excel report") }
             }
         }
+        val pdfSaver = rememberLauncherForActivityResult(
+            ActivityResultContracts.CreateDocument("application/pdf")
+        ) { uri ->
+            val day = pendingPdfDate
+            val snapshot = pendingPdfRows
+            pendingPdfDate = ""
+            pendingPdfRows = emptyList()
+            if (uri != null && day.isNotBlank() && snapshot.isNotEmpty()) {
+                scope.launch {
+                    runCatching {
+                        withContext(Dispatchers.IO) {
+                            context.contentResolver.openOutputStream(uri)?.use { output ->
+                                MarketPdf.write(day, snapshot, output)
+                            } ?: error("Cannot open PDF destination")
+                        }
+                    }.onSuccess { message("Completed purchase PDF saved") }
+                        .onFailure { message("Could not save PDF: " +
+                            (it.message ?: "Unknown error")) }
+                }
+            }
+        }
+
+        if (pdfDialogOpen) {
+            CompletedPdfDialog(
+                date = date,
+                rows = rows,
+                onClose = { pdfDialogOpen = false },
+                onSavePdf = { completed ->
+                    pendingPdfDate = date.toString()
+                    pendingPdfRows = completed.toList()
+                    pdfDialogOpen = false
+                    pdfSaver.launch("Completed-Purchases-" + date + ".pdf")
+                }
+            )
+        }
+
         val backupSaver = rememberLauncherForActivityResult(
             ActivityResultContracts.CreateDocument("application/json")
         ) { uri ->
@@ -306,7 +347,7 @@ fun MarketProApp(vm: MarketViewModel) {
         ) { innerPadding ->
             Box(Modifier.fillMaxSize().padding(innerPadding)) {
                 when (tab) {
-                    0 -> DashboardScreen(date, rows, categories, onExport = { exportExcel() })
+                    0 -> DashboardScreen(date, rows, categories, onExport = { pdfDialogOpen = true })
                     1 -> KitchensScreen(items, categories, reqs, vm, ::message)
                     else -> MarketScreen(rows, vm, ::message)
                 }
