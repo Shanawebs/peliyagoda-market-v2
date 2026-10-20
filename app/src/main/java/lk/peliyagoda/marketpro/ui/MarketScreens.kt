@@ -1,5 +1,6 @@
 package lk.peliyagoda.marketpro.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,6 +18,8 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items as lazyItems
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -59,6 +62,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -80,6 +84,7 @@ import lk.peliyagoda.marketpro.util.MarketMath
 import lk.peliyagoda.marketpro.util.PurchaseEntryRules
 import lk.peliyagoda.marketpro.util.sortedMarketPurchases
 import lk.peliyagoda.marketpro.util.nextMarketSortRefreshMs
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 @Composable
@@ -169,19 +174,29 @@ private fun CategoryChip(category: String, active: Boolean, onClick: () -> Unit)
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, categories: List<String>, onExport: () -> Unit) {
-    var filter by rememberSaveable { mutableStateOf("All") }
+    var filter by rememberSaveable(date.toString()) { mutableStateOf("All") }
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    fun chooseCategory(category: String) {
+        if (filter != category) {
+            filter = category
+            scope.launch { listState.scrollToItem(1) }
+        }
+    }
     val shown = rows.filter { filter == "All" || it.item.category == filter }
     val totalReq = rows.sumOf { it.requiredGrams }
     val totalPurch = rows.sumOf { it.purchasedGrams }
     val totalCents = rows.sumOf { it.lineCents }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
+        state = listState,
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        item {
+        item(key = "dashboard-summary") {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween) {
@@ -205,11 +220,24 @@ fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, categories: Li
                     Metric("Estimated bill", "Rs. ${MarketMath.lkr(totalCents)}", Modifier.weight(1f), ProColors.purple)
                     Metric("Item count", "${rows.size}", Modifier.weight(1f), ProColors.navy)
                 }
-                // Keep filters directly below the second metric row; no large gap.
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item { CategoryChip(category = "All", active = filter == "All", onClick = { filter = "All" }) }
-                    lazyItems(categories) { c ->
-                        CategoryChip(category = c, active = filter == c, onClick = { filter = c })
+            }
+        }
+        // Summary scrolls away; this filter strip sticks directly below the
+        // global date header as cards continue scrolling underneath it.
+        stickyHeader(key = "dashboard-category-header") {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = ProColors.page
+            ) {
+                LazyRow(
+                    modifier = Modifier.padding(vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    item(key = "All") {
+                        CategoryChip("All", active = filter == "All") { chooseCategory("All") }
+                    }
+                    lazyItems(categories, key = { it }) { c ->
+                        CategoryChip(c, active = filter == c) { chooseCategory(c) }
                     }
                 }
             }
@@ -646,15 +674,18 @@ private fun ItemPickerSheet(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MarketScreen(
     rows: List<ConsolidatedRow>,
     categories: List<String>,
     vm: MarketViewModel,
-    message: (String) -> Unit
+    message: (String) -> Unit,
+    listState: LazyListState,
+    filter: String,
+    onFilterChange: (String) -> Unit
 ) {
     val date by vm.date.collectAsState()
-    var filter by rememberSaveable { mutableStateOf("All") }
     val context = LocalContext.current
     val businessDate = date.toString()
     var photoVersion by remember(businessDate) { mutableIntStateOf(0) }
@@ -694,10 +725,11 @@ fun MarketScreen(
     val totalBill = rows.sumOf { it.lineCents }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
+        state = listState,
         contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        item {
+        item(key = "market-summary") {
             Surface(color = Color(0xFFEAE9FB), shape = RoundedCornerShape(19.dp)) {
                 Column(
                     Modifier.fillMaxWidth().padding(16.dp),
@@ -738,19 +770,22 @@ fun MarketScreen(
                 }
             }
         }
-        item {
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(horizontal = 2.dp)
-            ) {
-                item {
-                    CategoryChip(category = "All", active = filter == "All") {
-                        filter = "All"
+        stickyHeader(key = "market-category-header") {
+            Surface(modifier = Modifier.fillMaxWidth(), color = ProColors.page) {
+                LazyRow(
+                    modifier = Modifier.padding(vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(horizontal = 2.dp)
+                ) {
+                    item(key = "All") {
+                        CategoryChip("All", active = filter == "All") {
+                            onFilterChange("All")
+                        }
                     }
-                }
-                lazyItems(categories) { category ->
-                    CategoryChip(category = category, active = filter == category) {
-                        filter = category
+                    lazyItems(categories, key = { it }) { category ->
+                        CategoryChip(category, active = filter == category) {
+                            onFilterChange(category)
+                        }
                     }
                 }
             }
