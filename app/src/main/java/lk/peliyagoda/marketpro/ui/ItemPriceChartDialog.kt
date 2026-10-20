@@ -251,76 +251,102 @@ private fun TrendPanel(
     points: List<DailyPriceTrend>,
     metric: (DailyPriceTrend) -> Float,
     color: Color,
-    width: Dp,
-    money: Boolean
+    height: Dp,
+    money: Boolean,
+    offset: Float,
+    onDrag: (Float, Float) -> Unit
 ) {
+    val values = points.map(metric)
+    val minimum = values.minOrNull() ?: 0f
+    val maximum = values.maxOrNull() ?: 0f
+    val margin = max(1f, maximum - minimum) * 0.3f
+    val low = (minimum - margin).coerceAtLeast(0f)
+    val high = maximum + margin
+    val range = max(0.001f, high - low)
     Card(
-        modifier = Modifier.width(width),
-        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth().height(height),
+        shape = RoundedCornerShape(15.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
-        Column(Modifier.padding(horizontal = 12.dp, vertical = 11.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 9.dp, vertical = 7.dp)) {
             Text(title, fontWeight = FontWeight.ExtraBold, color = color,
-                style = MaterialTheme.typography.titleSmall)
-            Canvas(Modifier.width(width - 24.dp).height(190.dp)) {
-                val values = points.map(metric)
-                if (values.isEmpty()) return@Canvas
-                val left = 54.dp.toPx()
-                val right = 26.dp.toPx()
-                val top = 25.dp.toPx()
-                val bottom = size.height - 28.dp.toPx()
-                val plotH = bottom - top
-                val maximum = values.maxOrNull() ?: 0f
-                val minimum = values.minOrNull() ?: 0f
-                val spread = max(1f, maximum - minimum)
-                val low = (minimum - spread * 0.35f).coerceAtLeast(0f)
-                val high = maximum + spread * 0.35f
-                val range = max(0.001f, high - low)
-                val xStep = 88.dp.toPx()
-                val native = drawContext.canvas.nativeCanvas
-                val font = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    this.color = android.graphics.Color.rgb(91, 108, 118)
-                    textSize = 10.5f * density
+                style = MaterialTheme.typography.titleSmall, maxLines = 1)
+            Row(Modifier.fillMaxWidth().weight(1f)) {
+                // This axis never moves when the user swipes a chart.
+                Canvas(Modifier.width(46.dp).fillMaxHeight()) {
+                    val top = 24.dp.toPx()
+                    val bottom = size.height - 24.dp.toPx()
+                    val span = (bottom - top).coerceAtLeast(1f)
+                    val font = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        this.color = android.graphics.Color.rgb(91, 108, 118)
+                        textSize = 10.5f * density
+                        textAlign = Paint.Align.RIGHT
+                    }
+                    for (tick in 0..3) {
+                        val v = low + range * tick / 3f
+                        val y = bottom - span * tick / 3f
+                        val label = if (money) "%.0f".format(java.util.Locale.US, v)
+                            else "%.1f".format(java.util.Locale.US, v)
+                        drawContext.canvas.nativeCanvas.drawText(
+                            label, size.width - 3.dp.toPx(), y + 4.dp.toPx(), font
+                        )
+                    }
                 }
-                fun yOf(value: Float) = bottom - (value - low) / range * plotH
-                for (tick in 0..3) {
-                    val value = low + (high - low) * tick / 3f
-                    val yy = yOf(value)
-                    drawLine(
-                        Color(0xFFDBE6EB), Offset(left, yy),
-                        Offset(size.width - right, yy), 1.dp.toPx()
+                Canvas(
+                    Modifier.weight(1f).fillMaxHeight().clipToBounds()
+                        .pointerInput(points) {
+                            detectHorizontalDragGestures { change, delta ->
+                                change.consume()
+                                val extent = (points.size - 1).coerceAtLeast(0) *
+                                    86.dp.toPx() + 39.dp.toPx()
+                                onDrag(delta, (extent - size.width).coerceAtLeast(0f))
+                            }
+                        }
+                ) {
+                    val step = 86.dp.toPx()
+                    val extent = (points.size - 1).coerceAtLeast(0) * step + 39.dp.toPx()
+                    val maximumScroll = (extent - size.width).coerceAtLeast(0f)
+                    val shift = if (offset == Float.MAX_VALUE) maximumScroll
+                        else offset.coerceIn(0f, maximumScroll)
+                    val top = 24.dp.toPx()
+                    val bottom = size.height - 24.dp.toPx()
+                    val span = (bottom - top).coerceAtLeast(1f)
+                    fun y(v: Float) = bottom - (v - low) / range * span
+                    val font = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        textSize = 10.5f * density
+                        textAlign = Paint.Align.CENTER
+                    }
+                    for (tick in 0..3) {
+                        val yy = bottom - span * tick / 3f
+                        drawLine(Color(0xFFDAE6ED), Offset(0f, yy),
+                            Offset(size.width, yy), strokeWidth = 1.dp.toPx())
+                    }
+                    val path = Path()
+                    values.forEachIndexed { i, v ->
+                        val x = 17.dp.toPx() + i * step - shift
+                        if (i == 0) path.moveTo(x, y(v)) else path.lineTo(x, y(v))
+                    }
+                    if (values.size > 1) drawPath(
+                        path, color, style = Stroke(width = 2.5.dp.toPx())
                     )
-                    native.drawText(
-                        if (money) "%.0f".format(java.util.Locale.US, value)
-                        else "%.1f".format(java.util.Locale.US, value),
-                        1.dp.toPx(), yy + 4.dp.toPx(), font
-                    )
-                }
-                val path = Path()
-                values.forEachIndexed { index, v ->
-                    val x = left + index * xStep
-                    val y = yOf(v)
-                    if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
-                }
-                if (values.size > 1) {
-                    drawPath(path, color, style = Stroke(width = 3.dp.toPx()))
-                }
-                values.forEachIndexed { index, v ->
-                    val x = left + index * xStep
-                    val y = yOf(v)
-                    drawCircle(color, radius = 4.dp.toPx(), center = Offset(x, y))
-                    font.textAlign = Paint.Align.CENTER
-                    font.color = android.graphics.Color.rgb(16, 42, 55)
-                    native.drawText(
-                        if (money) "%.2f".format(java.util.Locale.US, v)
-                        else "%.2f".format(java.util.Locale.US, v),
-                        x, (y - 9.dp.toPx()).coerceAtLeast(11.dp.toPx()), font
-                    )
-                    font.color = android.graphics.Color.rgb(91, 108, 118)
-                    native.drawText(points[index].date.takeLast(5),
-                        x, size.height - 5.dp.toPx(), font)
-                    font.textAlign = Paint.Align.LEFT
+                    values.forEachIndexed { i, v ->
+                        val x = 17.dp.toPx() + i * step - shift
+                        if (x < -15.dp.toPx() || x > size.width + 15.dp.toPx())
+                            return@forEachIndexed
+                        val yy = y(v)
+                        drawCircle(color, radius = 3.5.dp.toPx(),
+                            center = Offset(x, yy))
+                        font.color = android.graphics.Color.rgb(16, 42, 55)
+                        drawContext.canvas.nativeCanvas.drawText(
+                            "%.2f".format(java.util.Locale.US, v), x,
+                            (yy - 9.dp.toPx()).coerceAtLeast(11.dp.toPx()), font
+                        )
+                        font.color = android.graphics.Color.rgb(91, 108, 118)
+                        drawContext.canvas.nativeCanvas.drawText(
+                            points[i].date.takeLast(5), x,
+                            size.height - 4.dp.toPx(), font
+                        )
+                    }
                 }
             }
         }
