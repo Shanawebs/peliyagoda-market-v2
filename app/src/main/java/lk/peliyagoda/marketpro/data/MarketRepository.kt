@@ -17,6 +17,13 @@ class MarketRepository(private val db: MarketDatabase) {
     fun purchases(date: String) = dao.observePurchases(date)
     fun additions(date: String) = dao.observeAdditions(date)
     fun purchaseHistory(itemId: Long) = dao.observePurchaseHistory(itemId)
+    fun cashReceived(date: String) = dao.observeCashReceived(date)
+
+    suspend fun saveCashReceived(date: String, amountCents: Long) {
+        LocalDate.parse(date)
+        require(amountCents in 0L..9_999_999_999L) { "Cash received is out of range" }
+        dao.upsertCashReceived(DailyCashReceivedEntity(date, amountCents))
+    }
 
     suspend fun seedCatalogOnce() {
         MarketConstants.categories.forEach { dao.insertCategory(CategoryEntity(it)) }
@@ -129,8 +136,16 @@ class MarketRepository(private val db: MarketDatabase) {
     suspend fun exportBackup(): String {
         val root = JSONObject()
         root.put("format", "peliyagoda-market-pro")
-        root.put("schemaVersion", 2)
+        root.put("schemaVersion", 3)
         root.put("createdAt", OffsetDateTime.now().toString())
+        root.put("cashReceived", JSONArray().apply {
+            dao.allCashReceived().forEach {
+                put(JSONObject().apply {
+                    put("date", it.businessDate)
+                    put("amountCents", it.amountCents)
+                })
+            }
+        })
         root.put("categories", JSONArray().apply {
             dao.allCategories().forEach { put(it.name) }
         })
@@ -165,13 +180,15 @@ class MarketRepository(private val db: MarketDatabase) {
         val root = JSONObject(json)
         require(root.optString("format") == "peliyagoda-market-pro") { "Not a Market Pro backup" }
         val backupVersion = root.optInt("schemaVersion")
-        require(backupVersion == 1 || backupVersion == 2) { "Unsupported backup version" }
+        require(backupVersion in 1..3) { "Unsupported backup version" }
         val itemArray = root.getJSONArray("items")
         val reqArray = root.getJSONArray("requisitions")
         val purchaseArray = root.getJSONArray("purchases")
-        val additionsArray = if (backupVersion == 2) root.getJSONArray("additions") else JSONArray()
+        val additionsArray = if (backupVersion >= 2) root.getJSONArray("additions") else JSONArray()
+        val cashArray = if (backupVersion >= 3) root.getJSONArray("cashReceived") else JSONArray()
         require(itemArray.length() <= 100_000 && reqArray.length() <= 500_000 &&
-                purchaseArray.length() <= 500_000 && additionsArray.length() <= 500_000) { "Backup too large" }
+                purchaseArray.length() <= 500_000 && additionsArray.length() <= 500_000 &&
+                cashArray.length() <= 100_000) { "Backup too large" }
         val restoredItems = ArrayList<ItemEntity>(itemArray.length())
         for (i in 0 until itemArray.length()) {
             val obj = itemArray.getJSONObject(i)
@@ -187,7 +204,7 @@ class MarketRepository(private val db: MarketDatabase) {
         require(restoredItems.map { it.id }.distinct().size == restoredItems.size)
         require(restoredItems.map { it.name.lowercase() }.distinct().size == restoredItems.size)
         val categoryNames = linkedSetOf(MarketConstants.VEGETABLES, MarketConstants.FRUITS)
-        if (backupVersion == 2) {
+        if (backupVersion >= 2) {
             val array = root.getJSONArray("categories")
             require(array.length() <= 1000)
             val seen = mutableSetOf<String>()
@@ -250,7 +267,20 @@ class MarketRepository(private val db: MarketDatabase) {
         }
         require(restoredAdditions.map { it.id }.distinct().size == restoredAdditions.size)
 
+        val restoredCash = ArrayList<DailyCashReceivedEntity>(cashArray.length())
+        for (i in 0 until cashArray.length()) {
+            val obj = cashArray.getJSONObject(i)
+            val cash = DailyCashReceivedEntity(
+                businessDate = readDate(obj),
+                amountCents = obj.getLong("amountCents")
+            )
+            require(cash.amountCents in 0L..9_999_999_999L)
+            restoredCash.add(cash)
+        }
+        require(restoredCash.map { it.businessDate }.distinct().size == restoredCash.size)
+
         db.withTransaction {
+            dao.clearCashReceived()
             dao.clearAdditions()
             dao.clearPurchases()
             dao.clearRequisitions()
@@ -261,6 +291,7 @@ class MarketRepository(private val db: MarketDatabase) {
             dao.restoreRequisitions(restoredRequirements)
             dao.restorePurchases(restoredPurchases)
             dao.restoreAdditions(restoredAdditions)
+            dao.restoreCashReceived(restoredCash)
         }
     }
 }
