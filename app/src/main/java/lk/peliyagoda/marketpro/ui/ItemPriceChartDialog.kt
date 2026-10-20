@@ -2,8 +2,8 @@ package lk.peliyagoda.marketpro.ui
 
 import android.graphics.Paint
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items as lazyItems
@@ -40,6 +39,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.consume
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -84,10 +87,10 @@ fun ItemPriceChartDialog(
     }
     // Render at most 180 dates per chart to avoid very large Android Canvas textures.
     val visibleTrend = trend.takeLast(180)
-    val scrollState = rememberScrollState()
+    var scrollOffset by remember(selectedItemId) { mutableFloatStateOf(0f) }
     LaunchedEffect(selectedItemId, visibleTrend.size) {
         // Start from the most recent recorded day. The user can drag left for history.
-        scrollState.scrollTo(scrollState.maxValue)
+        scrollOffset = Float.MAX_VALUE
     }
 
     Dialog(
@@ -95,22 +98,20 @@ fun ItemPriceChartDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Surface(
-            modifier = Modifier.fillMaxWidth(0.95f).fillMaxHeight(0.92f),
+            modifier = Modifier.fillMaxWidth(0.96f).fillMaxHeight(0.91f),
             shape = RoundedCornerShape(22.dp),
             color = ProColors.page
         ) {
             Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                modifier = Modifier.padding(horizontal = 13.dp, vertical = 11.dp),
+                verticalArrangement = Arrangement.spacedBy(7.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("Items price chart", color = ProColors.navy,
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.ExtraBold)
-                        Text("Historic market prices and purchased quantities",
-                            color = ProColors.muted,
-                            style = MaterialTheme.typography.bodySmall)
+
                     }
                     TextButton(onClick = onDismiss) { Text("Close") }
                 }
@@ -130,8 +131,7 @@ fun ItemPriceChartDialog(
                         )
                     }
                 }
-                Text("Select item", color = ProColors.navy,
-                    fontWeight = FontWeight.Bold)
+
                 Box(Modifier.fillMaxWidth()) {
                     OutlinedButton(
                         modifier = Modifier.fillMaxWidth(),
@@ -183,9 +183,7 @@ fun ItemPriceChartDialog(
                             fontWeight = FontWeight.Bold,
                             style = MaterialTheme.typography.bodyMedium
                         )
-                        Text("Swipe left or right on either chart to explore dates.",
-                            color = ProColors.muted,
-                            style = MaterialTheme.typography.labelSmall)
+
                         if (trend.size > 180) {
                             Text("Chart shows the most recent 180 recorded dates.",
                                 color = ProColors.muted,
@@ -217,15 +215,7 @@ fun ItemPriceChartDialog(
                                 )
                             }
                         }
-                        // Legible current day values independent of finger dragging.
-                        val latest = trend.last()
-                        Text(
-                            "Latest ${latest.date}: Rs. ${MarketMath.editPrice(latest.weightedPriceCentsPerKg)}/kg" +
-                                "  •  ${MarketMath.kg(latest.quantityGrams)} kg",
-                            color = ProColors.navy,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold
-                        )
+
                     }
                 }
                 Spacer(Modifier.height(2.dp))
