@@ -19,6 +19,27 @@ fun completedPurchases(rows: List<ConsolidatedRow>): List<ConsolidatedRow> =
 fun completedPurchaseTotal(rows: List<ConsolidatedRow>): Long =
     completedPurchases(rows).sumOf { it.lineCents }
 
+/** Category totals contain COMPLETED items only. Uncompleted purchased goods still cost cash. */
+data class CompletedCategoryGroup(
+    val name: String,
+    val rows: List<ConsolidatedRow>
+) {
+    val subtotalCents: Long get() = rows.sumOf { it.lineCents }
+}
+
+fun completedCategoryGroups(rows: List<ConsolidatedRow>): List<CompletedCategoryGroup> =
+    completedPurchases(rows)
+        .groupBy { it.item.category }
+        .toSortedMap(String.CASE_INSENSITIVE_ORDER)
+        .map { (category, completed) ->
+            CompletedCategoryGroup(category, completed.sortedBy { it.item.name.lowercase() })
+        }
+
+/** Actual money spent includes purchased shortage/pending items, not only completed rows. */
+fun totalMarketSpentCents(rows: List<ConsolidatedRow>): Long = rows.sumOf { it.lineCents }
+fun cashBalanceCents(receivedCents: Long, rows: List<ConsolidatedRow>): Long =
+    receivedCents - totalMarketSpentCents(rows)
+
 /**
  * Android's native PDF renderer retains Sinhala text through its installed
  * Android font fallback and StaticLayout shaping. No external PDF library,
@@ -61,10 +82,23 @@ object MarketPdf {
         return layout.height
     }
 
-    fun write(date: String, rows: List<ConsolidatedRow>, output: OutputStream) {
-        val completed = completedPurchases(rows)
-        require(completed.isNotEmpty()) { "No completed purchases to export" }
-        val total = completed.sumOf { it.lineCents }
+    fun write(date: String, rows: List<ConsolidatedRow>, output: OutputStream) =
+        write(date, rows, 0L, output)
+
+    fun write(
+        date: String,
+        rows: List<ConsolidatedRow>,
+        cashReceivedCents: Long,
+        output: OutputStream
+    ) {
+        require(cashReceivedCents >= 0) { "Cash received cannot be negative" }
+        val groups = completedCategoryGroups(rows)
+        val count = groups.sumOf { it.rows.size }
+        require(count > 0) { "No completed purchases to export" }
+        val completedTotal = groups.sumOf { it.subtotalCents }
+        val spent = totalMarketSpentCents(rows)
+        val balance = cashReceivedCents - spent
+
         val document = PdfDocument()
         var pageNumber = 0
         var page: PdfDocument.Page? = null
@@ -84,89 +118,128 @@ object MarketPdf {
         fun nextPage() {
             finishPage()
             pageNumber++
-            val info = PdfDocument.PageInfo.Builder(PAGE_W, PAGE_H, pageNumber).create()
-            val pg = document.startPage(info)
+            val pg = document.startPage(
+                PdfDocument.PageInfo.Builder(PAGE_W, PAGE_H, pageNumber).create()
+            )
             page = pg
             val canvas = pg.canvas
             canvas.drawColor(Color.WHITE)
-            canvas.drawRoundRect(LEFT, 35f, RIGHT, 130f, 14f, 14f,
-                Paint(Paint.ANTI_ALIAS_FLAG).apply { color = light })
+            canvas.drawRoundRect(
+                LEFT, 35f, RIGHT, 130f, 14f, 14f,
+                Paint(Paint.ANTI_ALIAS_FLAG).apply { color = light }
+            )
             canvas.drawText("PELIYAGODA MARKET PRO", LEFT + 16f, 63f,
                 paint(12f, teal, true))
-            canvas.drawText("Completed purchases", LEFT + 16f, 91f,
-                paint(22f, navy, true))
-            canvas.drawText("Date: " + date, LEFT + 16f, 114f,
-                paint(11f, muted))
+            canvas.drawText("Completed purchases by category", LEFT + 16f, 90f,
+                paint(18f, navy, true))
+            canvas.drawText("Date: " + date, LEFT + 16f, 114f, paint(11f, muted))
             y = 153f
         }
 
-        fun canvas(): Canvas = requireNotNull(page).canvas
+        fun c(): Canvas = requireNotNull(page).canvas
+        fun ensure(height: Float) {
+            if (y + height > BOTTOM) nextPage()
+        }
+        fun drawTotalBar(label: String, value: Long, background: Int) {
+            ensure(51f)
+            c().drawRoundRect(
+                LEFT, y, RIGHT, y + 44f, 8f, 8f,
+                Paint(Paint.ANTI_ALIAS_FLAG).apply { color = background }
+            )
+            c().drawText(
+                label, LEFT + 12f, y + 27f, paint(12f, Color.WHITE, true)
+            )
+            val valueText = "Rs. " + MarketMath.lkr(value)
+            val p = paint(15f, Color.WHITE, true).apply {
+                textAlign = Paint.Align.RIGHT
+            }
+            val available = 216f
+            if (p.measureText(valueText) > available) {
+                p.textSize = (p.textSize * available /
+                    p.measureText(valueText)).coerceAtLeast(9f)
+            }
+            c().drawText(valueText, RIGHT - 12f, y + 28f, p)
+            y += 51f
+        }
 
         try {
             nextPage()
-             // Stable A-Z item order and explicit final costs, including additional lots.
-            for ((index, row) in completed.withIndex()) {
-                val namePaint = paint(18f, navy, true)
-                val availableNameWidth = 255
-                val namelayout = StaticLayout.Builder.obtain(
-                    row.item.name, 0, row.item.name.length, namePaint,
-                    availableNameWidth
-                ).setIncludePad(false).build()
-                // Tighter cards; preserve enough height for long Sinhala item names.
-                val rowHeight = maxOf(76f, namelayout.height.toFloat() + 47f)
-                if (y + rowHeight > BOTTOM) nextPage()
-
-                val c = canvas()
-                c.drawRoundRect(LEFT, y, RIGHT, y + rowHeight - 5f,
-                    9f, 9f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = light })
-
-                val top = y + 10f
-                val title = (index + 1).toString() + ". " + row.item.name
-                val titleHeight = drawWrapped(
-                    c, title, LEFT + 11f, top, availableNameWidth, namePaint
+            var number = 0
+            for (group in groups) {
+                ensure(56f)
+                val headerY = y
+                c().drawRoundRect(
+                    LEFT, headerY, RIGHT, headerY + 32f, 8f, 8f,
+                    Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(220, 243, 246) }
                 )
-                val qtyText = "Required: " + MarketMath.kg(row.requiredGrams) +
-                    " kg  |  Bought: " + MarketMath.kg(row.purchasedGrams) + " kg"
-                val qtyPaint = paint(13f, muted, true)
-                if (qtyPaint.measureText(qtyText) > availableNameWidth.toFloat()) {
-                    qtyPaint.textSize = (13f * availableNameWidth /
-                        qtyPaint.measureText(qtyText)).coerceAtLeast(9.5f)
+                drawWrapped(c(), group.name, LEFT + 11f, headerY + 6f,
+                    400, paint(17f, teal, true))
+                y += 39f
+                for (row in group.rows) {
+                    number++
+                    val namePaint = paint(17f, navy, true)
+                    val nameWidth = 253
+                    val nameLayout = StaticLayout.Builder.obtain(
+                        number.toString() + ". " + row.item.name, 0,
+                        (number.toString() + ". " + row.item.name).length,
+                        namePaint, nameWidth
+                    ).setIncludePad(false).build()
+                    val height = maxOf(67f, nameLayout.height.toFloat() + 39f)
+                    ensure(height)
+                    c().drawRoundRect(
+                        LEFT, y, RIGHT, y + height - 4f, 8f, 8f,
+                        Paint(Paint.ANTI_ALIAS_FLAG).apply { color = light }
+                    )
+                    val title = "$" + "{number}. " + "$" + "{row.item.name}"
+                    val titleHeight = drawWrapped(c(), title, LEFT + 11f, y + 7f,
+                        nameWidth, namePaint)
+                    val qty = "Required: " + MarketMath.kg(row.requiredGrams) +
+                        " kg  |  Bought: " + MarketMath.kg(row.purchasedGrams) + " kg"
+                    val qtyPaint = paint(12f, muted, true)
+                    if (qtyPaint.measureText(qty) > nameWidth.toFloat()) {
+                        qtyPaint.textSize = (12f * nameWidth / qtyPaint.measureText(qty))
+                            .coerceAtLeast(9f)
+                    }
+                    c().drawText(qty, LEFT + 11f, y + 9f + titleHeight + 17f, qtyPaint)
+                    c().drawText("Final cost", RIGHT - 10f, y + 21f,
+                        paint(10f, muted).apply { textAlign = Paint.Align.RIGHT })
+                    val money = "Rs. " + MarketMath.lkr(row.lineCents)
+                    val moneyPaint = paint(16f, teal, true).apply {
+                        textAlign = Paint.Align.RIGHT
+                    }
+                    if (moneyPaint.measureText(money) > 185f) {
+                        moneyPaint.textSize = (16f * 185f / moneyPaint.measureText(money))
+                            .coerceAtLeast(10f)
+                    }
+                    c().drawText(money, RIGHT - 10f, y + 44f, moneyPaint)
+                    y += height
                 }
-                c.drawText(
-                    qtyText, LEFT + 11f, top + titleHeight + 19f, qtyPaint
-                )
-                c.drawText(
-                    "Final cost", RIGHT - 12f, y + 25f,
-                    paint(12f, muted, true).apply { textAlign = Paint.Align.RIGHT }
-                )
-                val costText = "Rs. " + MarketMath.lkr(row.lineCents)
-                val costPaint = paint(19f, teal, true).apply {
-                    textAlign = Paint.Align.RIGHT
-                }
-                if (costPaint.measureText(costText) > 178f) {
-                    costPaint.textSize = (19f * 178f /
-                        costPaint.measureText(costText)).coerceAtLeast(12f)
-                }
-                c.drawText(costText, RIGHT - 12f, y + 52f, costPaint)
-                y += rowHeight
+                drawTotalBar(group.name + " subtotal", group.subtotalCents, teal)
+                y += 6f
             }
-            if (y + 102f > BOTTOM) nextPage()
-            val c = canvas()
-            y += 10f
-            c.drawRoundRect(LEFT, y, RIGHT, y + 80f, 10f, 10f,
-                Paint(Paint.ANTI_ALIAS_FLAG).apply { color = teal })
-            c.drawText(
-                "Completed items: " + completed.size,
-                LEFT + 16f, y + 27f, paint(12f, Color.WHITE, true)
+
+            y += 6f
+            drawTotalBar("COMPLETED FINAL TOTAL (" + count + ")", completedTotal, navy)
+            drawTotalBar("CASH RECEIVED", cashReceivedCents, Color.rgb(93, 87, 134))
+            drawTotalBar("TOTAL SPENT (ALL PURCHASES)", spent, Color.rgb(93, 87, 134))
+            drawTotalBar(
+                "CASH BALANCE",
+                balance,
+                if (balance >= 0L) Color.rgb(23, 107, 61)
+                else Color.rgb(163, 34, 43)
             )
-            c.drawText(
-                "TOTAL FINAL COST: Rs. " + MarketMath.lkr(total),
-                LEFT + 16f, y + 55f, paint(16f, Color.WHITE, true)
+            // Explicit explanation: the completed-only cost and cash-spend
+            // total may differ while shortage/pending items have purchased lots.
+            ensure(35f)
+            drawWrapped(
+                c(),
+                "Cash balance uses every purchased lot (including incomplete items). " +
+                    "Completed final total contains completed items only.",
+                LEFT + 2f, y + 3f, 470, paint(9f, muted)
             )
             finishPage()
             document.writeTo(output)
         } finally {
-            // Safe after writeTo success/failure. Never leave a page open.
             if (page != null) finishPage()
             document.close()
         }
