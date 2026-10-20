@@ -40,7 +40,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.consume
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.graphics.Color
@@ -203,7 +202,7 @@ fun ItemPriceChartDialog(
                                     money = true,
                                     offset = scrollOffset,
                                     onDrag = { delta, maximum ->
-                                        scrollOffset = (if (scrollOffset == Float.MAX_VALUE) maximum
+                                        scrollOffset = (if (scrollOffset == Float.MAX_VALUE) maximum - delta
                                             else scrollOffset - delta).coerceIn(0f, maximum)
                                     }
                                 )
@@ -216,7 +215,7 @@ fun ItemPriceChartDialog(
                                     money = false,
                                     offset = scrollOffset,
                                     onDrag = { delta, maximum ->
-                                        scrollOffset = (if (scrollOffset == Float.MAX_VALUE) maximum
+                                        scrollOffset = (if (scrollOffset == Float.MAX_VALUE) maximum - delta
                                             else scrollOffset - delta).coerceIn(0f, maximum)
                                     }
                                 )
