@@ -100,6 +100,14 @@ class MarketRepository(private val db: MarketDatabase) {
         ))
     }
 
+    /** Preserve lot IDs: records remain individually priced and editable. */
+    suspend fun editPurchaseAddition(date: String, itemId: Long, lotId: Long, grams: Long, centsPerKg: Long) {
+        require(grams in 1..1_000_000_000 && centsPerKg in 0..1_000_000_000)
+        check(dao.updateAddition(lotId, date, itemId, grams, centsPerKg) == 1) {
+            "Additional purchase no longer exists"
+        }
+    }
+
     suspend fun exportBackup(): String {
         val root = JSONObject()
         root.put("format", "peliyagoda-market-pro")
