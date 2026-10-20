@@ -1,0 +1,332 @@
+package lk.peliyagoda.marketpro.ui
+
+import android.graphics.Paint
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items as lazyItems
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import kotlin.math.max
+import lk.peliyagoda.marketpro.data.ItemEntity
+import lk.peliyagoda.marketpro.data.PurchaseHistoryLot
+import lk.peliyagoda.marketpro.util.DailyPriceTrend
+import lk.peliyagoda.marketpro.util.MarketMath
+import lk.peliyagoda.marketpro.util.dailyPriceTrends
+
+/**
+ * Historical item purchase trends: all records stay on device, selected category
+ * controls the item dropdown, and both charts pan horizontally together.
+ */
+@Composable
+fun ItemPriceChartDialog(
+    categories: List<String>,
+    items: List<ItemEntity>,
+    history: List<PurchaseHistoryLot>,
+    onPickItem: (Long?) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var category by remember(categories) {
+        mutableStateOf(categories.firstOrNull().orEmpty())
+    }
+    var selectedItemId by remember { mutableStateOf<Long?>(null) }
+    var dropdownOpen by remember { mutableStateOf(false) }
+    val categoryItems = remember(category, items) {
+        items.filter { it.category == category }.sortedBy { it.name.lowercase() }
+    }
+    val selectedItem = items.firstOrNull { it.id == selectedItemId }
+    val trend = remember(history, selectedItemId) {
+        if (selectedItemId == null) emptyList() else dailyPriceTrends(history)
+    }
+    // Render at most 180 dates per chart to avoid very large Android Canvas textures.
+    val visibleTrend = trend.takeLast(180)
+    val scrollState = rememberScrollState()
+    LaunchedEffect(selectedItemId, visibleTrend.size) {
+        // Start from the most recent recorded day. The user can drag left for history.
+        scrollState.scrollTo(scrollState.maxValue)
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.95f).fillMaxHeight(0.92f),
+            shape = RoundedCornerShape(22.dp),
+            color = ProColors.page
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Items price chart", color = ProColors.navy,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold)
+                        Text("Historic market prices and purchased quantities",
+                            color = ProColors.muted,
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                    TextButton(onClick = onDismiss) { Text("Close") }
+                }
+                Text("Item category", color = ProColors.navy,
+                    fontWeight = FontWeight.Bold)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    lazyItems(categories) { c ->
+                        CategoryChipForChart(
+                            name = c,
+                            selected = category == c,
+                            onClick = {
+                                category = c
+                                selectedItemId = null
+                                onPickItem(null)
+                                dropdownOpen = false
+                            }
+                        )
+                    }
+                }
+                Text("Select item", color = ProColors.navy,
+                    fontWeight = FontWeight.Bold)
+                Box(Modifier.fillMaxWidth()) {
+                    OutlinedButton(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { dropdownOpen = true },
+                        enabled = categoryItems.isNotEmpty()
+                    ) {
+                        Text(
+                            selectedItem?.name ?: if (categoryItems.isEmpty()) "No items in category"
+                                else "Choose an item (${categoryItems.size})",
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        androidx.compose.material3.Icon(
+                            Icons.Filled.ArrowDropDown, contentDescription = "Open item list"
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = dropdownOpen,
+                        onDismissRequest = { dropdownOpen = false }
+                    ) {
+                        categoryItems.forEach { item ->
+                            DropdownMenuItem(
+                                text = { Text(item.name, maxLines = 2) },
+                                onClick = {
+                                    dropdownOpen = false
+                                    selectedItemId = item.id
+                                    onPickItem(item.id)
+                                }
+                            )
+                        }
+                    }
+                }
+                when {
+                    selectedItemId == null -> {
+                        Text("Select a category and an item to view its historical charts.",
+                            modifier = Modifier.padding(vertical = 32.dp),
+                            color = ProColors.muted)
+                    }
+                    visibleTrend.isEmpty() -> {
+                        Text("No recorded purchases for this item yet.",
+                            modifier = Modifier.padding(vertical = 32.dp),
+                            color = ProColors.muted)
+                    }
+                    else -> {
+                        Text(
+                            "${trend.size} recorded day(s) • ${history.size} purchase lot(s)",
+                            color = ProColors.teal,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Text("Swipe left or right on either chart to explore dates.",
+                            color = ProColors.muted,
+                            style = MaterialTheme.typography.labelSmall)
+                        if (trend.size > 180) {
+                            Text("Chart shows the most recent 180 recorded dates.",
+                                color = ProColors.muted,
+                                style = MaterialTheme.typography.labelSmall)
+                        }
+                        // One horizontal scroll container keeps both price and quantity
+                        // traces aligned to the same visible dates.
+                        BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
+                            val fullWidth = maxOf(maxWidth, ((visibleTrend.size - 1) * 88 + 130).dp)
+                            Column(
+                                modifier = Modifier.horizontalScroll(scrollState),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                TrendPanel(
+                                    title = "Price trend • Rs./kg",
+                                    points = visibleTrend,
+                                    metric = { it.weightedPriceCentsPerKg / 100f },
+                                    color = ProColors.teal,
+                                    width = fullWidth,
+                                    money = true
+                                )
+                                TrendPanel(
+                                    title = "Purchased quantity • kg",
+                                    points = visibleTrend,
+                                    metric = { it.quantityGrams / 1000f },
+                                    color = ProColors.purple,
+                                    width = fullWidth,
+                                    money = false
+                                )
+                            }
+                        }
+                        // Legible current day values independent of finger dragging.
+                        val latest = trend.last()
+                        Text(
+                            "Latest ${latest.date}: Rs. ${MarketMath.editPrice(latest.weightedPriceCentsPerKg)}/kg" +
+                                "  •  ${MarketMath.kg(latest.quantityGrams)} kg",
+                            color = ProColors.navy,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+                Spacer(Modifier.height(2.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryChipForChart(
+    name: String, selected: Boolean, onClick: () -> Unit
+) {
+    val background = if (selected) ProColors.teal else Color.White
+    Surface(shape = RoundedCornerShape(10.dp), color = background,
+        onClick = onClick) {
+        Text(
+            name, modifier = Modifier.padding(horizontal = 13.dp, vertical = 9.dp),
+            color = if (selected) Color.White else ProColors.navy,
+            fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.Medium
+        )
+    }
+}
+
+@Composable
+private fun TrendPanel(
+    title: String,
+    points: List<DailyPriceTrend>,
+    metric: (DailyPriceTrend) -> Float,
+    color: Color,
+    width: Dp,
+    money: Boolean
+) {
+    Card(
+        modifier = Modifier.width(width),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
+    ) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 11.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Text(title, fontWeight = FontWeight.ExtraBold, color = color,
+                style = MaterialTheme.typography.titleSmall)
+            Canvas(Modifier.width(width - 24.dp).height(190.dp)) {
+                val values = points.map(metric)
+                if (values.isEmpty()) return@Canvas
+                val left = 54.dp.toPx()
+                val right = 26.dp.toPx()
+                val top = 25.dp.toPx()
+                val bottom = size.height - 28.dp.toPx()
+                val plotH = bottom - top
+                val maximum = values.maxOrNull() ?: 0f
+                val minimum = values.minOrNull() ?: 0f
+                val spread = max(1f, maximum - minimum)
+                val low = (minimum - spread * 0.35f).coerceAtLeast(0f)
+                val high = maximum + spread * 0.35f
+                val range = max(0.001f, high - low)
+                val xStep = 88.dp.toPx()
+                val native = drawContext.canvas.nativeCanvas
+                val font = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    this.color = android.graphics.Color.rgb(91, 108, 118)
+                    textSize = 10.5f * density
+                }
+                fun yOf(value: Float) = bottom - (value - low) / range * plotH
+                for (tick in 0..3) {
+                    val value = low + (high - low) * tick / 3f
+                    val yy = yOf(value)
+                    drawLine(
+                        Color(0xFFDBE6EB), Offset(left, yy),
+                        Offset(size.width - right, yy), 1.dp.toPx()
+                    )
+                    native.drawText(
+                        if (money) "%.0f".format(java.util.Locale.US, value)
+                        else "%.1f".format(java.util.Locale.US, value),
+                        1.dp.toPx(), yy + 4.dp.toPx(), font
+                    )
+                }
+                val path = Path()
+                values.forEachIndexed { index, v ->
+                    val x = left + index * xStep
+                    val y = yOf(v)
+                    if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                }
+                if (values.size > 1) {
+                    drawPath(path, color, style = Stroke(width = 3.dp.toPx()))
+                }
+                values.forEachIndexed { index, v ->
+                    val x = left + index * xStep
+                    val y = yOf(v)
+                    drawCircle(color, radius = 4.dp.toPx(), center = Offset(x, y))
+                    font.textAlign = Paint.Align.CENTER
+                    font.color = android.graphics.Color.rgb(16, 42, 55)
+                    native.drawText(
+                        if (money) "%.2f".format(java.util.Locale.US, v)
+                        else "%.2f".format(java.util.Locale.US, v),
+                        x, (y - 9.dp.toPx()).coerceAtLeast(11.dp.toPx()), font
+                    )
+                    font.color = android.graphics.Color.rgb(91, 108, 118)
+                    native.drawText(points[index].date.takeLast(5),
+                        x, size.height - 5.dp.toPx(), font)
+                    font.textAlign = Paint.Align.LEFT
+                }
+            }
+        }
+    }
+}
