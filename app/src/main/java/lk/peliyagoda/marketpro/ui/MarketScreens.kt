@@ -114,24 +114,24 @@ private fun StatusTag(row: ConsolidatedRow) {
         row.purchasedGrams == 0L -> "PENDING"
         row.varianceGrams > 0 -> "EXTRA +${MarketMath.kg(row.varianceGrams)} kg"
         row.varianceGrams < 0 -> "SHORTAGE (-${MarketMath.kg(-row.varianceGrams)} kg)"
-        else -> "MATCHED"
+        else -> "COMPLETED"
     }
     val color = when {
-        row.purchasedGrams == 0L -> ProColors.muted
-        row.varianceGrams > 0 -> ProColors.teal
-        row.varianceGrams < 0 -> ProColors.red
-        else -> ProColors.green
+        row.purchasedGrams == 0L -> Color(0xFF475569) // dark gray
+        row.varianceGrams > 0 -> Color(0xFF075985)    // dark blue
+        row.varianceGrams < 0 -> Color(0xFF991B1B)    // dark red
+        else -> Color(0xFF166534)                      // dark green
     }
-    val bg = when {
-        row.purchasedGrams == 0L -> Color(0xFFE8EDF0)
-        row.varianceGrams > 0 -> Color(0xFFE2F3FB)
-        row.varianceGrams < 0 -> Color(0xFFFFE8EA)
-        else -> Color(0xFFE4F5EA)
+    Surface(shape = RoundedCornerShape(12.dp), color = color) {
+        Text(
+            status,
+            color = Color.White,
+            fontWeight = FontWeight.ExtraBold,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)
+        )
     }
-    Text(status, color = color, fontWeight = FontWeight.Bold,
-        style = MaterialTheme.typography.labelSmall,
-        modifier = Modifier.background(bg, RoundedCornerShape(12.dp))
-            .padding(horizontal = 9.dp, vertical = 6.dp))
 }
 
 @Composable
@@ -727,6 +727,66 @@ private fun PurchaseCard(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
                 )
             }
+            if (row.additions.isNotEmpty()) {
+                HorizontalDivider(color = ProColors.pale)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Additional purchases (${row.additions.size})",
+                        color = ProColors.teal, fontWeight = FontWeight.ExtraBold,
+                        style = MaterialTheme.typography.labelLarge)
+                    Spacer(Modifier.weight(1f))
+                    Text("Total: ${MarketMath.kg(row.purchasedGrams)} kg",
+                        color = ProColors.muted, fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.labelSmall)
+                }
+                row.additions.forEachIndexed { index, lot ->
+                    Column(
+                        modifier = Modifier.fillMaxWidth()
+                            .background(Color(0xFFE9F4F9), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 9.dp, vertical = 9.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text("Additional purchase ${index + 1}",
+                            color = ProColors.teal, fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.labelMedium)
+                        Row(Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = MarketMath.editKg(lot.quantityGrams),
+                                onValueChange = {},
+                                modifier = Modifier.weight(1f),
+                                label = { Text("Extra Qty") },
+                                suffix = { Text("kg") },
+                                readOnly = true,
+                                singleLine = true,
+                                shape = RoundedCornerShape(11.dp),
+                                textStyle = MaterialTheme.typography.bodyLarge.copy(
+                                    fontWeight = FontWeight.Bold)
+                            )
+                            OutlinedTextField(
+                                value = MarketMath.editPrice(lot.priceCentsPerKg),
+                                onValueChange = {},
+                                modifier = Modifier.weight(1f),
+                                label = { Text("Extra Price") },
+                                prefix = { Text("Rs.") },
+                                suffix = { Text("/kg") },
+                                readOnly = true,
+                                singleLine = true,
+                                shape = RoundedCornerShape(11.dp),
+                                textStyle = MaterialTheme.typography.bodyLarge.copy(
+                                    fontWeight = FontWeight.Bold)
+                            )
+                        }
+                        Text(
+                            "Additional cost: Rs. ${MarketMath.lkr(MarketMath.billCents(lot.quantityGrams, lot.priceCentsPerKg))}",
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.End,
+                            color = ProColors.purple,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    }
+                }
+            }
             Row(
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -734,10 +794,7 @@ private fun PurchaseCard(
             ) {
                 if (shortGrams > 0L) {
                     IconButton(onClick = { addOpen = true }) {
-                        Surface(
-                            shape = RoundedCornerShape(50),
-                            color = ProColors.teal
-                        ) {
+                        Surface(shape = RoundedCornerShape(50), color = ProColors.teal) {
                             Icon(Icons.Default.Add,
                                 contentDescription = "Add purchase for " + row.item.name,
                                 tint = Color.White,
@@ -747,17 +804,10 @@ private fun PurchaseCard(
                 } else {
                     Spacer(Modifier.width(44.dp))
                 }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text("Subtotal: Rs. ${MarketMath.lkr(preview)}",
-                        color = ProColors.purple,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.ExtraBold)
-                    if (row.additions.isNotEmpty()) {
-                        Text("${row.additions.size} extra purchase(s) • Total ${MarketMath.kg(row.purchasedGrams)} kg",
-                            color = ProColors.muted,
-                            style = MaterialTheme.typography.labelSmall)
-                    }
-                }
+                Text("Subtotal: Rs. ${MarketMath.lkr(preview)}",
+                    color = ProColors.purple,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold)
             }
         }
     }
@@ -825,12 +875,24 @@ fun CatalogSheet(
             Text("Master item catalog", style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold)
             Text("Add or rename vegetables and fruits.", color = ProColors.muted)
-            OutlinedTextField(value = name, onValueChange = { name = it },
-                modifier = Modifier.fillMaxWidth(), label = { Text("New item name") },
-                shape = RoundedCornerShape(12.dp), singleLine = true)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically) {
-                Button(onClick = { add(name, category); name = "" }, enabled = name.isNotBlank()) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    modifier = Modifier.weight(1f),
+                    label = { Text("New item name") },
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true
+                )
+                Button(
+                    onClick = { add(name, category); name = "" },
+                    enabled = name.isNotBlank(),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 12.dp)
+                ) {
                     Icon(Icons.Default.Add, contentDescription = null)
                     Text(" Add Item")
                 }
