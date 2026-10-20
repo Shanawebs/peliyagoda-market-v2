@@ -132,6 +132,15 @@ fun MarketProApp(vm: MarketViewModel) {
         var marketFilter by rememberSaveable(date.toString()) {
             mutableStateOf("All")
         }
+        // Capture a stable ITEM ID before leaving Market. If the 60-second
+        // invoice sorting moves cards while this tab is hidden, restore the
+        // same item instead of blindly restoring an outdated list index.
+        var marketAnchorItemId by rememberSaveable(date.toString()) {
+            mutableStateOf<Long?>(null)
+        }
+        var marketAnchorOffset by rememberSaveable(date.toString()) {
+            mutableIntStateOf(0)
+        }
         var catalogOpen by remember { mutableStateOf(false) }
         var chartOpen by remember { mutableStateOf(false) }
         val priceHistory by vm.chartHistory.collectAsState()
@@ -362,7 +371,22 @@ fun MarketProApp(vm: MarketViewModel) {
                     labels.forEachIndexed { index, label ->
                         NavigationBarItem(
                             selected = tab == index,
-                            onClick = { tab = index },
+                            onClick = {
+                                if (tab == 2 && index != 2) {
+                                    val first = marketListState.firstVisibleItemIndex
+                                    if (first >= 2) {
+                                        val anchor = marketListState.layoutInfo.visibleItemsInfo
+                                            .firstOrNull { it.index == first && it.key is Long }
+                                        marketAnchorItemId = anchor?.key as? Long
+                                        marketAnchorOffset =
+                                            marketListState.firstVisibleItemScrollOffset
+                                    } else {
+                                        marketAnchorItemId = null
+                                        marketAnchorOffset = 0
+                                    }
+                                }
+                                tab = index
+                            },
                             icon = { Icon(icons[index], contentDescription = null) },
                             label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                             alwaysShowLabel = true
@@ -382,9 +406,13 @@ fun MarketProApp(vm: MarketViewModel) {
                         message = ::message,
                         listState = marketListState,
                         filter = marketFilter,
+                        restoreItemId = marketAnchorItemId,
+                        restoreItemOffset = marketAnchorOffset,
                         onFilterChange = { category ->
                             if (marketFilter != category) {
                                 marketFilter = category
+                                marketAnchorItemId = null
+                                marketAnchorOffset = 0
                                 scope.launch { marketListState.scrollToItem(1) }
                             }
                         }
