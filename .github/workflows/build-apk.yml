@@ -2,7 +2,7 @@ name: Build Peliyagoda Market V2 APK
 
 on:
   push:
-    branches: [main, feature/v212-completed-photo-delay-sort]
+    branches: [main, feature/v213-purchase-entry-guard-zero-reset]
   workflow_dispatch:
 
 permissions:
