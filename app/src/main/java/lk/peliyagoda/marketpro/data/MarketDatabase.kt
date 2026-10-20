@@ -117,6 +117,8 @@ interface MarketDao {
         SELECT businessDate FROM purchases WHERE quantityGrams > 0 OR priceCentsPerKg > 0
         UNION
         SELECT businessDate FROM purchase_additions WHERE quantityGrams > 0
+        UNION
+        SELECT businessDate FROM daily_cash_received WHERE amountCents > 0
         ORDER BY businessDate
     """)
     fun observeDatesWithData(): Flow<List<String>>
