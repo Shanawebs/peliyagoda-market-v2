@@ -13,8 +13,7 @@ import java.io.OutputStream
 /** Only fully purchased, requested items qualify as completed for the final-cost PDF. */
 fun completedPurchases(rows: List<ConsolidatedRow>): List<ConsolidatedRow> =
     rows.filter {
-        it.requiredGrams > 0L && it.purchasedGrams > 0L &&
-            it.purchasedGrams >= it.requiredGrams
+        it.purchasedGrams > 0L && it.purchasedGrams >= it.requiredGrams
     }.sortedBy { it.item.name.lowercase() }
 
 fun completedPurchaseTotal(rows: List<ConsolidatedRow>): Long =
