@@ -81,6 +81,7 @@ import lk.peliyagoda.marketpro.data.PurchaseAdditionEntity
 import lk.peliyagoda.marketpro.data.RequisitionEntity
 import lk.peliyagoda.marketpro.util.ConsolidatedRow
 import lk.peliyagoda.marketpro.util.MarketMath
+import lk.peliyagoda.marketpro.util.groupKitchenRequirements
 import lk.peliyagoda.marketpro.util.CashAmountFormatter
 import lk.peliyagoda.marketpro.util.PurchaseEntryRules
 import lk.peliyagoda.marketpro.util.sortedMarketPurchases
@@ -320,8 +321,9 @@ fun KitchensScreen(
     val kitchen = MarketConstants.kitchens[kitchenIndex]
     var pickerOpen by remember { mutableStateOf(false) }
     val current = requirements.filter { it.kitchen == kitchen }
-        .sortedBy { entry -> items.firstOrNull { it.id == entry.itemId }?.name?.lowercase() ?: "" }
-    val itemMap = items.associateBy { it.id }
+    // Group each kitchen's own requirements by live master-item categories.
+    // This is display-only; autosave and Room IDs stay unchanged.
+    val grouped = groupKitchenRequirements(items, current, kitchen)
     Column(Modifier.fillMaxSize()) {
         TabRow(selectedTabIndex = kitchenIndex, containerColor = Color.White) {
             val displayNames = listOf("Main", "Indian", "Bar/Pastry")
@@ -363,16 +365,67 @@ fun KitchensScreen(
                 if (current.isEmpty()) item {
                     EmptyState("No items selected", "Use the Add Items button to create this kitchen's requisition.")
                 }
-                lazyItems(current, key = { "${it.businessDate}:${it.kitchen}:${it.itemId}" }) { entry ->
-                    itemMap[entry.itemId]?.let { item ->
+                grouped.forEach { group ->
+                    item(key = "category:${kitchen}:${group.category}") {
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = ProColors.pale,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(
+                                    horizontal = 16.dp, vertical = 12.dp
+                                ),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        group.category,
+                                        color = ProColors.navy,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.ExtraBold
+                                    )
+                                    Text(
+                                        "${group.itemCount} item(s)",
+                                        color = ProColors.muted,
+                                        style = MaterialTheme.typography.labelMedium
+                                    )
+                                }
+                                Text(
+                                    "${MarketMath.kg(group.subtotalGrams)} kg",
+                                    color = ProColors.teal,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                            }
+                        }
+                    }
+                    lazyItems(
+                        group.rows,
+                        key = { row ->
+                            val entry = row.requirement
+                            "${entry.businessDate}:${entry.kitchen}:${entry.itemId}"
+                        }
+                    ) { row ->
+                        val item = row.item
+                        val entry = row.requirement
                         RequirementCard(
-                            item = item, entry = entry,
-                            onSave = { grams -> vm.saveRequirement(kitchen, item.id, grams) { result ->
-                                if (result.isFailure) message("Could not auto-save quantity")
-                            } },
-                            onDelete = { vm.removeRequirement(kitchen, item.id) { result ->
-                                message(if (result.isSuccess) "Item removed" else "Could not remove item")
-                            } }
+                            item = item,
+                            entry = entry,
+                            onSave = { grams ->
+                                vm.saveRequirement(kitchen, item.id, grams) { result ->
+                                    if (result.isFailure) message("Could not auto-save quantity")
+                                }
+                            },
+                            onDelete = {
+                                vm.removeRequirement(kitchen, item.id) { result ->
+                                    message(
+                                        if (result.isSuccess) "Item removed"
+                                        else "Could not remove item"
+                                    )
+                                }
+                            }
                         )
                     }
                 }
