@@ -203,7 +203,7 @@ private fun CategoryChip(category: String, active: Boolean, onClick: () -> Unit)
 fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, categories: List<String>, onExport: () -> Unit) {
     var filter by rememberSaveable(date.toString()) { mutableStateOf("All") }
     // Dashboard uses a separate list position for each chosen business date.
-    val listState = remember(date) { LazyListState() }
+    val listState = rememberSaveable(date.toString(), saver = LazyListState.Saver) { LazyListState() }
     val scope = rememberCoroutineScope()
     fun chooseCategory(category: String) {
         if (filter != category) {
@@ -211,7 +211,7 @@ fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, categories: Li
             scope.launch { listState.scrollToItem(1) }
         }
     }
-    val shown = rows.filter { filter == "All" || it.item.category == filter }
+    val shown = remember(rows, filter) { rows.filter { filter == "All" || it.item.category == filter } }
     val totalReq = rows.sumOf { it.requiredGrams }
     val totalPurch = rows.sumOf { it.purchasedGrams }
     val totalCents = rows.sumOf { it.lineCents }
@@ -270,7 +270,7 @@ fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, categories: Li
         if (shown.isEmpty()) {
             item { EmptyState("No requirements yet", "Open Kitchens to select items and enter the required quantities.") }
         } else {
-            lazyItems(shown, key = { it.item.id }) { row ->
+            lazyItems(shown, key = { it.item.id }, contentType = { "dashboard-row" }) { row ->
                 SectionCard {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
@@ -347,13 +347,17 @@ fun KitchensScreen(
     var kitchenIndex by rememberSaveable { mutableIntStateOf(0) }
     val kitchen = MarketConstants.kitchens[kitchenIndex]
     var pickerOpen by remember { mutableStateOf(false) }
-    val current = requirements.filter { it.kitchen == kitchen }
-    // Group each kitchen's own requirements by live master-item categories.
-    // This is display-only; autosave and Room IDs stay unchanged.
-    val grouped = groupKitchenRequirements(items, current, kitchen)
+    val current = remember(requirements, kitchen) {
+        requirements.filter { it.kitchen == kitchen }
+    }
+    // Memoize category grouping during unrelated keyboard/focus re-compositions.
+    // Auto-save remains in the ViewModel and still updates the source records.
+    val grouped = remember(items, current, kitchen) {
+        groupKitchenRequirements(items, current, kitchen)
+    }
     // Keep the list state per kitchen and keep focused item identity stable as
     // Room auto-save updates numbers while a user is editing.
-    val kitchenListState = remember(kitchen) { LazyListState() }
+    val kitchenListState = rememberSaveable(kitchen, saver = LazyListState.Saver) { LazyListState() }
     var focusedKitchenItemId by remember(kitchen) { mutableStateOf<Long?>(null) }
     val density = LocalDensity.current
     val keyboardVisible = WindowInsets.ime.getBottom(density) >
@@ -472,7 +476,8 @@ fun KitchensScreen(
                         key = { row ->
                             val entry = row.requirement
                             "${entry.businessDate}:${entry.kitchen}:${entry.itemId}"
-                        }
+                        },
+                        contentType = { "kitchen-requisition-row" }
                     ) { row ->
                         val item = row.item
                         val entry = row.requirement
@@ -895,11 +900,15 @@ fun MarketScreen(
     }
     // Photos are private on this device. Read only the selected business date,
     // and recompute after saving a photo or after purchase records change.
-    val latestPhotoByItem = remember(businessDate, rows, photoVersion) {
-        rows.mapNotNull { row ->
-            InvoicePhotoStore.photos(context, businessDate, row.item.id)
+    // Quantity/price auto-save creates a new consolidated row list on every edit.
+    // Invoice files have NOT changed then. Cache the disk scan by stable item IDs
+    // and photoVersion instead of re-reading every photo directory per keystroke.
+    val photoItemIds = rows.map { it.item.id }
+    val latestPhotoByItem = remember(businessDate, photoItemIds, photoVersion) {
+        photoItemIds.mapNotNull { itemId ->
+            InvoicePhotoStore.photos(context, businessDate, itemId)
                 .maxOfOrNull { it.lastModified() }
-                ?.let { row.item.id to it }
+                ?.let { itemId to it }
         }.toMap()
     }
     LaunchedEffect(businessDate, rows, latestPhotoByItem) {
@@ -916,11 +925,13 @@ fun MarketScreen(
     // Only reorder visible cards, not totals, source records, or other tabs.
     // Unfinished/awaiting-invoice rows stay on top; fully verified rows move
     // to the bottom after the one-minute delay. Both sections stay A–Z.
-    val shown = sortedMarketPurchases(
-        rows.filter { filter == "All" || it.item.category == filter },
-        latestPhotoByItem,
-        nowMs
-    )
+    val shown = remember(rows, filter, latestPhotoByItem, nowMs) {
+        sortedMarketPurchases(
+            rows.filter { filter == "All" || it.item.category == filter },
+            latestPhotoByItem,
+            nowMs
+        )
+    }
     var focusedMarketItemId by remember(businessDate, filter) {
         mutableStateOf<Long?>(null)
     }
@@ -1056,7 +1067,7 @@ fun MarketScreen(
                 else "Select another category to view purchasing items."
             )
         }
-        lazyItems(shown, key = { it.item.id }) { row ->
+        lazyItems(shown, key = { it.item.id }, contentType = { "market-purchase-row" }) { row ->
             PurchaseCard(
                 row = row,
                 date = date.toString(),
