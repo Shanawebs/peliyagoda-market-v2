@@ -1,0 +1,6 @@
+# Local-only Supabase CLI identity. This is not a credential.
+# The hosted DEV project is linked separately after secure user authorization.
+project_id = "peliyagoda-market-cloud-v1-dev"
+
+[db]
+major_version = 17
