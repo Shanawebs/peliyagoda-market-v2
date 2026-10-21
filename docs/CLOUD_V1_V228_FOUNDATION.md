@@ -1,5 +1,9 @@
 # Peliyagoda Market Pro — Cloud V1 (V2.28 baseline)
 
+> **2026-10-21 Cloud V1 scope decision (takes precedence over the broader options below):**
+> User selected **purchase-data-only synchronization** for the first cloud release. Only `categories` and `items` identifiers needed for purchase meaning, `purchases` and `purchase_additions`, plus workspace/device/membership/sync-operation security metadata will exist in this initial cloud schema.
+> **DO NOT create or sync cloud requisitions, daily cash received, invoice metadata/files, Supabase Storage buckets or any photos.** All those remain local on Android. Future expansion is optional and requires a new migration and user approval. The Android package, Room DB and local invoice files are unchanged by Phase 1.
+
 Status: **Architecture agreed, planning-only; NOT deployed; no production/cloud data writes performed.**
 Date: 2026-10-21
 GitHub main baseline: `e411b7377596d6756550528f5e2c8860170edbf9`, APK V2.28.0 / applicationId `lk.peliyagoda.marketpro.v228`.
