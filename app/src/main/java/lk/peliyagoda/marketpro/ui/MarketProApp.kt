@@ -3,6 +3,12 @@ package lk.peliyagoda.marketpro.ui
 import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.clickable
@@ -56,6 +62,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -137,6 +144,9 @@ fun MarketProApp(vm: MarketViewModel) {
             )
         }
         var tab by rememberSaveable { mutableIntStateOf(0) }
+        // The old when(tab) disposed Dashboard/Kitchen state on every switch.
+        // Retain saveable per-tab state (including each list's scroll position).
+        val tabStateHolder = rememberSaveableStateHolder()
         // Hoist Market's scroll state out of the tab-specific composition:
         // switching Dashboard/Kitchens/Market must NOT reset item position.
         // A new date intentionally creates a fresh scroll/filter state.
@@ -423,34 +433,53 @@ fun MarketProApp(vm: MarketViewModel) {
                 }
             }
         ) { innerPadding ->
-            Box(Modifier.fillMaxSize().padding(innerPadding)) {
-                when (tab) {
-                    0 -> DashboardScreen(date, rows, categories, onExport = { pdfDialogOpen = true })
-                    1 -> KitchensScreen(items, categories, reqs, vm, ::message)
-                    else -> MarketScreen(
-                        rows = rows,
-                        categories = categories,
-                        vm = vm,
-                        cashReceivedCents = cashReceivedCents,
-                        onSaveCash = { cents ->
-                            vm.saveCashReceived(cents) { result ->
-                                if (result.isFailure) message("Could not save Cash Received")
+            // Animate only content; date header and bottom navigation stay fixed.
+            // A short fade plus 6% horizontal travel avoids a hard screen cut,
+            // while old/new screens never share a saveable-state key.
+            AnimatedContent(
+                targetState = tab,
+                modifier = Modifier.fillMaxSize().padding(innerPadding),
+                transitionSpec = {
+                    (fadeIn(animationSpec = tween(durationMillis = 170)) +
+                        slideInHorizontally(
+                            animationSpec = tween(durationMillis = 170),
+                            initialOffsetX = { width ->
+                                val travel = (width * 0.06f).toInt()
+                                if (targetState > initialState) travel else -travel
                             }
-                        },
-                        message = ::message,
-                        listState = marketListState,
-                        filter = marketFilter,
-                        restoreItemId = marketAnchorItemId,
-                        restoreItemOffset = marketAnchorOffset,
-                        onFilterChange = { category ->
-                            if (marketFilter != category) {
-                                marketFilter = category
-                                marketAnchorItemId = null
-                                marketAnchorOffset = 0
-                                scope.launch { marketListState.scrollToItem(1) }
+                        )) togetherWith fadeOut(animationSpec = tween(durationMillis = 100))
+                },
+                label = "Market Pro tab navigation"
+            ) { activeTab ->
+                tabStateHolder.SaveableStateProvider("market-pro-tab-$activeTab") {
+                    when (activeTab) {
+                        0 -> DashboardScreen(date, rows, categories, onExport = { pdfDialogOpen = true })
+                        1 -> KitchensScreen(items, categories, reqs, vm, ::message)
+                        else -> MarketScreen(
+                            rows = rows,
+                            categories = categories,
+                            vm = vm,
+                            cashReceivedCents = cashReceivedCents,
+                            onSaveCash = { cents ->
+                                vm.saveCashReceived(cents) { result ->
+                                    if (result.isFailure) message("Could not save Cash Received")
+                                }
+                            },
+                            message = ::message,
+                            listState = marketListState,
+                            filter = marketFilter,
+                            restoreItemId = marketAnchorItemId,
+                            restoreItemOffset = marketAnchorOffset,
+                            onFilterChange = { category ->
+                                if (marketFilter != category) {
+                                    marketFilter = category
+                                    marketAnchorItemId = null
+                                    marketAnchorOffset = 0
+                                    scope.launch { marketListState.scrollToItem(1) }
+                                }
                             }
-                        }
-                    )
+                        )
+                    }
                 }
             }
         }
