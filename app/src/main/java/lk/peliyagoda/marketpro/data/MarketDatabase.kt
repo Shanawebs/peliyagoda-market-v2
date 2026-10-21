@@ -1,6 +1,7 @@
 package lk.peliyagoda.marketpro.data
 
 import android.content.Context
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Entity
@@ -48,7 +49,15 @@ data class PurchaseAdditionEntity(
 data class ItemEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
-    val category: String
+    val category: String,
+    @ColumnInfo(defaultValue = "1") val isActive: Boolean = true
+)
+
+/** Records which curated catalog release was applied to an existing database. */
+@Entity(tableName = "catalog_state")
+data class CatalogStateEntity(
+    @PrimaryKey val id: Int = 1,
+    val version: Int
 )
 
 @Entity(tableName = "requisitions", primaryKeys = ["businessDate", "kitchen", "itemId"],
@@ -168,6 +177,21 @@ interface MarketDao {
     @Query("SELECT * FROM items ORDER BY name COLLATE NOCASE")
     fun observeItems(): Flow<List<ItemEntity>>
 
+    @Query("SELECT * FROM items WHERE isActive = 1 ORDER BY name COLLATE NOCASE")
+    fun observeActiveItems(): Flow<List<ItemEntity>>
+
+    @Query("UPDATE items SET isActive = 0 WHERE isActive = 1")
+    suspend fun archiveCatalogItems()
+
+    @Query("UPDATE items SET category = :category, isActive = 1 WHERE id = :id")
+    suspend fun reactivateCatalogItem(id: Long, category: String): Int
+
+    @Query("SELECT version FROM catalog_state WHERE id = 1 LIMIT 1")
+    suspend fun curatedCatalogVersion(): Int?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun setCuratedCatalogVersion(state: CatalogStateEntity)
+
     @Query("SELECT COUNT(*) FROM items")
     suspend fun itemCount(): Int
 
@@ -230,9 +254,9 @@ interface MarketDao {
     entities = [
         ItemEntity::class, RequisitionEntity::class, PurchaseEntity::class,
         CategoryEntity::class, PurchaseAdditionEntity::class,
-        DailyCashReceivedEntity::class
+        DailyCashReceivedEntity::class, CatalogStateEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class MarketDatabase : RoomDatabase() {
@@ -261,13 +285,25 @@ abstract class MarketDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Never remove existing items: prior records and invoice photos
+                // are still keyed by their original item IDs.
+                db.execSQL("ALTER TABLE items ADD COLUMN isActive INTEGER NOT NULL DEFAULT 1")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS catalog_state " +
+                        "(id INTEGER NOT NULL PRIMARY KEY, version INTEGER NOT NULL)"
+                )
+            }
+        }
+
         @Volatile private var instance: MarketDatabase? = null
         fun get(context: Context): MarketDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 MarketDatabase::class.java,
                 "peliyagoda-market-pro.db"
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { instance = it }
         }
     }
 }
