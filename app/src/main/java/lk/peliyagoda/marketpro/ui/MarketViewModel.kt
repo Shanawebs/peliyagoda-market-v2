@@ -49,6 +49,8 @@ class MarketViewModel(private val repository: MarketRepository) : ViewModel() {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val dailyCashReceived = date.flatMapLatest { repository.cashReceived(it.toString()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val cloudPendingCount = repository.cloudPendingCount
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     init {
         viewModelScope.launch(Dispatchers.IO) { repository.seedCatalogOnce() }
