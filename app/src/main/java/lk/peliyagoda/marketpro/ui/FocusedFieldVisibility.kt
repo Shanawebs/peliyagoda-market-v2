@@ -3,6 +3,7 @@ package lk.peliyagoda.marketpro.ui
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.runtime.Composable
@@ -11,6 +12,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Rect
@@ -20,51 +22,80 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 /**
- * V2.20: actively bring the focused numeric field fully into its LazyColumn
- * viewport AFTER the keyboard has animated into place.
+ * V2.21: the parent LazyColumn must own the scroll correction, not only
+ * the child TextField. In V2.20 the latter could run before the IME resized
+ * the viewport and a last/near-last item remained obscured.
  *
- * The Market list pins its category filter at the top. Asking for a rectangle
- * that extends ABOVE the input reserves room for that filter, avoiding the
- * focused field disappearing underneath it. The lower margin keeps the field
- * from touching the keyboard edge.
- *
- * This changes scrolling only. It does not mutate saved quantities, prices,
- * dates, market sorting, or the saved list-state when changing tabs.
+ * Listen to IME inset updates, wait for the keyboard animation to settle, then
+ * place the item inside the resized list. Only scroll when a field is focused
+ * AND the keyboard is actually open. A negative offset reserves space for the
+ * pinned category filters on Market; Kitchens has no pinned category filter.
+ */
+@Composable
+internal fun FocusedListKeyboardScroll(
+    listState: LazyListState,
+    focusedIndex: Int?,
+    topClearance: Dp = 12.dp
+) {
+    val density = LocalDensity.current
+    LaunchedEffect(listState, focusedIndex, topClearance, density) {
+        if (focusedIndex == null) return@LaunchedEffect
+        snapshotFlow { WindowInsets.ime.getBottom(density) }
+            .distinctUntilChanged()
+            .collectLatest { keyboardHeight ->
+                if (keyboardHeight > with(density) { 90.dp.roundToPx() }) {
+                    // collectLatest cancels this wait while IME frames keep changing.
+                    delay(240L)
+                    if (focusedIndex < listState.layoutInfo.totalItemsCount) {
+                        listState.animateScrollToItem(
+                            focusedIndex,
+                            scrollOffset = -with(density) { topClearance.roundToPx() }
+                        )
+                    }
+                }
+            }
+    }
+}
+
+/**
+ * Field-level secondary protection: requests the exact focused input after
+ * its parent scrolls, especially important for Additional Purchase editors
+ * inside cards taller than the visible keyboard-adjusted viewport.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun Modifier.keepFocusedFieldVisible(
     topClearance: Dp = 14.dp
 ): Modifier {
-    val bringRequester = remember { BringIntoViewRequester() }
+    val requester = remember { BringIntoViewRequester() }
     val density = LocalDensity.current
-    val keyboardBottomPx = WindowInsets.ime.getBottom(density)
+    val keyboardHeight = WindowInsets.ime.getBottom(density)
     var focused by remember { mutableStateOf(false) }
-    var fieldSize by remember { mutableStateOf(IntSize.Zero) }
+    var size by remember { mutableStateOf(IntSize.Zero) }
 
-    // Keyboard insets update throughout the IME animation. The effect restarts
-    // on every change; the final request runs after the viewport has settled.
-    // A physical keyboard (0px IME) is supported by the same focus request.
-    LaunchedEffect(focused, keyboardBottomPx, fieldSize, topClearance) {
-        if (focused && fieldSize.width > 0 && fieldSize.height > 0) {
-            delay(90L)
-            val topPx = with(density) { topClearance.toPx() }
-            val bottomPx = with(density) { 18.dp.toPx() }
-            bringRequester.bringIntoView(
+    LaunchedEffect(focused, keyboardHeight, size, topClearance) {
+        if (focused && size.width > 0 && size.height > 0) {
+            // Run after keyboard + parent LazyColumn correction; avoid races.
+            delay(if (keyboardHeight > 0) 440L else 50L)
+            val top = with(density) { topClearance.toPx() }
+            val bottom = with(density) { 22.dp.toPx() }
+            requester.bringIntoView(
                 Rect(
                     left = 0f,
-                    top = -topPx,
-                    right = fieldSize.width.toFloat(),
-                    bottom = fieldSize.height.toFloat() + bottomPx
+                    top = -top,
+                    right = size.width.toFloat(),
+                    bottom = size.height.toFloat() + bottom
                 )
             )
         }
     }
 
     return this
-        .bringIntoViewRequester(bringRequester)
-        .onSizeChanged { fieldSize = it }
+        .bringIntoViewRequester(requester)
+        .onSizeChanged { size = it }
         .onFocusChanged { focused = it.hasFocus }
 }
