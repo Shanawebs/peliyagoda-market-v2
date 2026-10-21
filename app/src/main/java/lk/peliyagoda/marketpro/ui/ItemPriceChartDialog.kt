@@ -1,6 +1,7 @@
 package lk.peliyagoda.marketpro.ui
 
 import android.graphics.Paint
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.background
@@ -99,7 +100,7 @@ fun ItemPriceChartDialog(
         Surface(
             modifier = Modifier.fillMaxWidth(0.96f).fillMaxHeight(0.91f),
             shape = RoundedCornerShape(22.dp),
-            color = ProColors.page
+            color = ProVisual.page
         ) {
             Column(
                 modifier = Modifier.padding(horizontal = 13.dp, vertical = 11.dp),
@@ -265,7 +266,8 @@ private fun TrendPanel(
     Card(
         modifier = Modifier.fillMaxWidth().height(height),
         shape = RoundedCornerShape(15.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
+        colors = CardDefaults.cardColors(containerColor = ProVisual.card),
+        border = BorderStroke(1.dp, ProVisual.cardBorder)
     ) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 9.dp, vertical = 7.dp)) {
             Text(title, fontWeight = FontWeight.ExtraBold, color = color,
