@@ -254,13 +254,15 @@ interface MarketDao {
     entities = [
         ItemEntity::class, RequisitionEntity::class, PurchaseEntity::class,
         CategoryEntity::class, PurchaseAdditionEntity::class,
-        DailyCashReceivedEntity::class, CatalogStateEntity::class
+        DailyCashReceivedEntity::class, CatalogStateEntity::class,
+        CloudOutboxEntity::class, CloudIdentityEntity::class, CloudSyncStateEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class MarketDatabase : RoomDatabase() {
     abstract fun dao(): MarketDao
+    abstract fun cloudDao(): CloudSyncDao
 
     companion object {
         private val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -297,13 +299,42 @@ abstract class MarketDatabase : RoomDatabase() {
             }
         }
 
+        /** Add-only Room 4→5 migration; existing records and local invoice files are untouched. */
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS cloud_sync_outbox (" +
+                        "entityType TEXT NOT NULL, entityKey TEXT NOT NULL, " +
+                        "operationId TEXT NOT NULL, action TEXT NOT NULL, " +
+                        "changedAtMs INTEGER NOT NULL, PRIMARY KEY(entityType, entityKey))"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_cloud_sync_outbox_changedAtMs " +
+                        "ON cloud_sync_outbox(changedAtMs)"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS cloud_entity_ids (" +
+                        "entityType TEXT NOT NULL, entityKey TEXT NOT NULL, " +
+                        "cloudId TEXT NOT NULL, PRIMARY KEY(entityType,entityKey))"
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_cloud_entity_ids_cloudId " +
+                        "ON cloud_entity_ids(cloudId)"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS cloud_sync_state (" +
+                        "name TEXT NOT NULL PRIMARY KEY, value TEXT NOT NULL)"
+                )
+            }
+        }
+
         @Volatile private var instance: MarketDatabase? = null
         fun get(context: Context): MarketDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 MarketDatabase::class.java,
                 "peliyagoda-market-pro.db"
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build().also { instance = it }
         }
     }
 }
