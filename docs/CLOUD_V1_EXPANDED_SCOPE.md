@@ -23,3 +23,11 @@
 5. Next milestone is authenticated single-phone sync using add-only Room migration, outbox, idempotent RPC, WorkManager, historical ID mapping, and validated snapshot import. Multi-phone later.
 
 Cloud schema status and actual hosted migration version must be checked and recorded after deploy.
+
+## Verified on Supabase DEV (2026-10-21)
+
+- Hosted migration: `20261021180636_expand_requisitions_cash_financial_summary` — success.
+- 10 public tables with RLS; requisitions and daily cash were added without any row deletion.
+- One `daily_financial_summary` read-only view (`security_invoker=true`). No anonymous SELECT or direct authenticated writes.
+- **0 user records, 0 invoice images, 0 Supabase Storage buckets/objects.**
+- Migration SQL and local financial/RLS tests passed in GitHub Actions. Android upload/sync code has not yet been implemented.
