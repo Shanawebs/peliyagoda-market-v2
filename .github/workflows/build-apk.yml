@@ -2,7 +2,7 @@ name: Build Peliyagoda Market V2 APK
 
 on:
   push:
-    branches: [main, feature/v226-low-memory-performance]
+    branches: [main, feature/v227-stable-item-picker]
   workflow_dispatch:
 
 permissions:
