@@ -2,7 +2,7 @@ name: Build Peliyagoda Market V2 APK
 
 on:
   push:
-    branches: [main, feature/v216-pdf-category-numbering-dialog-layout]
+    branches: [main, feature/v217-kitchen-category-groups]
   workflow_dispatch:
 
 permissions:
