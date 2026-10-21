@@ -243,7 +243,7 @@ fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, categories: Li
         stickyHeader(key = "dashboard-category-header") {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = ProColors.page
+                color = ProVisual.page
             ) {
                 LazyRow(
                     modifier = Modifier.padding(vertical = 2.dp),
@@ -941,7 +941,7 @@ fun MarketScreen(
                             Text("${MarketMath.kg(totalPurchased)} kg",
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                color = ProColors.navy,
+                                color = ProVisual.amountInk,
                                 fontWeight = FontWeight.ExtraBold,
                                 style = MaterialTheme.typography.titleSmall)
                         }
@@ -950,7 +950,7 @@ fun MarketScreen(
             }
         }
         stickyHeader(key = "market-category-header") {
-            Surface(modifier = Modifier.fillMaxWidth(), color = ProColors.page) {
+            Surface(modifier = Modifier.fillMaxWidth(), color = ProVisual.page) {
                 LazyRow(
                     modifier = Modifier.padding(vertical = 2.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1169,7 +1169,8 @@ private fun PurchaseCard(
                     label = { Text("Purchased") },
                     suffix = { Text("kg") },
                     textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        fontWeight = FontWeight.SemiBold),
+                        fontWeight = FontWeight.SemiBold,
+                        color = ProVisual.amountInk),
                     shape = RoundedCornerShape(11.dp),
                     isError = qtyInvalid,
                     singleLine = true,
@@ -1186,7 +1187,8 @@ private fun PurchaseCard(
                     prefix = { Text("Rs.") },
                     suffix = { Text("/kg") },
                     textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        fontWeight = FontWeight.SemiBold),
+                        fontWeight = FontWeight.SemiBold,
+                        color = ProVisual.amountInk),
                     shape = RoundedCornerShape(11.dp),
                     isError = rateInvalid,
                     singleLine = true,
@@ -1205,7 +1207,7 @@ private fun PurchaseCard(
                 Text(
                     "Initial cost: Rs. ${MarketMath.lkr(originalCents)}",
                     modifier = Modifier.fillMaxWidth(),
-                    color = ProColors.purple,
+                    color = ProVisual.purpleAmount,
                     textAlign = TextAlign.End,
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold
@@ -1256,7 +1258,7 @@ private fun PurchaseCard(
                 Text(
                     "Subtotal: Rs. ${MarketMath.lkr(preview)}",
                     modifier = Modifier.weight(3f, fill = false),
-                    color = ProColors.purple,
+                    color = ProVisual.purpleAmount,
                     textAlign = TextAlign.End,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.ExtraBold,
@@ -1328,7 +1330,8 @@ private fun AdditionalPurchaseEditor(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 shape = RoundedCornerShape(11.dp),
                 textStyle = MaterialTheme.typography.bodyLarge.copy(
-                    fontWeight = FontWeight.Bold)
+                    fontWeight = FontWeight.Bold,
+                    color = ProVisual.amountInk)
             )
             OutlinedTextField(
                 value = rate,
@@ -1345,14 +1348,15 @@ private fun AdditionalPurchaseEditor(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 shape = RoundedCornerShape(11.dp),
                 textStyle = MaterialTheme.typography.bodyLarge.copy(
-                    fontWeight = FontWeight.Bold)
+                    fontWeight = FontWeight.Bold,
+                    color = ProVisual.amountInk)
             )
         }
         Text(
             "Additional cost: Rs. ${MarketMath.lkr(amount)}",
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.End,
-            color = ProColors.purple,
+            color = ProVisual.purpleAmount,
             fontWeight = FontWeight.Bold,
             style = MaterialTheme.typography.labelMedium
         )
