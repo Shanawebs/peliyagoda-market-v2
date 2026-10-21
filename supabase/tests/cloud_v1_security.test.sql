@@ -4,7 +4,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 
 -- Keep pgtap plan count aligned with the assertions below.
-select plan(37);
+select plan(45);
 
 -- Synthetic JWT users; cannot log in (no password or authentication identity).
 insert into auth.users(id,email) values
@@ -49,10 +49,10 @@ values ('80000000-0000-4000-8000-000000000001',
         '20000000-0000-4000-8000-000000000001','2026-10-21',
         '50000000-0000-4000-8000-000000000001',2000,32000);
 
--- Purchase-only scope: legacy financial data other than purchases stays on Android.
+-- Extended scope: requisitions and cash are cloud-readable; invoice images remain on Android.
 select ok(to_regclass('public.invoice_photos') is null, 'No invoice-photo metadata table exists');
-select ok(to_regclass('public.requisitions') is null, 'No kitchen requisition cloud table exists');
-select ok(to_regclass('public.daily_cash_received') is null, 'No cash cloud table exists');
+select ok(to_regclass('public.requisitions') is not null, 'Kitchen requisition table exists');
+select ok(to_regclass('public.daily_cash_received') is not null, 'Daily cash table exists');
 
 -- Verify EVERY exposed business table has row level security enabled.
 select ok((select relrowsecurity from pg_class where oid = 'public.workspaces'::regclass), 'RLS enabled on workspaces');
@@ -63,6 +63,11 @@ select ok((select relrowsecurity from pg_class where oid = 'public.items'::regcl
 select ok((select relrowsecurity from pg_class where oid = 'public.purchases'::regclass), 'RLS enabled on purchases');
 select ok((select relrowsecurity from pg_class where oid = 'public.purchase_additions'::regclass), 'RLS enabled on purchase_additions');
 select ok((select relrowsecurity from pg_class where oid = 'public.sync_operations'::regclass), 'RLS enabled on sync_operations');
+select ok((select relrowsecurity from pg_class where oid = 'public.requisitions'::regclass), 'RLS enabled on requisitions');
+select ok((select relrowsecurity from pg_class where oid = 'public.daily_cash_received'::regclass), 'RLS enabled on daily cash');
+select ok(not has_table_privilege('anon','public.daily_financial_summary','SELECT'), 'anonymous cannot read summary');
+select ok(not has_table_privilege('authenticated','public.requisitions','INSERT'), 'cannot write requisitions directly');
+select ok(not has_table_privilege('authenticated','public.daily_cash_received','UPDATE'), 'cannot update cash directly');
 
 -- Grants: anonymous gets NOTHING; direct application writes are locked.
 select ok(not has_table_privilege('anon','public.items','SELECT'), 'anon cannot read catalog');
@@ -83,6 +88,7 @@ select is((select count(*) from public.workspaces), 1::bigint, 'owner sees own w
 select is((select count(*) from public.workspace_members), 1::bigint, 'owner sees own membership row only');
 select is((select count(*) from public.items), 1::bigint, 'owner sees own catalog only');
 select is((select count(*) from public.purchases), 1::bigint, 'owner sees own purchase only');
+select is((select count(*) from public.daily_financial_summary), 1::bigint, 'owner sees daily summary');
 select is((select count(*) from public.purchase_additions), 1::bigint, 'owner sees own extra purchase lot');
 select is((select count(*) from public.registered_devices), 1::bigint, 'owner sees own device');
 
@@ -91,6 +97,7 @@ set local request.jwt.claim.sub = '10000000-0000-4000-8000-000000000002';
 select is((select count(*) from public.items), 1::bigint, 'viewer sees workspace A catalog');
 select is((select count(*) from public.purchases), 1::bigint, 'viewer sees workspace A purchases');
 select is((select count(*) from public.purchase_additions), 1::bigint, 'viewer sees workspace A extra lot');
+select is((select count(*) from public.daily_financial_summary), 1::bigint, 'viewer sees workspace daily summary');
 select is((select count(*) from public.registered_devices), 0::bigint, 'viewer cannot inspect owner device');
 select is((select count(*) from public.workspace_members), 1::bigint, 'viewer sees own membership only');
 
@@ -98,6 +105,7 @@ select is((select count(*) from public.workspace_members), 1::bigint, 'viewer se
 set local request.jwt.claim.sub = '10000000-0000-4000-8000-000000000003';
 select is((select count(*) from public.items), 1::bigint, 'other workspace sees only its own matching-name item');
 select is((select count(*) from public.purchases), 0::bigint, 'workspace B cannot see workspace A purchases');
+select is((select count(*) from public.daily_financial_summary), 0::bigint, 'other workspace cannot see daily summary');
 select is((select count(*) from public.items where workspace_id = '20000000-0000-4000-8000-000000000001'), 0::bigint, 'workspace B cannot inspect A items');
 select is((select count(*) from public.workspaces), 1::bigint, 'workspace B sees only B workspace');
 select is((select count(*) from public.workspace_members where workspace_id = '20000000-0000-4000-8000-000000000001'), 0::bigint, 'workspace B cannot inspect A membership');
