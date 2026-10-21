@@ -1,5 +1,7 @@
 # Peliyagoda Market Pro — Cloud V1 (V2.28 baseline)
 
+> **Latest scope update (2026-10-21):** Supersedes the earlier *purchase-only* limitation. Cloud V1 now includes **Kitchen Requisitions** and **Daily Cash Received**, and a secure **calculated Total Expenses / Cash Balance** view. **Invoice Photos remain permanently excluded from Cloud V1**. See `docs/CLOUD_V1_EXPANDED_SCOPE.md`. The earlier original purchase-only migration stays intact; an additive SQL migration extends it. 
+
 > **2026-10-21 Cloud V1 scope decision (takes precedence over the broader options below):**
 > User selected **purchase-data-only synchronization** for the first cloud release. Only `categories` and `items` identifiers needed for purchase meaning, `purchases` and `purchase_additions`, plus workspace/device/membership/sync-operation security metadata will exist in this initial cloud schema.
 > **DO NOT create or sync cloud requisitions, daily cash received, invoice metadata/files, Supabase Storage buckets or any photos.** All those remain local on Android. Future expansion is optional and requires a new migration and user approval. The Android package, Room DB and local invoice files are unchanged by Phase 1.
