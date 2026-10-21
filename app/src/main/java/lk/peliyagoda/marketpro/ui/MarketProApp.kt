@@ -78,6 +78,7 @@ import lk.peliyagoda.marketpro.util.MarketXlsx
 import lk.peliyagoda.marketpro.util.MarketPdf
 import lk.peliyagoda.marketpro.util.ConsolidatedRow
 import lk.peliyagoda.marketpro.util.DevicePerformancePolicy
+import lk.peliyagoda.marketpro.data.CloudDeviceIdentity
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -318,12 +319,22 @@ fun MarketProApp(vm: MarketViewModel) {
         }
 
         if (cloudStatusOpen) {
+            val deviceUuid = remember(context) { CloudDeviceIdentity.get(context) }
             AlertDialog(
                 onDismissRequest = { cloudStatusOpen = false },
                 title = { Text("Cloud Sync — Development Preview") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Pending local changes: $cloudPendingCount")
+                        Text("DEV Device ID: $deviceUuid")
+                        TextButton(onClick = {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
+                                as android.content.ClipboardManager
+                            clipboard.setPrimaryClip(
+                                android.content.ClipData.newPlainText("Market Pro Device ID", deviceUuid)
+                            )
+                            message("DEV Device ID copied")
+                        }) { Text("Copy Device ID") }
                         Text("Data is saved locally. No cloud upload is enabled yet.")
                         Text("Kitchen, purchase lots, cash and catalog changes are journaled.")
                         Text("Invoice photos remain on this phone and are NEVER queued.")
