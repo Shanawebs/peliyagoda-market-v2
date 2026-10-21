@@ -341,7 +341,8 @@ fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, categories: Li
 
 @Composable
 fun KitchensScreen(
-    items: List<ItemEntity>, categories: List<String>, requirements: List<RequisitionEntity>,
+    items: List<ItemEntity>, catalogItems: List<ItemEntity>,
+    categories: List<String>, requirements: List<RequisitionEntity>,
     vm: MarketViewModel, message: (String) -> Unit
 ) {
     var kitchenIndex by rememberSaveable { mutableIntStateOf(0) }
@@ -514,7 +515,7 @@ fun KitchensScreen(
     }
     if (pickerOpen) ItemPickerSheet(
         kitchen = kitchen,
-        allItems = items,
+        allItems = catalogItems,
         categories = categories,
         addCategory = { name, done -> vm.addCategory(name, done) },
         addMasterItem = { name, cat, done -> vm.addItem(name, cat, done) },
