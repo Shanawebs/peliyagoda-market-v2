@@ -76,6 +76,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import lk.peliyagoda.marketpro.data.ItemEntity
 import lk.peliyagoda.marketpro.data.MarketConstants
 import lk.peliyagoda.marketpro.data.PurchaseAdditionEntity
@@ -105,17 +106,20 @@ private fun SectionCard(modifier: Modifier = Modifier, content: @Composable () -
 
 @Composable
 private fun Metric(label: String, value: String, modifier: Modifier = Modifier, accent: Color = ProColors.teal) {
-    val fill = when (accent) {
-        ProColors.purple -> ProVisual.metricPurple
-        ProColors.navy -> ProVisual.metricNeutral
-        else -> ProVisual.metricTeal
+    val (fill, outline) = when (label) {
+        "Total required" -> ProVisual.metricTeal to ProVisual.metricTealBorder
+        "Purchased" -> ProVisual.metricPurchased to ProVisual.metricPurchasedBorder
+        "Estimated bill" -> ProVisual.metricPurple to ProVisual.metricPurpleBorder
+        "Item count" -> ProVisual.metricNeutral to ProVisual.metricNeutralBorder
+        else -> ProVisual.metricNeutral to ProVisual.metricNeutralBorder
     }
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(16.dp),
         color = fill,
+        border = BorderStroke(1.dp, outline),
         tonalElevation = 0.dp,
-        shadowElevation = 1.dp
+        shadowElevation = 2.dp
     ) {
         Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -367,7 +371,12 @@ fun KitchensScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 item {
-                    Surface(shape = RoundedCornerShape(18.dp), color = ProVisual.kitchenBanner) {
+                    Surface(
+                        shape = RoundedCornerShape(18.dp),
+                        color = ProVisual.kitchenBanner,
+                        border = BorderStroke(1.dp, ProVisual.kitchenBannerBorder),
+                        shadowElevation = 2.dp
+                    ) {
                         Column(Modifier.fillMaxWidth().padding(18.dp),
                             verticalArrangement = Arrangement.spacedBy(7.dp)) {
                             Text(kitchen, style = MaterialTheme.typography.titleLarge,
@@ -387,7 +396,9 @@ fun KitchensScreen(
                     item(key = "category:${kitchen}:${group.category}") {
                         Surface(
                             shape = RoundedCornerShape(14.dp),
-                            color = ProColors.pale,
+                            color = ProVisual.kitchenCategoryBanner,
+                            border = BorderStroke(1.dp, ProVisual.kitchenCategoryBorder),
+                            shadowElevation = 1.dp,
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
@@ -400,7 +411,7 @@ fun KitchensScreen(
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         group.category,
-                                        color = ProColors.navy,
+                                        color = ProVisual.itemInk,
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.ExtraBold
                                     )
@@ -501,9 +512,13 @@ private fun RequirementCard(
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(7.dp)) {
             Column(Modifier.weight(1.15f)) {
-                Text(item.name, style = MaterialTheme.typography.titleMedium,
+                Text(item.name,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontSize = 20.sp,
+                        lineHeight = 26.sp
+                    ),
                     color = ProVisual.itemInk,
-                    fontWeight = FontWeight.Bold, maxLines = 2,
+                    fontWeight = FontWeight.ExtraBold, maxLines = 2,
                     overflow = TextOverflow.Ellipsis)
                 Text(item.category, style = MaterialTheme.typography.labelSmall,
                     color = ProColors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -1148,8 +1163,13 @@ private fun PurchaseCard(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text(row.item.name, style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.ExtraBold, color = ProVisual.itemInk,
+                        Text(row.item.name,
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontSize = 20.sp,
+                                lineHeight = 26.sp
+                            ),
+                            fontWeight = FontWeight.ExtraBold,
+                            color = ProVisual.itemInk,
                             maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Text("Required: ${MarketMath.kg(row.requiredGrams)} kg",
                             color = ProColors.teal, fontWeight = FontWeight.Bold,
