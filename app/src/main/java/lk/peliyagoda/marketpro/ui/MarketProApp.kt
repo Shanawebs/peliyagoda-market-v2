@@ -1,5 +1,6 @@
 package lk.peliyagoda.marketpro.ui
 
+import android.app.ActivityManager
 import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -116,6 +117,17 @@ fun MarketProApp(vm: MarketViewModel) {
         val density = LocalDensity.current
         val keyboardVisible = WindowInsets.ime.getBottom(density) >
             with(density) { 90.dp.roundToPx() }
+        // 4 GB devices often struggle to render two complex lists at once
+        // during a slide transition. Keep lightweight fades for those devices.
+        val constrainedDevice = remember(context) {
+            val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE)
+                as? ActivityManager
+            if (activityManager == null) false else {
+                val memory = ActivityManager.MemoryInfo()
+                activityManager.getMemoryInfo(memory)
+                activityManager.isLowRamDevice || memory.totalMem <= 5L * 1024L * 1024L * 1024L
+            }
+        }
         val scope = rememberCoroutineScope()
         val snackbar = remember { SnackbarHostState() }
         val date by vm.date.collectAsState()
@@ -441,14 +453,21 @@ fun MarketProApp(vm: MarketViewModel) {
                 targetState = tab,
                 modifier = Modifier.fillMaxSize().padding(innerPadding),
                 transitionSpec = {
-                    (fadeIn(animationSpec = tween(durationMillis = 170)) +
-                        slideInHorizontally(
-                            animationSpec = tween(durationMillis = 170),
-                            initialOffsetX = { width ->
-                                val travel = (width * 0.06f).toInt()
-                                if (targetState > initialState) travel else -travel
-                            }
-                        )) togetherWith fadeOut(animationSpec = tween(durationMillis = 100))
+                    if (constrainedDevice) {
+                        // No position translation on low-memory/entry-level devices:
+                        // short alpha-only transitions avoid expensive relayout.
+                        fadeIn(animationSpec = tween(durationMillis = 90)) togetherWith
+                            fadeOut(animationSpec = tween(durationMillis = 60))
+                    } else {
+                        (fadeIn(animationSpec = tween(durationMillis = 170)) +
+                            slideInHorizontally(
+                                animationSpec = tween(durationMillis = 170),
+                                initialOffsetX = { width ->
+                                    val travel = (width * 0.06f).toInt()
+                                    if (targetState > initialState) travel else -travel
+                                }
+                            )) togetherWith fadeOut(animationSpec = tween(durationMillis = 100))
+                    }
                 },
                 label = "Market Pro tab navigation"
             ) { activeTab ->
