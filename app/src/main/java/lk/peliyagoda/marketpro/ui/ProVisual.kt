@@ -16,13 +16,26 @@ object ProVisual {
     val headerBottom = Color(0xFFDCEFF5)
     val card = Color(0xFFFFFFFF)
     val cardBorder = Color(0xFFDCE8EF)
-    val itemInk = Color(0xFF173241)
+    val itemInk = Color(0xFF123A48)
     val amountInk = Color(0xFF203E4B)
     val purpleAmount = Color(0xFF555079)
-    val metricTeal = Color(0xFFE6F4F5)
-    val metricPurple = Color(0xFFF0EDFA)
-    val metricNeutral = Color(0xFFECF3F7)
-    val kitchenBanner = Color(0xFFDDEFF5)
+    // Four distinct light summary tiles, with clear borders on white/light screens.
+    // Foreground numeric accents are intentionally unchanged from ProColors.
+    val metricTeal = Color(0xFFD5F0EE)
+    val metricPurple = Color(0xFFE7E1F7)
+    val metricNeutral = Color(0xFFE5EDF6)
+    val metricPurchased = Color(0xFFDCECF9)
+    val metricTealBorder = Color(0xFFB4DFDB)
+    val metricPurpleBorder = Color(0xFFCDC4EC)
+    val metricNeutralBorder = Color(0xFFC6D7E4)
+    val metricPurchasedBorder = Color(0xFFBBD7ED)
+
+    // Two visually distinct kitchen information cards. No action buttons or
+    // selectable category chips use these colors.
+    val kitchenBanner = Color(0xFFD4EAF4)
+    val kitchenBannerBorder = Color(0xFFB8D6E7)
+    val kitchenCategoryBanner = Color(0xFFE0F2EF)
+    val kitchenCategoryBorder = Color(0xFFC1E0DA)
     val marketBanner = Color(0xFFECE9FA)
     val purchaseCard = Color(0xFFF7FBFF)
     val purchaseCardBorder = Color(0xFFD8E7F1)
