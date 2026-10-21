@@ -919,6 +919,21 @@ fun MarketScreen(
         latestPhotoByItem,
         nowMs
     )
+    var focusedMarketItemId by remember(businessDate, filter) {
+        mutableStateOf<Long?>(null)
+    }
+    val density = LocalDensity.current
+    val keyboardVisible = WindowInsets.ime.getBottom(density) >
+        with(density) { 90.dp.roundToPx() }
+    val focusedMarketIndex = focusedMarketItemId?.let { id ->
+        shown.indexOfFirst { it.item.id == id }
+            .takeIf { it >= 0 }?.plus(2) // summary + pinned categories
+    }
+    FocusedListKeyboardScroll(
+        listState = listState,
+        focusedIndex = focusedMarketIndex,
+        topClearance = 78.dp
+    )
     // Runs only on the Market tab's next entry, not during continuous scrolling.
     // Rows have stable item-ID keys, so live reorder also preserves visible cards.
     LaunchedEffect(listState) {
@@ -934,9 +949,12 @@ fun MarketScreen(
     val totalPurchased = rows.sumOf { it.purchasedGrams }
     val totalBill = rows.sumOf { it.lineCents }
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().imePadding(),
         state = listState,
-        contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 24.dp),
+        contentPadding = PaddingValues(
+            start = 14.dp, end = 14.dp, top = 14.dp,
+            bottom = if (keyboardVisible) 280.dp else 24.dp
+        ),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         item(key = "market-summary") {
@@ -1038,6 +1056,7 @@ fun MarketScreen(
             PurchaseCard(
                 row = row,
                 date = date.toString(),
+                onFieldFocused = { focusedMarketItemId = row.item.id },
                 onSave = { grams, cents ->
                     vm.savePurchase(row.item.id, grams, cents) { result ->
                         if (result.isFailure) message("Could not auto-save purchase")
@@ -1062,6 +1081,7 @@ fun MarketScreen(
 private fun PurchaseCard(
     row: ConsolidatedRow,
     date: String,
+    onFieldFocused: () -> Unit,
     onSave: (Long, Long) -> Unit,
     onAdd: (Long, Long, (Result<Unit>) -> Unit) -> Unit,
     onEdit: (Long, Long, Long) -> Unit,
@@ -1086,6 +1106,13 @@ private fun PurchaseCard(
     val rate = MarketMath.parseBlankPriceCents(price)
     val qtyInvalid = qty == null || qty > 1_000_000_000
     val rateInvalid = rate == null || rate > 1_000_000_000
+    val qtyInteraction = remember { MutableInteractionSource() }
+    val rateInteraction = remember { MutableInteractionSource() }
+    val qtyFocused by qtyInteraction.collectIsFocusedAsState()
+    val rateFocused by rateInteraction.collectIsFocusedAsState()
+    LaunchedEffect(qtyFocused, rateFocused) {
+        if (qtyFocused || rateFocused) onFieldFocused()
+    }
     val preview = if (!qtyInvalid && !rateInvalid) {
         MarketMath.billCents(qty!!, rate!!) + row.additionalCents
     } else row.lineCents
@@ -1231,6 +1258,7 @@ private fun PurchaseCard(
                     modifier = Modifier.weight(1f)
                         .keepFocusedFieldVisible(topClearance = 76.dp),
                     label = { Text("Purchased") },
+                    interactionSource = qtyInteraction,
                     suffix = { Text("kg") },
                     textStyle = MaterialTheme.typography.bodyLarge.copy(
                         fontWeight = FontWeight.SemiBold,
@@ -1249,6 +1277,7 @@ private fun PurchaseCard(
                     modifier = Modifier.weight(1f)
                         .keepFocusedFieldVisible(topClearance = 76.dp),
                     label = { Text("Market Price") },
+                    interactionSource = rateInteraction,
                     prefix = { Text("Rs.") },
                     suffix = { Text("/kg") },
                     textStyle = MaterialTheme.typography.bodyLarge.copy(
@@ -1291,6 +1320,7 @@ private fun PurchaseCard(
                         lot = lot,
                         ordinal = index + 1,
                         date = date,
+                        onFieldFocused = onFieldFocused,
                         onEdit = { grams, cents -> onEdit(lot.id, grams, cents) }
                     )
                 }
@@ -1344,6 +1374,7 @@ private fun AdditionalPurchaseEditor(
     lot: PurchaseAdditionEntity,
     ordinal: Int,
     date: String,
+    onFieldFocused: () -> Unit,
     onEdit: (Long, Long) -> Unit
 ) {
     var quantity by remember(date, lot.id) {
@@ -1365,6 +1396,13 @@ private fun AdditionalPurchaseEditor(
     val cents = MarketMath.parseBlankPriceCents(rate)
     val gramsInvalid = grams == null || grams !in 0..1_000_000_000
     val centsInvalid = cents == null || cents !in 0..1_000_000_000
+    val extraQtyInteraction = remember { MutableInteractionSource() }
+    val extraRateInteraction = remember { MutableInteractionSource() }
+    val extraQtyFocused by extraQtyInteraction.collectIsFocusedAsState()
+    val extraRateFocused by extraRateInteraction.collectIsFocusedAsState()
+    LaunchedEffect(extraQtyFocused, extraRateFocused) {
+        if (extraQtyFocused || extraRateFocused) onFieldFocused()
+    }
     val amount = if (!gramsInvalid && !centsInvalid) {
         MarketMath.billCents(grams!!, cents!!)
     } else MarketMath.billCents(lot.quantityGrams, lot.priceCentsPerKg)
@@ -1390,6 +1428,7 @@ private fun AdditionalPurchaseEditor(
                 modifier = Modifier.weight(1f)
                     .keepFocusedFieldVisible(topClearance = 76.dp),
                 label = { Text("Extra Qty") },
+                interactionSource = extraQtyInteraction,
                 suffix = { Text("kg") },
                 singleLine = true,
                 isError = gramsInvalid,
@@ -1408,6 +1447,7 @@ private fun AdditionalPurchaseEditor(
                 modifier = Modifier.weight(1f)
                     .keepFocusedFieldVisible(topClearance = 76.dp),
                 label = { Text("Extra Price") },
+                interactionSource = extraRateInteraction,
                 prefix = { Text("Rs.") },
                 suffix = { Text("/kg") },
                 singleLine = true,
