@@ -540,7 +540,7 @@ private fun RequirementCard(
                 singleLine = true,
                 isError = invalid,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f).keepFocusedFieldVisible(topClearance = 16.dp)
             )
             IconButton(onClick = { confirmDelete = true }) {
                 Icon(Icons.Default.DeleteOutline,
@@ -1185,7 +1185,8 @@ private fun PurchaseCard(
                         purchased = input
                         autoSaveIfValid(input, price)
                     },
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f)
+                        .keepFocusedFieldVisible(topClearance = 76.dp),
                     label = { Text("Purchased") },
                     suffix = { Text("kg") },
                     textStyle = MaterialTheme.typography.bodyLarge.copy(
@@ -1202,7 +1203,8 @@ private fun PurchaseCard(
                         price = input
                         autoSaveIfValid(purchased, input)
                     },
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f)
+                        .keepFocusedFieldVisible(topClearance = 76.dp),
                     label = { Text("Market Price") },
                     prefix = { Text("Rs.") },
                     suffix = { Text("/kg") },
@@ -1342,7 +1344,8 @@ private fun AdditionalPurchaseEditor(
                     quantity = input
                     persistIfValid(input, rate)
                 },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f)
+                    .keepFocusedFieldVisible(topClearance = 76.dp),
                 label = { Text("Extra Qty") },
                 suffix = { Text("kg") },
                 singleLine = true,
@@ -1359,7 +1362,8 @@ private fun AdditionalPurchaseEditor(
                     rate = input
                     persistIfValid(quantity, input)
                 },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f)
+                    .keepFocusedFieldVisible(topClearance = 76.dp),
                 label = { Text("Extra Price") },
                 prefix = { Text("Rs.") },
                 suffix = { Text("/kg") },
