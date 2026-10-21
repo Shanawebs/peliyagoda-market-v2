@@ -36,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -46,6 +47,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.time.LocalDate
 import java.text.SimpleDateFormat
@@ -86,12 +89,16 @@ internal object InvoicePhotoStore {
         BitmapFactory.decodeFile(file.absolutePath, bounds)
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
         var factor = 1
-        while (bounds.outWidth / factor > maxPixels * 2 ||
-               bounds.outHeight / factor > maxPixels * 2) {
+        // Decode only screen-sized pixels; the saved camera original is unchanged.
+        while (bounds.outWidth / factor > maxPixels * 3 / 2 ||
+               bounds.outHeight / factor > maxPixels * 3 / 2) {
             factor *= 2
         }
         return BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply {
             inSampleSize = factor
+            // Camera invoices do not need a 32-bit alpha channel for preview.
+            // Halves preview bitmap RAM without re-encoding original JPEGs.
+            inPreferredConfig = Bitmap.Config.RGB_565
         })
     }
 }
@@ -110,8 +117,14 @@ fun InvoicePhotoControl(
     var fullPreview by remember(businessDate, itemId) { mutableStateOf<File?>(null) }
     var pendingPath by rememberSaveable(businessDate, itemId) { mutableStateOf("") }
 
-    val photos = remember(context, businessDate, itemId, refresh) {
-        InvoicePhotoStore.photos(context, businessDate, itemId)
+    // Per-card directory reads are expensive while fling-scrolling, even
+    // when the preview dialog is closed. Run the I/O outside the UI thread.
+    val photos by produceState<List<File>?>(
+        initialValue = null, context, businessDate, itemId, refresh
+    ) {
+        value = withContext(Dispatchers.IO) {
+            InvoicePhotoStore.photos(context, businessDate, itemId)
+        }
     }
 
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
@@ -146,12 +159,15 @@ fun InvoicePhotoControl(
     }
 
     // Never draw images inside the purchase card, only the compact camera action.
-    IconButton(onClick = {
-        if (photos.isEmpty()) captureOriginal() else photoDialog = true
-    }) {
+    IconButton(
+        enabled = photos != null,
+        onClick = {
+            if (photos.isNullOrEmpty()) captureOriginal() else photoDialog = true
+        }
+    ) {
         Icon(
-            if (photos.isEmpty()) Icons.Default.CameraAlt else Icons.Default.PhotoLibrary,
-            contentDescription = "Invoice photos (${photos.size}) for $itemName",
+            if (photos.isNullOrEmpty()) Icons.Default.CameraAlt else Icons.Default.PhotoLibrary,
+            contentDescription = "Invoice photos (${photos?.size ?: 0}) for $itemName",
             tint = ProColors.teal
         )
     }
@@ -169,15 +185,19 @@ fun InvoicePhotoControl(
                         modifier = Modifier.fillMaxWidth().heightIn(max = 330.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(photos, key = { it.absolutePath }) { file ->
+                        items(photos.orEmpty(), key = { it.absolutePath }) { file ->
                             Row(
                                 modifier = Modifier.fillMaxWidth()
                                     .clickable { fullPreview = file }
                                     .padding(vertical = 4.dp),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                val thumb = remember(file.absolutePath) {
-                                    InvoicePhotoStore.preview(file, 160)
+                                val thumb by produceState<Bitmap?>(
+                                    initialValue = null, file.absolutePath
+                                ) {
+                                    value = withContext(Dispatchers.IO) {
+                                        InvoicePhotoStore.preview(file, 160)
+                                    }
                                 }
                                 if (thumb != null) {
                                     Image(
@@ -228,11 +248,15 @@ fun InvoicePhotoControl(
             onDismissRequest = { fullPreview = null },
             title = { Text("Invoice photo") },
             text = {
-                val image = remember(file.absolutePath) {
-                    InvoicePhotoStore.preview(file, 1400)
+                val image by produceState<Bitmap?>(
+                    initialValue = null, file.absolutePath
+                ) {
+                    value = withContext(Dispatchers.IO) {
+                        InvoicePhotoStore.preview(file, 1400)
+                    }
                 }
                 if (image == null) {
-                    Text("Unable to display the image")
+                    Text("Loading invoice preview…")
                 } else {
                     Image(
                         bitmap = image.asImageBitmap(),
