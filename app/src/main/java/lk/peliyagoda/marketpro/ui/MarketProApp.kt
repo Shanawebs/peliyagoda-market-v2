@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
@@ -59,6 +61,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -99,6 +102,13 @@ fun MarketProApp(vm: MarketViewModel) {
     )
     MaterialTheme(colorScheme = palette) {
         val context = LocalContext.current
+        // With adjustResize, the IME occupies the bottom of the screen.
+        // Scaffold's bottom NavigationBar still reserves its height even when
+        // physically covered by the keyboard. Hide it from the layout while
+        // typing so the empty ~80dp strip above the IME disappears.
+        val density = LocalDensity.current
+        val keyboardVisible = WindowInsets.ime.getBottom(density) >
+            with(density) { 90.dp.roundToPx() }
         val scope = rememberCoroutineScope()
         val snackbar = remember { SnackbarHostState() }
         val date by vm.date.collectAsState()
@@ -383,7 +393,7 @@ fun MarketProApp(vm: MarketViewModel) {
                 }
             },
             bottomBar = {
-                NavigationBar(containerColor = Color.White) {
+                if (!keyboardVisible) NavigationBar(containerColor = Color.White) {
                     val labels = listOf("Dashboard", "Kitchens", "Market")
                     val icons = listOf(Icons.Filled.Dashboard, Icons.Filled.Restaurant, Icons.Filled.ShoppingCart)
                     labels.forEachIndexed { index, label ->
