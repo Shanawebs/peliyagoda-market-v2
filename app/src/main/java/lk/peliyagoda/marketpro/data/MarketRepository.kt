@@ -10,6 +10,9 @@ import java.time.OffsetDateTime
 
 class MarketRepository(private val db: MarketDatabase) {
     private val dao = db.dao()
+    private val cloudDao = db.cloudDao()
+    private val journal = CloudChangeJournal(cloudDao)
+    val cloudPendingCount: Flow<Int> = cloudDao.observePendingCount()
     val items: Flow<List<ItemEntity>> = dao.observeItems()
     // Includes only current selectable master items. Historical rows still use
     // the full items flow so reports and invoice item IDs remain resolvable.
@@ -25,7 +28,10 @@ class MarketRepository(private val db: MarketDatabase) {
     suspend fun saveCashReceived(date: String, amountCents: Long) {
         LocalDate.parse(date)
         require(amountCents in 0L..9_999_999_999L) { "Cash received is out of range" }
-        dao.upsertCashReceived(DailyCashReceivedEntity(date, amountCents))
+        db.withTransaction {
+            dao.upsertCashReceived(DailyCashReceivedEntity(date, amountCents))
+            journal.record(CloudRecordType.DAILY_CASH_RECEIVED, CloudRecordKey.cash(date))
+        }
     }
 
     suspend fun seedCatalogOnce() {
@@ -50,6 +56,13 @@ class MarketRepository(private val db: MarketDatabase) {
                 }
             }
             dao.setCuratedCatalogVersion(CatalogStateEntity(version = MarketCatalog.VERSION))
+            // A new curated catalog release must not bypass the durable journal.
+            dao.allCategories().forEach {
+                journal.record(CloudRecordType.CATEGORY, CloudRecordKey.category(it.name))
+            }
+            dao.allItems().forEach {
+                journal.record(CloudRecordType.ITEM, CloudRecordKey.item(it.id))
+            }
         }
     }
 
@@ -58,7 +71,11 @@ class MarketRepository(private val db: MarketDatabase) {
         if (clean.isBlank() || clean.length > 40 || clean.equals("All", true)) return false
         return db.withTransaction {
             if (dao.allCategories().any { it.name.equals(clean, true) }) false
-            else dao.insertCategory(CategoryEntity(clean)) > 0
+            else {
+                val created = dao.insertCategory(CategoryEntity(clean)) > 0
+                if (created) journal.record(CloudRecordType.CATEGORY, CloudRecordKey.category(clean))
+                created
+            }
         }
     }
 
@@ -67,11 +84,16 @@ class MarketRepository(private val db: MarketDatabase) {
         if (cleaned.isBlank() || cleaned.length > 80 || dao.allCategories().none { it.name == category }) return false
         return db.withTransaction {
             val old = dao.allItems().firstOrNull { it.name.equals(cleaned, ignoreCase = true) }
-            when {
+            val created = when {
                 old == null -> dao.insertItem(ItemEntity(name = cleaned, category = category)) > 0
                 !old.isActive -> dao.reactivateCatalogItem(old.id, category) == 1
                 else -> false
             }
+            if (created) {
+                val latest = dao.allItems().first { it.name.equals(cleaned, ignoreCase = true) }
+                journal.record(CloudRecordType.ITEM, CloudRecordKey.item(latest.id))
+            }
+            created
         }
     }
 
@@ -84,7 +106,11 @@ class MarketRepository(private val db: MarketDatabase) {
             if (existing.none { it.id == id } ||
                 existing.any { it.id != id && it.name.equals(clean, ignoreCase = true) }) {
                 false
-            } else dao.renameItem(id, clean) == 1
+            } else {
+                val renamed = dao.renameItem(id, clean) == 1
+                if (renamed) journal.record(CloudRecordType.ITEM, CloudRecordKey.item(id))
+                renamed
+            }
         }
     }
 
@@ -94,7 +120,13 @@ class MarketRepository(private val db: MarketDatabase) {
         val valid = dao.allItems().filter { it.isActive }.map { it.id }.toSet()
         db.withTransaction {
             for (id in ids) {
-                if (id in valid) dao.saveRequisition(RequisitionEntity(date, kitchen, id, 0))
+                if (id in valid) {
+                    dao.saveRequisition(RequisitionEntity(date, kitchen, id, 0))
+                    journal.record(
+                        CloudRecordType.REQUISITION,
+                        CloudRecordKey.requisition(date, kitchen, id)
+                    )
+                }
             }
         }
     }
@@ -102,20 +134,36 @@ class MarketRepository(private val db: MarketDatabase) {
     suspend fun saveRequirement(date: String, kitchen: String, id: Long, grams: Long) {
         require(grams >= 0 && grams <= 1_000_000_000)
         require(kitchen in MarketConstants.kitchens)
-        dao.saveRequisition(RequisitionEntity(date, kitchen, id, grams))
+        db.withTransaction {
+            dao.saveRequisition(RequisitionEntity(date, kitchen, id, grams))
+            journal.record(CloudRecordType.REQUISITION, CloudRecordKey.requisition(date, kitchen, id))
+        }
     }
 
     suspend fun deleteRequirement(date: String, kitchen: String, id: Long) {
-        dao.deleteRequisition(date, kitchen, id)
+        db.withTransaction {
+            dao.deleteRequisition(date, kitchen, id)
+            journal.record(
+                CloudRecordType.REQUISITION, CloudRecordKey.requisition(date, kitchen, id),
+                CloudAction.DELETE
+            )
+        }
     }
 
     suspend fun savePurchase(date: String, id: Long, grams: Long, centsPerKg: Long) {
         require(grams in 0..1_000_000_000 && centsPerKg in 0..1_000_000_000)
-        if (grams == 0L && centsPerKg == 0L) {
-            // Entirely empty purchase is pending, not a falsely completed/short item.
-            dao.deletePurchase(date, id)
-        } else {
-            dao.savePurchase(PurchaseEntity(date, id, grams, centsPerKg))
+        db.withTransaction {
+            if (grams == 0L && centsPerKg == 0L) {
+                // Empty purchase is a real delete, not a completed transaction.
+                dao.deletePurchase(date, id)
+                journal.record(
+                    CloudRecordType.PURCHASE, CloudRecordKey.purchase(date, id),
+                    CloudAction.DELETE
+                )
+            } else {
+                dao.savePurchase(PurchaseEntity(date, id, grams, centsPerKg))
+                journal.record(CloudRecordType.PURCHASE, CloudRecordKey.purchase(date, id))
+            }
         }
     }
 
@@ -135,18 +183,22 @@ class MarketRepository(private val db: MarketDatabase) {
                 "Enter the initial purchased quantity and market price first. " +
                     "An additional purchase is allowed only for a shortage."
             }
-            dao.insertAddition(PurchaseAdditionEntity(
+            val lotId = dao.insertAddition(PurchaseAdditionEntity(
                 businessDate = date, itemId = id,
                 quantityGrams = grams, priceCentsPerKg = centsPerKg
             ))
+            journal.record(CloudRecordType.PURCHASE_ADDITION, CloudRecordKey.addition(lotId))
         }
     }
 
     /** Preserve lot IDs: records remain individually priced and editable. */
     suspend fun editPurchaseAddition(date: String, itemId: Long, lotId: Long, grams: Long, centsPerKg: Long) {
         require(grams in 0..1_000_000_000 && centsPerKg in 0..1_000_000_000)
-        check(dao.updateAddition(lotId, date, itemId, grams, centsPerKg) == 1) {
-            "Additional purchase no longer exists"
+        db.withTransaction {
+            check(dao.updateAddition(lotId, date, itemId, grams, centsPerKg) == 1) {
+                "Additional purchase no longer exists"
+            }
+            journal.record(CloudRecordType.PURCHASE_ADDITION, CloudRecordKey.addition(lotId))
         }
     }
 
@@ -195,6 +247,11 @@ class MarketRepository(private val db: MarketDatabase) {
 
     /** Validate *everything* before replacing records, then change the database in one transaction. */
     suspend fun restoreBackup(json: String) {
+        // A user-approved full cloud rebootstrap protocol is required after enrollment.
+        // Do NOT silently rewrite remote UUID identities when importing a backup.
+        check(cloudDao.state("enrolled") != "true") {
+            "Cloud-linked backup restore needs a verified disconnect/rebootstrap."
+        }
         val root = JSONObject(json)
         require(root.optString("format") == "peliyagoda-market-pro") { "Not a Market Pro backup" }
         val backupVersion = root.optInt("schemaVersion")
@@ -299,6 +356,10 @@ class MarketRepository(private val db: MarketDatabase) {
         require(restoredCash.map { it.businessDate }.distinct().size == restoredCash.size)
 
         db.withTransaction {
+            // Re-check under lock before performing any destructive local restore.
+            check(cloudDao.state("enrolled") != "true") {
+                "Cannot replace data while Cloud Sync enrollment is active."
+            }
             dao.clearCashReceived()
             dao.clearAdditions()
             dao.clearPurchases()
@@ -316,6 +377,31 @@ class MarketRepository(private val db: MarketDatabase) {
             dao.setCuratedCatalogVersion(
                 CatalogStateEntity(version = if (backupVersion < 4) 0 else MarketCatalog.VERSION)
             )
+            // Replace journal and opaque IDs only for an UNENROLLED development database.
+            // Tombstones for an enrolled workspace may never be silently discarded.
+            cloudDao.clearPending()
+            cloudDao.clearIdentities()
+            dao.allCategories().forEach {
+                journal.record(CloudRecordType.CATEGORY, CloudRecordKey.category(it.name))
+            }
+            dao.allItems().forEach {
+                journal.record(CloudRecordType.ITEM, CloudRecordKey.item(it.id))
+            }
+            restoredRequirements.forEach {
+                journal.record(
+                    CloudRecordType.REQUISITION,
+                    CloudRecordKey.requisition(it.businessDate, it.kitchen, it.itemId)
+                )
+            }
+            restoredPurchases.forEach {
+                journal.record(CloudRecordType.PURCHASE, CloudRecordKey.purchase(it.businessDate, it.itemId))
+            }
+            restoredAdditions.forEach {
+                journal.record(CloudRecordType.PURCHASE_ADDITION, CloudRecordKey.addition(it.id))
+            }
+            restoredCash.forEach {
+                journal.record(CloudRecordType.DAILY_CASH_RECEIVED, CloudRecordKey.cash(it.businessDate))
+            }
         }
         if (backupVersion < 4) seedCatalogOnce()
     }
