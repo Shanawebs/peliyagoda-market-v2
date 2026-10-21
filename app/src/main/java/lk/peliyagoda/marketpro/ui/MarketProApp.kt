@@ -77,6 +77,7 @@ import lk.peliyagoda.marketpro.util.consolidate
 import lk.peliyagoda.marketpro.util.MarketXlsx
 import lk.peliyagoda.marketpro.util.MarketPdf
 import lk.peliyagoda.marketpro.util.ConsolidatedRow
+import lk.peliyagoda.marketpro.util.DevicePerformancePolicy
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -125,7 +126,7 @@ fun MarketProApp(vm: MarketViewModel) {
             if (activityManager == null) false else {
                 val memory = ActivityManager.MemoryInfo()
                 activityManager.getMemoryInfo(memory)
-                activityManager.isLowRamDevice || memory.totalMem <= 5L * 1024L * 1024L * 1024L
+                DevicePerformancePolicy.preferLightweightAnimations(memory.totalMem, activityManager.isLowRamDevice)
             }
         }
         val scope = rememberCoroutineScope()
