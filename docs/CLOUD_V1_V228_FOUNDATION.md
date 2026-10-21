@@ -4,7 +4,7 @@
 > User selected **purchase-data-only synchronization** for the first cloud release. Only `categories` and `items` identifiers needed for purchase meaning, `purchases` and `purchase_additions`, plus workspace/device/membership/sync-operation security metadata will exist in this initial cloud schema.
 > **DO NOT create or sync cloud requisitions, daily cash received, invoice metadata/files, Supabase Storage buckets or any photos.** All those remain local on Android. Future expansion is optional and requires a new migration and user approval. The Android package, Room DB and local invoice files are unchanged by Phase 1.
 
-Status: **Architecture agreed, planning-only; NOT deployed; no production/cloud data writes performed.**
+Status: **Purchase-only schema deployed to Supabase DEV and verified (2026-10-21). No purchase data imported. Android sync NOT implemented. Production app unchanged.**
 Date: 2026-10-21
 GitHub main baseline: `e411b7377596d6756550528f5e2c8860170edbf9`, APK V2.28.0 / applicationId `lk.peliyagoda.marketpro.v228`.
 Cloud provider: **Supabase managed PostgreSQL + Auth + RLS + Realtime + private Storage**.
@@ -66,8 +66,8 @@ Use explicit uniqueness for `(workspace_id,business_date,kitchen,item_id)` on re
 
 ## Phase gates
 
-- **Phase 0 (this document):** update Cloud V1 design to V2.28 current schema and confirmed single-writer→multiwriter requirements. This branch changes no Android code and requires no new APK.
-- **Phase 1:** create *development* Supabase project `marketpro-cloud-dev`, add versioned SQL schema + grants/RLS + authenticated writer restriction + negative access tests. Keep production untouched. Do not seed or import real records.
+- **Phase 0 (complete):** update Cloud V1 design to V2.28 current schema and confirmed single-writer→multiwriter requirements. No Android code changes and no new APK.
+- **Phase 1 (database foundation complete; onboarding not started):** Supabase DEV project is connected. Purchase-only schema (8 tables) deployed with version `20261021174526`, all 8 RLS-enabled, zero data, no photos. 37 local pgTAP assertions and lint passed. Workspace and devices not enrolled; no authenticated sync writer RPC exists yet. Production untouched.
 - **Phase 2:** non-destructive Room 4→5 migration (mapping/outbox tables) + Kotlin auth/sync. Test Room migrations and app background/restart; offline queue, duplicate retries and zero-value edits. Maintain 4GB RAM performance.
 - **Phase 3:** limited staged import of backed-up data; compare all entity counts, daily cost totals, cash and price histories. Revoke/rollback on failure. No automatic restore.
 - **Phase 4:** read-only Web Dashboard, authenticated Realtime and refetch, verify totals against Android.
