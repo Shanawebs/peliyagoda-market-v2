@@ -199,9 +199,10 @@ fun InvoicePhotoControl(
                                         InvoicePhotoStore.preview(file, 160)
                                     }
                                 }
-                                if (thumb != null) {
+                                val thumbnail = thumb
+                                if (thumbnail != null) {
                                     Image(
-                                        bitmap = thumb.asImageBitmap(),
+                                        bitmap = thumbnail.asImageBitmap(),
                                         contentDescription = "Invoice thumbnail",
                                         modifier = Modifier.size(62.dp)
                                             .clip(RoundedCornerShape(9.dp)),
@@ -255,11 +256,12 @@ fun InvoicePhotoControl(
                         InvoicePhotoStore.preview(file, 1400)
                     }
                 }
-                if (image == null) {
+                val previewBitmap = image
+                if (previewBitmap == null) {
                     Text("Loading invoice preview…")
                 } else {
                     Image(
-                        bitmap = image.asImageBitmap(),
+                        bitmap = previewBitmap.asImageBitmap(),
                         contentDescription = "Captured invoice photo",
                         modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp),
                         contentScale = ContentScale.Fit
