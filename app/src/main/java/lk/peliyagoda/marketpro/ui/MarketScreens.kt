@@ -68,9 +68,12 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -363,12 +366,14 @@ fun KitchensScreen(
     val density = LocalDensity.current
     val keyboardVisible = WindowInsets.ime.getBottom(density) >
         with(density) { 90.dp.roundToPx() }
-    val kitchenItemIndices = buildMap<Long, Int> {
-        var position = 1 // first item is the kitchen-wide summary
-        grouped.forEach { group ->
-            position++ // category summary
-            group.rows.forEach { row ->
-                put(row.item.id, position++)
+    val kitchenItemIndices = remember(grouped) {
+        buildMap<Long, Int> {
+            var position = 1 // first item is the kitchen-wide summary
+            grouped.forEach { group ->
+                position++ // category summary
+                group.rows.forEach { row ->
+                    put(row.item.id, position++)
+                }
             }
         }
     }
@@ -736,8 +741,10 @@ private fun ItemPickerSheet(
             }
         )
     }
-    val filtered = allItems.filter {
-        it.category == category && it.name.contains(search, ignoreCase = true)
+    val filtered = remember(allItems, category, search) {
+        allItems.filter {
+            it.category == category && it.name.contains(search, ignoreCase = true)
+        }
     }
     // Open at full height immediately rather than the default half-expanded state.
     val pickerSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -904,13 +911,23 @@ fun MarketScreen(
     // Quantity/price auto-save creates a new consolidated row list on every edit.
     // Invoice files have NOT changed then. Cache the disk scan by stable item IDs
     // and photoVersion instead of re-reading every photo directory per keystroke.
-    val photoItemIds = rows.map { it.item.id }
-    val latestPhotoByItem = remember(businessDate, photoItemIds, photoVersion) {
-        photoItemIds.mapNotNull { itemId ->
-            InvoicePhotoStore.photos(context, businessDate, itemId)
-                .maxOfOrNull { it.lastModified() }
-                ?.let { itemId to it }
-        }.toMap()
+    val photoItemIds = remember(rows.map { it.item.id }) {
+        rows.map { it.item.id }
+    }
+    // listFiles() + File.lastModified() are blocking disk operations.
+    // Never perform a full invoice-directory scan during a Compose frame.
+    // Only changed dates, item IDs or captured photos trigger another scan.
+    val latestPhotoByItem by produceState(
+        initialValue = emptyMap<Long, Long>(),
+        context, businessDate, photoItemIds, photoVersion
+    ) {
+        value = withContext(Dispatchers.IO) {
+            photoItemIds.mapNotNull { itemId ->
+                InvoicePhotoStore.photos(context, businessDate, itemId)
+                    .maxOfOrNull { it.lastModified() }
+                    ?.let { itemId to it }
+            }.toMap()
+        }
     }
     LaunchedEffect(businessDate, rows, latestPhotoByItem) {
         // No background service/polling: schedule only the next 60-second
