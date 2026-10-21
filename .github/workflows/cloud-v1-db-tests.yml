@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/cloud-v1-v228-foundation
+      - feature/cloud-v1-android-outbox-v229
     paths:
       - 'supabase/**'
       - '.github/workflows/cloud-v1-db-tests.yml'
