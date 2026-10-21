@@ -146,6 +146,7 @@ fun MarketProApp(vm: MarketViewModel) {
         val purchases by vm.purchases.collectAsState()
         val additions by vm.additions.collectAsState()
         val dailyCash by vm.dailyCashReceived.collectAsState()
+        val cloudPendingCount by vm.cloudPendingCount.collectAsState()
         val cashReceivedCents = dailyCash
             ?.takeIf { it.businessDate == date.toString() }?.amountCents ?: 0L
         val rows = remember(date, items, reqs, purchases, additions) {
@@ -183,6 +184,7 @@ fun MarketProApp(vm: MarketViewModel) {
         var chartOpen by remember { mutableStateOf(false) }
         val priceHistory by vm.chartHistory.collectAsState()
         var menuOpen by remember { mutableStateOf(false) }
+        var cloudStatusOpen by remember { mutableStateOf(false) }
         var calendarOpen by remember { mutableStateOf(false) }
         var pendingXlsx by remember { mutableStateOf<ByteArray?>(null) }
         var pdfDialogOpen by remember { mutableStateOf(false) }
@@ -315,6 +317,25 @@ fun MarketProApp(vm: MarketViewModel) {
             )
         }
 
+        if (cloudStatusOpen) {
+            AlertDialog(
+                onDismissRequest = { cloudStatusOpen = false },
+                title = { Text("Cloud Sync — Development Preview") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Pending local changes: $cloudPendingCount")
+                        Text("Data is saved locally. No cloud upload is enabled yet.")
+                        Text("Kitchen, purchase lots, cash and catalog changes are journaled.")
+                        Text("Invoice photos remain on this phone and are NEVER queued.")
+                        Text("Cloud login, single-device enrollment, secure upload and verified history import are the next release gates.")
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { cloudStatusOpen = false }) { Text("Close") }
+                }
+            )
+        }
+
         if (chartOpen) ItemPriceChartDialog(
             categories = categories,
             items = items,
@@ -367,6 +388,10 @@ fun MarketProApp(vm: MarketViewModel) {
                                 Icon(Icons.Filled.MoreVert, contentDescription = "More options")
                             }
                             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                                DropdownMenuItem(text = { Text("Cloud Sync Status (Preview)") }, onClick = {
+                                    menuOpen = false
+                                    cloudStatusOpen = true
+                                })
                                 DropdownMenuItem(text = { Text("Items Price Chart") }, onClick = {
                                     menuOpen = false
                                     vm.selectChartItem(null)
