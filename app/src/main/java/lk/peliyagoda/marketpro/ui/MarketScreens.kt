@@ -2,6 +2,8 @@ package lk.peliyagoda.marketpro.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,6 +18,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -65,6 +69,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -346,6 +351,27 @@ fun KitchensScreen(
     // Group each kitchen's own requirements by live master-item categories.
     // This is display-only; autosave and Room IDs stay unchanged.
     val grouped = groupKitchenRequirements(items, current, kitchen)
+    // Keep the list state per kitchen and keep focused item identity stable as
+    // Room auto-save updates numbers while a user is editing.
+    val kitchenListState = remember(kitchen) { LazyListState() }
+    var focusedKitchenItemId by remember(kitchen) { mutableStateOf<Long?>(null) }
+    val density = LocalDensity.current
+    val keyboardVisible = WindowInsets.ime.getBottom(density) >
+        with(density) { 90.dp.roundToPx() }
+    val kitchenItemIndices = buildMap<Long, Int> {
+        var position = 1 // first item is the kitchen-wide summary
+        grouped.forEach { group ->
+            position++ // category summary
+            group.rows.forEach { row ->
+                put(row.item.id, position++)
+            }
+        }
+    }
+    FocusedListKeyboardScroll(
+        listState = kitchenListState,
+        focusedIndex = focusedKitchenItemId?.let(kitchenItemIndices::get),
+        topClearance = 12.dp
+    )
     Column(Modifier.fillMaxSize()) {
         TabRow(selectedTabIndex = kitchenIndex, containerColor = Color.White) {
             val displayNames = listOf("Main", "Indian", "Bar/Pastry")
@@ -367,7 +393,16 @@ fun KitchensScreen(
         }
         Box(Modifier.fillMaxSize()) {
             LazyColumn(
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 116.dp),
+                modifier = Modifier.fillMaxSize().imePadding(),
+                state = kitchenListState,
+                // More scroll runway while typing allows even the LAST card
+                // to move fully above the soft keyboard.
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    end = 16.dp,
+                    top = 16.dp,
+                    bottom = if (keyboardVisible) 270.dp else 116.dp
+                ),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 item {
@@ -442,6 +477,7 @@ fun KitchensScreen(
                         RequirementCard(
                             item = item,
                             entry = entry,
+                            onFieldFocused = { focusedKitchenItemId = item.id },
                             onSave = { grams ->
                                 vm.saveRequirement(kitchen, item.id, grams) { result ->
                                     if (result.isFailure) message("Could not auto-save quantity")
@@ -459,7 +495,7 @@ fun KitchensScreen(
                     }
                 }
             }
-            ExtendedFloatingActionButton(
+            if (!keyboardVisible) ExtendedFloatingActionButton(
                 onClick = { pickerOpen = true },
                 modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
@@ -489,6 +525,7 @@ fun KitchensScreen(
 @Composable
 private fun RequirementCard(
     item: ItemEntity, entry: RequisitionEntity,
+    onFieldFocused: () -> Unit,
     onSave: (Long) -> Unit, onDelete: () -> Unit
 ) {
     // Keep the typing draft stable across database Flow updates.
@@ -508,6 +545,11 @@ private fun RequirementCard(
     )
     val gramsValue = MarketMath.parseBlankGrams(gramsText)
     val invalid = gramsValue == null || gramsValue > 1_000_000_000
+    val fieldInteraction = remember { MutableInteractionSource() }
+    val fieldFocused by fieldInteraction.collectIsFocusedAsState()
+    LaunchedEffect(fieldFocused) {
+        if (fieldFocused) onFieldFocused()
+    }
     SectionCard {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -540,6 +582,7 @@ private fun RequirementCard(
                 singleLine = true,
                 isError = invalid,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                interactionSource = fieldInteraction,
                 modifier = Modifier.weight(1f).keepFocusedFieldVisible(topClearance = 16.dp)
             )
             IconButton(onClick = { confirmDelete = true }) {
