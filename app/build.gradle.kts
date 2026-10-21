@@ -10,11 +10,11 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "lk.peliyagoda.marketpro.v227"
+        applicationId = "lk.peliyagoda.marketpro.v228"
         minSdk = 26
         targetSdk = 35
-        versionCode = 28
-        versionName = "2.27.0"
+        versionCode = 29
+        versionName = "2.28.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
