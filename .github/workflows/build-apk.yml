@@ -2,7 +2,7 @@ name: Build Peliyagoda Market V2 APK
 
 on:
   push:
-    branches: [main, feature/v225-curated-sinhala-market-catalog]
+    branches: [main, feature/v226-low-memory-performance]
   workflow_dispatch:
 
 permissions:
