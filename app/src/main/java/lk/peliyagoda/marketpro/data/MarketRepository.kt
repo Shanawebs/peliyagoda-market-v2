@@ -11,6 +11,9 @@ import java.time.OffsetDateTime
 class MarketRepository(private val db: MarketDatabase) {
     private val dao = db.dao()
     val items: Flow<List<ItemEntity>> = dao.observeItems()
+    // Includes only current selectable master items. Historical rows still use
+    // the full items flow so reports and invoice item IDs remain resolvable.
+    val catalogItems: Flow<List<ItemEntity>> = dao.observeActiveItems()
     val categories: Flow<List<CategoryEntity>> = dao.observeCategories()
     val recordedDates: Flow<List<String>> = dao.observeDatesWithData()
     fun requirements(date: String) = dao.observeRequisitions(date)
@@ -26,20 +29,28 @@ class MarketRepository(private val db: MarketDatabase) {
     }
 
     suspend fun seedCatalogOnce() {
-        MarketConstants.categories.forEach { dao.insertCategory(CategoryEntity(it)) }
-        if (dao.itemCount() != 0) return
-        val vegetables = listOf(
-            "Beans", "Beetroot", "Big Onion", "Brinjal", "Cabbage", "Carrot",
-            "Cucumber", "Green Chilli", "Leeks", "Lettuce", "Ladies Fingers",
-            "Pumpkin", "Potato", "Red Onion", "Tomato", "Capsicum", "Radish",
-            "Sweet Potato", "Garlic", "Ginger", "Lime"
-        )
-        val fruits = listOf(
-            "Apple", "Banana", "Grapes", "Guava", "Mango", "Orange",
-            "Papaya", "Passion Fruit", "Pineapple", "Watermelon"
-        )
-        dao.insertItems(vegetables.map { ItemEntity(name = it, category = MarketConstants.VEGETABLES) }
-                + fruits.map { ItemEntity(name = it, category = MarketConstants.FRUITS) })
+        // Exactly once per DB/catalog release; transaction keeps the current
+        // catalog intact if any insert fails. Retain all old item IDs and
+        // historical kitchen/purchase/camera references.
+        db.withTransaction {
+            if ((dao.curatedCatalogVersion() ?: 0) >= MarketCatalog.VERSION) {
+                return@withTransaction
+            }
+            MarketCatalog.categories.forEach { dao.insertCategory(CategoryEntity(it)) }
+            val allExisting = dao.allItems()
+            val byName = allExisting.associateBy { it.name.trim().lowercase() }
+            dao.archiveCatalogItems()
+            for ((name, category) in MarketCatalog.entries) {
+                val item = byName[name.lowercase()]
+                if (item != null) {
+                    dao.reactivateCatalogItem(item.id, category)
+                } else {
+                    val result = dao.insertItem(ItemEntity(name = name, category = category))
+                    check(result > 0) { "Catalog collision for $name" }
+                }
+            }
+            dao.setCuratedCatalogVersion(CatalogStateEntity(version = MarketCatalog.VERSION))
+        }
     }
 
     suspend fun addCategory(name: String): Boolean {
@@ -54,8 +65,14 @@ class MarketRepository(private val db: MarketDatabase) {
     suspend fun addItem(name: String, category: String): Boolean {
         val cleaned = name.trim().replace(Regex("\\s+"), " ")
         if (cleaned.isBlank() || cleaned.length > 80 || dao.allCategories().none { it.name == category }) return false
-        if (dao.allItems().any { it.name.equals(cleaned, ignoreCase = true) }) return false
-        return dao.insertItem(ItemEntity(name = cleaned, category = category)) > 0
+        return db.withTransaction {
+            val old = dao.allItems().firstOrNull { it.name.equals(cleaned, ignoreCase = true) }
+            when {
+                old == null -> dao.insertItem(ItemEntity(name = cleaned, category = category)) > 0
+                !old.isActive -> dao.reactivateCatalogItem(old.id, category) == 1
+                else -> false
+            }
+        }
     }
 
     /** Rename without changing the item ID or any linked requisition/purchase records. */
@@ -74,7 +91,7 @@ class MarketRepository(private val db: MarketDatabase) {
     suspend fun addRequirements(date: String, kitchen: String, ids: Set<Long>) {
         require(kitchen in MarketConstants.kitchens)
         require(LocalDate.parse(date) <= LocalDate.now().plusYears(10))
-        val valid = dao.allItems().map { it.id }.toSet()
+        val valid = dao.allItems().filter { it.isActive }.map { it.id }.toSet()
         db.withTransaction {
             for (id in ids) {
                 if (id in valid) dao.saveRequisition(RequisitionEntity(date, kitchen, id, 0))
@@ -136,7 +153,7 @@ class MarketRepository(private val db: MarketDatabase) {
     suspend fun exportBackup(): String {
         val root = JSONObject()
         root.put("format", "peliyagoda-market-pro")
-        root.put("schemaVersion", 3)
+        root.put("schemaVersion", 4)
         root.put("createdAt", OffsetDateTime.now().toString())
         root.put("cashReceived", JSONArray().apply {
             dao.allCashReceived().forEach {
@@ -158,6 +175,7 @@ class MarketRepository(private val db: MarketDatabase) {
         root.put("items", JSONArray().apply {
             dao.allItems().forEach { put(JSONObject().apply {
                 put("id", it.id); put("name", it.name); put("category", it.category)
+                put("active", it.isActive)
             }) }
         })
         root.put("requisitions", JSONArray().apply {
@@ -180,7 +198,7 @@ class MarketRepository(private val db: MarketDatabase) {
         val root = JSONObject(json)
         require(root.optString("format") == "peliyagoda-market-pro") { "Not a Market Pro backup" }
         val backupVersion = root.optInt("schemaVersion")
-        require(backupVersion in 1..3) { "Unsupported backup version" }
+        require(backupVersion in 1..4) { "Unsupported backup version" }
         val itemArray = root.getJSONArray("items")
         val reqArray = root.getJSONArray("requisitions")
         val purchaseArray = root.getJSONArray("purchases")
@@ -195,7 +213,8 @@ class MarketRepository(private val db: MarketDatabase) {
             val item = ItemEntity(
                 id = obj.getLong("id"),
                 name = obj.getString("name"),
-                category = obj.getString("category")
+                category = obj.getString("category"),
+                isActive = if (backupVersion >= 4) obj.optBoolean("active", true) else true
             )
             require(item.id > 0 && item.name.isNotBlank() && item.name.length <= 80)
             require(item.category.isNotBlank() && item.category.length <= 40)
@@ -292,6 +311,12 @@ class MarketRepository(private val db: MarketDatabase) {
             dao.restorePurchases(restoredPurchases)
             dao.restoreAdditions(restoredAdditions)
             dao.restoreCashReceived(restoredCash)
+            // A legacy backup must be upgraded to the new curated catalog.
+            // An actual V4 backup retains the owner's saved catalog state.
+            dao.setCuratedCatalogVersion(
+                CatalogStateEntity(version = if (backupVersion < 4) 0 else MarketCatalog.VERSION)
+            )
         }
+        if (backupVersion < 4) seedCatalogOnce()
     }
 }
