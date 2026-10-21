@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items as lazyItems
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -653,7 +654,7 @@ private fun CategoryStrip(
         )
     }
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        lazyItems(categories) { c ->
+        lazyItems(categories, key = { it }) { c ->
             CategoryChip(category = c, active = selected == c, onClick = { onSelect(c) })
         }
         item {
@@ -746,11 +747,18 @@ private fun ItemPickerSheet(
             it.category == category && it.name.contains(search, ignoreCase = true)
         }
     }
-    // Open at full height immediately rather than the default half-expanded state.
+    // Keep the item's list scroll independent from the outer bottom sheet.
+    // A category switch or new search always starts at the first matching item.
+    val pickerListState = rememberLazyListState()
+    LaunchedEffect(category, search) {
+        pickerListState.scrollToItem(0)
+    }
     val pickerSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = pickerSheetState,
+        sheetGesturesEnabled = false,
+        dragHandle = null,
         modifier = Modifier.imePadding()
     ) {
         Column(
@@ -775,7 +783,7 @@ private fun ItemPickerSheet(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Selected: ${selected.size}", color = ProColors.teal,
+                Text("New selections: ${selected.size}", color = ProColors.teal,
                     style = MaterialTheme.typography.labelLarge)
                 Spacer(Modifier.weight(1f))
                 Button(
@@ -789,8 +797,15 @@ private fun ItemPickerSheet(
                     Text(" Add Item")
                 }
             }
-            LazyColumn(modifier = Modifier.weight(1f)) {
-                lazyItems(filtered, key = { it.id }) { item ->
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                state = pickerListState
+            ) {
+                lazyItems(
+                    filtered,
+                    key = { it.id },
+                    contentType = { "master-catalog-item" }
+                ) { item ->
                     val alreadyAdded = item.id in existingIds
                     Row(
                         Modifier.fillMaxWidth()
