@@ -10,11 +10,11 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "lk.peliyagoda.marketpro.v226"
+        applicationId = "lk.peliyagoda.marketpro.v227"
         minSdk = 26
         targetSdk = 35
-        versionCode = 27
-        versionName = "2.26.0"
+        versionCode = 28
+        versionName = "2.27.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -38,7 +38,7 @@ android {
 kapt { correctErrorTypes = true }
 
 dependencies {
-    val composeBom = platform("androidx.compose:compose-bom:2025.04.01")
+    val composeBom = platform("androidx.compose:compose-bom:2025.09.01")
     implementation(composeBom)
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
