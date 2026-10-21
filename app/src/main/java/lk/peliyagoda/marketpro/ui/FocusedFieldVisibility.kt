@@ -42,9 +42,11 @@ internal fun FocusedListKeyboardScroll(
     topClearance: Dp = 12.dp
 ) {
     val density = LocalDensity.current
-    LaunchedEffect(listState, focusedIndex, topClearance, density) {
+    // Read the composable inset accessor here, not inside snapshotFlow.
+    val imeInsets = WindowInsets.ime
+    LaunchedEffect(listState, focusedIndex, topClearance, density, imeInsets) {
         if (focusedIndex == null) return@LaunchedEffect
-        snapshotFlow { WindowInsets.ime.getBottom(density) }
+        snapshotFlow { imeInsets.getBottom(density) }
             .distinctUntilChanged()
             .collectLatest { keyboardHeight ->
                 if (keyboardHeight > with(density) { 90.dp.roundToPx() }) {
