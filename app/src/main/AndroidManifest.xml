@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="Market Pro V2.16"
+        android:label="Market Pro V2.17"
         android:icon="@drawable/ic_market"
         android:roundIcon="@drawable/ic_market"
         android:allowBackup="false"
