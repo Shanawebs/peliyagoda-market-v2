@@ -947,14 +947,27 @@ fun MarketScreen(
         focusedIndex = focusedMarketIndex,
         topClearance = 78.dp
     )
-    // Runs only on the Market tab's next entry, not during continuous scrolling.
-    // Rows have stable item-ID keys, so live reorder also preserves visible cards.
+    // Market already keeps its LazyListState outside tab composition.
+    // Replaying scrollToItem on *every* tab return causes a visible snap.
+    // Restore only if invoice-driven reordering actually moved the anchor.
     LaunchedEffect(listState) {
         if (restoreItemId != null) {
             val position = shown.indexOfFirst { it.item.id == restoreItemId }
             if (position >= 0) {
-                // +2 accounts for the summary and the pinned filter header.
-                listState.scrollToItem(position + 2, restoreItemOffset.coerceAtLeast(0))
+                val visibleAnchor = listState.layoutInfo.visibleItemsInfo
+                    .firstOrNull { it.index == listState.firstVisibleItemIndex }
+                    ?.key as? Long
+                val offsetMismatch = kotlin.math.abs(
+                    listState.firstVisibleItemScrollOffset -
+                        restoreItemOffset.coerceAtLeast(0)
+                ) > 4
+                if (visibleAnchor != restoreItemId || offsetMismatch) {
+                    // +2 accounts for summary + pinned filters.
+                    listState.scrollToItem(
+                        position + 2,
+                        restoreItemOffset.coerceAtLeast(0)
+                    )
+                }
             }
         }
     }
