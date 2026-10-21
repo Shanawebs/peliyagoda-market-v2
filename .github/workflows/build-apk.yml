@@ -2,7 +2,7 @@ name: Build Peliyagoda Market V2 APK
 
 on:
   push:
-    branches: [main, feature/v219-card-font-color-polish]
+    branches: [main, feature/v220-keyboard-focus-visibility]
   workflow_dispatch:
 
 permissions:
