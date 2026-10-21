@@ -1,5 +1,6 @@
 package lk.peliyagoda.marketpro.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -94,8 +95,9 @@ private fun SectionCard(modifier: Modifier = Modifier, content: @Composable () -
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        colors = CardDefaults.cardColors(containerColor = ProVisual.card),
+        border = BorderStroke(1.dp, ProVisual.cardBorder),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
         Box(Modifier.padding(16.dp)) { content() }
     }
@@ -103,7 +105,18 @@ private fun SectionCard(modifier: Modifier = Modifier, content: @Composable () -
 
 @Composable
 private fun Metric(label: String, value: String, modifier: Modifier = Modifier, accent: Color = ProColors.teal) {
-    Surface(modifier, shape = RoundedCornerShape(16.dp), color = Color.White, tonalElevation = 1.dp) {
+    val fill = when (accent) {
+        ProColors.purple -> ProVisual.metricPurple
+        ProColors.navy -> ProVisual.metricNeutral
+        else -> ProVisual.metricTeal
+    }
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        color = fill,
+        tonalElevation = 0.dp,
+        shadowElevation = 1.dp
+    ) {
         Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(label, style = MaterialTheme.typography.labelMedium, color = ProColors.muted)
@@ -205,7 +218,7 @@ fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, categories: Li
                     horizontalArrangement = Arrangement.SpaceBetween) {
                     Column(Modifier.weight(1f)) {
                         Text("Consolidated requirements", style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold, color = ProColors.navy)
+                            fontWeight = FontWeight.ExtraBold, color = ProVisual.itemInk)
                         Text("All kitchens • Sorted A–Z", color = ProColors.muted,
                             style = MaterialTheme.typography.bodySmall)
                     }
@@ -255,6 +268,7 @@ fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, categories: Li
                             horizontalArrangement = Arrangement.SpaceBetween) {
                             Column(Modifier.weight(1f)) {
                                 Text(row.item.name, fontWeight = FontWeight.ExtraBold,
+                                    color = ProVisual.itemInk,
                                     style = MaterialTheme.typography.titleLarge,
                                     maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 Text(row.item.category, color = ProColors.muted,
@@ -267,12 +281,16 @@ fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, categories: Li
                             Column {
                                 Text("Required", color = ProColors.muted,
                                     style = MaterialTheme.typography.labelSmall)
-                                Text("${MarketMath.kg(row.requiredGrams)} kg", fontWeight = FontWeight.SemiBold)
+                                Text("${MarketMath.kg(row.requiredGrams)} kg",
+                                    color = ProVisual.amountInk,
+                                    fontWeight = FontWeight.SemiBold)
                             }
                             Column(horizontalAlignment = Alignment.End) {
                                 Text("Purchased", color = ProColors.muted,
                                     style = MaterialTheme.typography.labelSmall)
-                                Text("${MarketMath.kg(row.purchasedGrams)} kg", fontWeight = FontWeight.SemiBold)
+                                Text("${MarketMath.kg(row.purchasedGrams)} kg",
+                                    color = ProVisual.amountInk,
+                                    fontWeight = FontWeight.SemiBold)
                             }
                         }
                         Row(
@@ -349,11 +367,11 @@ fun KitchensScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 item {
-                    Surface(shape = RoundedCornerShape(18.dp), color = ProColors.pale) {
+                    Surface(shape = RoundedCornerShape(18.dp), color = ProVisual.kitchenBanner) {
                         Column(Modifier.fillMaxWidth().padding(18.dp),
                             verticalArrangement = Arrangement.spacedBy(7.dp)) {
                             Text(kitchen, style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold, color = ProColors.navy)
+                                fontWeight = FontWeight.ExtraBold, color = ProVisual.itemInk)
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                 Text("${current.size} selected items", color = ProColors.muted)
                                 Text("${MarketMath.kg(current.sumOf { it.quantityGrams })} kg",
@@ -484,6 +502,7 @@ private fun RequirementCard(
             horizontalArrangement = Arrangement.spacedBy(7.dp)) {
             Column(Modifier.weight(1.15f)) {
                 Text(item.name, style = MaterialTheme.typography.titleMedium,
+                    color = ProVisual.itemInk,
                     fontWeight = FontWeight.Bold, maxLines = 2,
                     overflow = TextOverflow.Ellipsis)
                 Text(item.category, style = MaterialTheme.typography.labelSmall,
@@ -497,7 +516,10 @@ private fun RequirementCard(
                     if (parsed != null && parsed <= 1_000_000_000) onSave(parsed)
                 },
                 label = { Text("Require") },
-                textStyle = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                textStyle = MaterialTheme.typography.bodyLarge.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    color = ProVisual.amountInk
+                ),
                 suffix = { Text("kg") },
                 shape = RoundedCornerShape(12.dp),
                 singleLine = true,
@@ -860,13 +882,13 @@ fun MarketScreen(
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         item(key = "market-summary") {
-            Surface(color = Color(0xFFEAE9FB), shape = RoundedCornerShape(19.dp)) {
+            Surface(color = ProVisual.marketBanner, shape = RoundedCornerShape(19.dp)) {
                 Column(
                     Modifier.fillMaxWidth().padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text("Market purchase & billing", style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.ExtraBold, color = ProColors.navy)
+                        fontWeight = FontWeight.ExtraBold, color = ProVisual.itemInk)
                     Text("Enter quantities and prices • Saves automatically",
                         color = ProColors.muted, style = MaterialTheme.typography.bodySmall)
                     Row(
@@ -877,7 +899,7 @@ fun MarketScreen(
                         Text(
                             "Rs. ${MarketMath.lkr(totalBill)}",
                             modifier = Modifier.weight(1f),
-                            color = ProColors.purple,
+                            color = ProVisual.purpleAmount,
                             style = MaterialTheme.typography.headlineSmall,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -908,7 +930,7 @@ fun MarketScreen(
                             Text("${MarketMath.kg(totalRequired)} kg",
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                color = ProColors.navy,
+                                color = ProVisual.amountInk,
                                 fontWeight = FontWeight.ExtraBold,
                                 style = MaterialTheme.typography.titleSmall)
                         }
@@ -1107,8 +1129,9 @@ private fun PurchaseCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFF4FAFD)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        colors = CardDefaults.cardColors(containerColor = ProVisual.purchaseCard),
+        border = BorderStroke(1.dp, ProVisual.purchaseCardBorder),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp),
@@ -1117,7 +1140,7 @@ private fun PurchaseCard(
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(11.dp),
-                color = Color(0xFFE1F3F8)
+                color = ProVisual.purchaseTitlePanel
             ) {
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 9.dp),
@@ -1126,7 +1149,7 @@ private fun PurchaseCard(
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text(row.item.name, style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.ExtraBold, color = ProColors.navy,
+                            fontWeight = FontWeight.ExtraBold, color = ProVisual.itemInk,
                             maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Text("Required: ${MarketMath.kg(row.requiredGrams)} kg",
                             color = ProColors.teal, fontWeight = FontWeight.Bold,
@@ -1280,7 +1303,7 @@ private fun AdditionalPurchaseEditor(
     } else MarketMath.billCents(lot.quantityGrams, lot.priceCentsPerKg)
     Column(
         modifier = Modifier.fillMaxWidth()
-            .background(Color(0xFFE9F4F9), RoundedCornerShape(12.dp))
+            .background(ProVisual.extraPurchasePanel, RoundedCornerShape(12.dp))
             .padding(horizontal = 9.dp, vertical = 9.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
@@ -1458,7 +1481,8 @@ fun CatalogSheet(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(item.name, style = MaterialTheme.typography.bodyLarge)
+                            Text(item.name, style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.SemiBold, color = ProVisual.itemInk)
                             Text(item.category, color = ProColors.muted,
                                 style = MaterialTheme.typography.bodySmall)
                         }
