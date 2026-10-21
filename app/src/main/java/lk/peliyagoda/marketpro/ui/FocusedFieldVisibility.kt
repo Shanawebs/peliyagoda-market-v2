@@ -66,5 +66,5 @@ internal fun Modifier.keepFocusedFieldVisible(
     return this
         .bringIntoViewRequester(bringRequester)
         .onSizeChanged { fieldSize = it }
-        .onFocusChanged { focused = it.isFocused }
+        .onFocusChanged { focused = it.hasFocus }
 }
