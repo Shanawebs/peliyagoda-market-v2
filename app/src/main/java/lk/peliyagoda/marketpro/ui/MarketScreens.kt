@@ -401,7 +401,9 @@ fun KitchensScreen(
                     start = 16.dp,
                     end = 16.dp,
                     top = 16.dp,
-                    bottom = if (keyboardVisible) 270.dp else 116.dp
+                    // IME already resizes the list via imePadding(). Only a small
+                    // visual breathing room is needed below the final card.
+                    bottom = if (keyboardVisible) 32.dp else 116.dp
                 ),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
@@ -953,7 +955,9 @@ fun MarketScreen(
         state = listState,
         contentPadding = PaddingValues(
             start = 14.dp, end = 14.dp, top = 14.dp,
-            bottom = if (keyboardVisible) 280.dp else 24.dp
+            // Keep a small margin above the keyboard; no giant spacer.
+            // The focused item + field visibility logic stays intact.
+            bottom = if (keyboardVisible) 32.dp else 24.dp
         ),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
