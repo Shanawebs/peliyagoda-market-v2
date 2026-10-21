@@ -32,3 +32,15 @@ Date: 2026-10-21.
 5. Perform a verified one-time initial backfill: categories→items→requisitions/purchases/additions/cash; test counts and daily money totals, then enable incremental writes.
 6. Test airplane mode, rapid edits, app restart/force-stop, repeated RPC operations, deletes, expired token, unauthorized device and 4GB RAM performance.
 7. Only after those gates may a clearly marked real cloud-sync APK be released.
+
+## Verified GitHub / hosted DEV status (2026-10-21)
+
+- GitHub CI: Android `testDebugUnitTest` + `assembleDebug` passed on V2.29 preview.
+- DEV project `lkoptqhodgjeuwwfihfr` has a third applied migration:
+  `20261021183148_secure_single_writer_rpc`. The GitHub migration filename matches that version.
+- Local Supabase CI migration, RLS tests, new 14-case writer RPC tests and SQL lint passed in run
+  https://github.com/Shanawebs/peliyagoda-market-v2/actions/runs/39653152416
+- Read-only hosted audit verified: **10 RLS-enabled tables, zero user records, no enrolled users/devices, zero Storage buckets and objects**. RPC is callable by authenticated only, not anon.
+- Supabase Security Advisor has an intentional **WARN** for a public, authenticated, SECURITY DEFINER function. This is **not yet accepted for production**; server-side owner + device authorization and payload allowlists exist, but manual security review is a gating requirement before enabling real uploads. The denied-all sync ledger has a separate INFO notice.
+- Build artifact: GitHub Actions run https://github.com/Shanawebs/peliyagoda-market-v2/actions/runs/39652254757, debug APK preview.
+- This preview is **not an operational cloud-upload client**. It shows local pending queue only; no login screen, uploader or data migration has been wired up. Installing it does NOT upload records, and cannot access V2.28's app-private database.
