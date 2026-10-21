@@ -36,6 +36,7 @@ class MarketViewModel(private val repository: MarketRepository) : ViewModel() {
 
     val date = MutableStateFlow(LocalDate.now())
     val items = repository.items.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val catalogItems = repository.catalogItems.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val categories = repository.categories.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val recordedDates = repository.recordedDates.stateIn(
         viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList()
