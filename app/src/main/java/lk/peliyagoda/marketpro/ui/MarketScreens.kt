@@ -1585,21 +1585,40 @@ fun CatalogSheet(
             }
         )
     }
-    // Full height while focused, and inset above the IME so the results list
-    // remains visible and scrollable instead of collapsing behind the keyboard.
+    // Keep a stable full-height catalog while users scroll the long item list.
+    // Prevent nested scroll/fling gestures from dragging the sheet itself.
+    // Dismissal remains possible through the explicit Close button, system
+    // back button, or tapping outside the sheet.
     val catalogSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val catalogListState = rememberLazyListState()
+    LaunchedEffect(category, search) {
+        catalogListState.scrollToItem(0)
+    }
     ModalBottomSheet(
         onDismissRequest = onClose,
         sheetState = catalogSheetState,
+        sheetGesturesEnabled = false,
+        dragHandle = null,
         modifier = Modifier.imePadding()
     ) {
         Column(
             Modifier.fillMaxWidth().fillMaxHeight(0.97f).padding(horizontal = 18.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Text("Master item catalog", style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold)
-            Text("Add or rename vegetables and fruits.", color = ProColors.muted)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Master item catalog",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = onClose) { Text("Close") }
+            }
+            Text("Add or rename items in any category.", color = ProColors.muted)
             Row(
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1632,13 +1651,18 @@ fun CatalogSheet(
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 placeholder = { Text("Find an item") },
                 shape = RoundedCornerShape(12.dp), singleLine = true)
-            val filteredItems = items.filter { item ->
-                item.category == category && item.name.contains(search, ignoreCase = true)
+            val filteredItems = remember(items, category, search) {
+                items.filter { item ->
+                    item.category == category && item.name.contains(search, ignoreCase = true)
+                }
             }
             Text("${filteredItems.size} ${category} item(s)", color = ProColors.muted,
                 style = MaterialTheme.typography.labelMedium)
-            LazyColumn(modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(bottom = 24.dp)) {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                state = catalogListState,
+                contentPadding = PaddingValues(bottom = 24.dp)
+            ) {
                 if (filteredItems.isEmpty()) {
                     item {
                         Text(
@@ -1648,7 +1672,11 @@ fun CatalogSheet(
                         )
                     }
                 }
-                lazyItems(filteredItems, key = { it.id }) { item ->
+                lazyItems(
+                    filteredItems,
+                    key = { it.id },
+                    contentType = { "catalog-item" }
+                ) { item ->
                     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically) {
