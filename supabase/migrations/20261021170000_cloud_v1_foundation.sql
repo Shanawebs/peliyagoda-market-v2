@@ -1,7 +1,9 @@
 -- Peliyagoda Market Pro — Cloud V1 phase 1 (STAGING ONLY).
--- Offline-first Android V2.28 -> Supabase read-only cloud schema foundation.
+-- Offline-first Android V2.28 -> Purchase-only cloud mirror schema foundation.
 -- A single Android writer will be enabled via a separately reviewed RPC in Phase 2.
 -- IMPORTANT: Do not run on production or import existing purchases without approved backups.
+-- Sync scope: initial purchases + additional purchase lots + item/category references ONLY.
+-- No requisitions, cash entries, invoice photos, Storage buckets or photo uploads.
 -- Migration deliberately DOES NOT create anonymous writes, direct client writes, or real data.
 --
 -- Prerequisite: a fresh Supabase development project with Supabase Auth installed.
@@ -75,23 +77,6 @@ create index items_workspace_updated_idx on public.items(workspace_id,updated_at
 
 -- IMPORTANT: Kitchen values are persisted identifiers in the existing Room DB.
 -- "Pastry Kitchen" may appear as "Bar/Pastry" in the Android presentation only.
-create table public.requisitions (
-  id uuid primary key,
-  workspace_id uuid not null references public.workspaces(id) on delete restrict,
-  business_date date not null,
-  kitchen text not null check (kitchen in ('Main Kitchen','Indian Kitchen','Pastry Kitchen')),
-  item_id uuid not null,
-  quantity_grams bigint not null default 0 check (quantity_grams between 0 and 1000000000),
-  revision bigint not null default 1 check (revision > 0),
-  deleted_at timestamptz,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  unique (workspace_id,business_date,kitchen,item_id),
-  foreign key (workspace_id,item_id)
-    references public.items(workspace_id,id) on delete restrict
-);
-create index requisitions_by_date_idx on public.requisitions(workspace_id,business_date);
-
 create table public.purchases (
   id uuid primary key,
   workspace_id uuid not null references public.workspaces(id) on delete restrict,
@@ -127,19 +112,6 @@ create table public.purchase_additions (
 create index purchase_additions_by_date_idx
   on public.purchase_additions(workspace_id,business_date,item_id);
 
-create table public.daily_cash_received (
-  id uuid primary key,
-  workspace_id uuid not null references public.workspaces(id) on delete restrict,
-  business_date date not null,
-  amount_cents bigint not null default 0 check (amount_cents between 0 and 9999999999),
-  revision bigint not null default 1 check (revision > 0),
-  deleted_at timestamptz,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  unique (workspace_id,business_date)
-);
-create index daily_cash_by_date_idx on public.daily_cash_received(workspace_id,business_date);
-
 -- Server-side idempotency ledger. NEVER grant direct client reads or writes.
 create table public.sync_operations (
   operation_id uuid primary key,
@@ -147,7 +119,7 @@ create table public.sync_operations (
   device_id uuid not null,
   actor_user_id uuid not null references auth.users(id) on delete restrict,
   entity_type text not null check (entity_type in
-     ('category','item','requisition','purchase','purchase_addition','daily_cash_received')),
+     ('category','item','purchase','purchase_addition')),
   entity_id uuid not null,
   operation_type text not null check (operation_type in ('upsert','delete')),
   payload_hash text not null check (payload_hash ~ '^[a-f0-9]{64}$'),
@@ -191,14 +163,10 @@ alter table public.categories enable row level security;
 revoke all privileges on table public.categories from public, anon, authenticated;
 alter table public.items enable row level security;
 revoke all privileges on table public.items from public, anon, authenticated;
-alter table public.requisitions enable row level security;
-revoke all privileges on table public.requisitions from public, anon, authenticated;
 alter table public.purchases enable row level security;
 revoke all privileges on table public.purchases from public, anon, authenticated;
 alter table public.purchase_additions enable row level security;
 revoke all privileges on table public.purchase_additions from public, anon, authenticated;
-alter table public.daily_cash_received enable row level security;
-revoke all privileges on table public.daily_cash_received from public, anon, authenticated;
 alter table public.sync_operations enable row level security;
 revoke all privileges on table public.sync_operations from public, anon, authenticated;
 grant usage on schema public to authenticated;
@@ -207,10 +175,8 @@ grant select on table public.workspace_members to authenticated;
 grant select on table public.registered_devices to authenticated;
 grant select on table public.categories to authenticated;
 grant select on table public.items to authenticated;
-grant select on table public.requisitions to authenticated;
 grant select on table public.purchases to authenticated;
 grant select on table public.purchase_additions to authenticated;
-grant select on table public.daily_cash_received to authenticated;
 
 -- Membership list itself is limited to the caller's own membership row.
 create policy members_own_membership
@@ -236,20 +202,12 @@ create policy member_items_read
   on public.items for select to authenticated
   using (marketpro_private.is_workspace_member(workspace_id));
 
-create policy member_requisitions_read
-  on public.requisitions for select to authenticated
-  using (marketpro_private.is_workspace_member(workspace_id));
-
 create policy member_purchases_read
   on public.purchases for select to authenticated
   using (marketpro_private.is_workspace_member(workspace_id));
 
 create policy member_purchase_additions_read
   on public.purchase_additions for select to authenticated
-  using (marketpro_private.is_workspace_member(workspace_id));
-
-create policy member_daily_cash_received_read
-  on public.daily_cash_received for select to authenticated
   using (marketpro_private.is_workspace_member(workspace_id));
 
 -- Intentionally NO INSERT/UPDATE/DELETE grants or policies for authenticated clients.
