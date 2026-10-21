@@ -126,6 +126,7 @@ fun MarketProApp(vm: MarketViewModel) {
             }.toSet()
         }
         val items by vm.items.collectAsState()
+        val catalogItems by vm.catalogItems.collectAsState()
         val categoriesDb by vm.categories.collectAsState()
         val categories = categoriesDb.map { it.name }.ifEmpty { listOf("Vegetables", "Fruits") }
         val reqs by vm.requisitions.collectAsState()
@@ -454,7 +455,7 @@ fun MarketProApp(vm: MarketViewModel) {
                 tabStateHolder.SaveableStateProvider("market-pro-tab-$activeTab") {
                     when (activeTab) {
                         0 -> DashboardScreen(date, rows, categories, onExport = { pdfDialogOpen = true })
-                        1 -> KitchensScreen(items, categories, reqs, vm, ::message)
+                        1 -> KitchensScreen(items, catalogItems, categories, reqs, vm, ::message)
                         else -> MarketScreen(
                             rows = rows,
                             categories = categories,
