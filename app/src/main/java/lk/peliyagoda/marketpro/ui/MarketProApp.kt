@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -303,10 +304,17 @@ fun MarketProApp(vm: MarketViewModel) {
         )
 
         Scaffold(
-            containerColor = ProColors.page,
+            containerColor = ProVisual.page,
             snackbarHost = { SnackbarHost(snackbar) },
             topBar = {
-                Column(Modifier.background(ProColors.pale).statusBarsPadding()) {
+                // Background-only update: existing action buttons and status colors stay put.
+                Column(
+                    Modifier.background(
+                        Brush.verticalGradient(
+                            listOf(ProVisual.headerTop, ProVisual.headerBottom)
+                        )
+                    ).statusBarsPadding()
+                ) {
                     Row(
                         Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -315,7 +323,7 @@ fun MarketProApp(vm: MarketViewModel) {
                             Text("PELIYAGODA", style = MaterialTheme.typography.labelSmall,
                                 color = ProColors.teal, fontWeight = FontWeight.Bold)
                             Text("Market Pro", style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.ExtraBold, color = ProColors.navy)
+                                fontWeight = FontWeight.ExtraBold, color = ProVisual.itemInk)
                         }
                         IconButton(onClick = { catalogOpen = true }) {
                             Icon(Icons.Filled.Inventory2, contentDescription = "Item catalog", tint = ProColors.teal)
