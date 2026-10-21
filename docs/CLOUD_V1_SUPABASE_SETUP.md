@@ -1,3 +1,5 @@
+> **Latest cloud scope / hosted state (2026-10-21):** Supabase DEV has two migrations. The first created the purchase foundation (8 tables). The second `20261021180636_expand_requisitions_cash_financial_summary` added requisitions, daily cash, and a read-only derived financial summary. **10 RLS tables + 1 view, zero user rows and zero invoice uploads.** Supersedes earlier purchase-only scope in this historical runbook. Android sync is not deployed. See `docs/CLOUD_V1_EXPANDED_SCOPE.md`.
+
 # Market Pro Cloud V1 — Supabase DEV connection / staging runbook
 
 ## Supplied Supabase DEV endpoint (non-secret)
