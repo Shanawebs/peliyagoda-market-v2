@@ -37,15 +37,14 @@ fun groupKitchenRequirements(
         }
         .groupBy { it.item.category }
         .entries
-        .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.key })
+        .sortedWith { a, b -> a.key.compareTo(b.key, ignoreCase = true) }
         .map { (category, unsorted) ->
             KitchenCategoryGroup(
                 category = category,
-                rows = unsorted.sortedWith(
-                    compareBy<KitchenRequirementRow>(String.CASE_INSENSITIVE_ORDER) {
-                        it.item.name
-                    }.thenBy { it.item.id }
-                )
+                rows = unsorted.sortedWith { a, b ->
+                    val byName = a.item.name.compareTo(b.item.name, ignoreCase = true)
+                    if (byName != 0) byName else a.item.id.compareTo(b.item.id)
+                }
             )
         }
 }
