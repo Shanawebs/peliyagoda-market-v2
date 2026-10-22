@@ -178,3 +178,129 @@ body{font-size:16px}
   #panel-overview #history-body td{font-size:15px}
   #panel-overview #history-body .table-button{font-size:15px}
 }
+
+
+/* V4 — recorded-data calendar and printable Sinhala completed-purchases report */
+.visually-hidden{position:absolute!important;width:1px!important;height:1px!important;
+  overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;
+  clip-path:inset(50%)!important;pointer-events:none!important}
+.date-picker-field{position:relative;display:flex;flex-direction:column;gap:7px;width:172px}
+.date-caption{font-size:14px;font-weight:800;color:#426653}
+.date-trigger{height:45px;border:1px solid #bddac8;border-radius:10px;background:#fff;
+  color:#183e30;font-size:16px;font-weight:800;padding:8px 12px;
+  display:flex;align-items:center;justify-content:space-between;gap:14px;white-space:nowrap}
+.date-trigger:hover,.date-trigger:focus-visible{border-color:#0b9665;box-shadow:0 0 0 3px #ccefe0}
+.calendar-trigger-icon{color:#078458;font-size:19px}
+.date-calendar{position:absolute;z-index:60;top:calc(100% + 9px);right:0;width:340px;
+  max-width:calc(100vw - 34px);background:#fff;color:#1b3f31;
+  border:1px solid #c5e1cf;border-radius:15px;box-shadow:0 18px 50px #143d2740;
+  padding:16px}
+.calendar-header{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  margin-bottom:13px;font-size:16px}
+.calendar-nav{width:36px;height:36px;border:1px solid #daebe0;border-radius:9px;
+  background:#f4faf5;font-size:25px;line-height:1;color:#166f4d}
+.calendar-weekdays,.calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}
+.calendar-weekdays{text-align:center;font-size:12px;font-weight:800;color:#617b6d;margin-bottom:5px}
+.calendar-weekdays span{padding:6px 0}
+.calendar-blank{min-height:39px}
+.calendar-day{position:relative;border:1px solid transparent;background:#fff;color:#294a39;
+  height:41px;border-radius:9px;font-size:14px;font-weight:600;
+  display:flex;align-items:center;justify-content:center;padding:0 0 5px}
+.calendar-day:hover{background:#e7f8ef;border-color:#a0d9b6}
+.calendar-day[aria-pressed="true"]{background:#0b865d;color:#fff;font-weight:850}
+.calendar-day.is-today:not([aria-pressed="true"]){border-color:#0b9767;color:#076d4a}
+.calendar-day.has-records{font-weight:850}
+.calendar-record-dot{position:absolute;width:6px;height:6px;border-radius:50%;
+  bottom:4px;left:calc(50% - 3px);background:#10a56c}
+.calendar-day[aria-pressed="true"] .calendar-record-dot{background:#fff}
+.calendar-footer{display:flex;align-items:center;gap:10px;border-top:1px solid #e2ede5;
+  margin-top:12px;padding-top:10px}
+.calendar-footer button{border:0;background:transparent;color:#08774f;font-weight:800;
+  cursor:pointer;font-size:12px;padding:7px 4px}
+.calendar-legend{font-size:12px;font-weight:650;color:#4e7660;flex:1;white-space:nowrap}
+.calendar-legend i{display:inline-block;width:7px;height:7px;border-radius:50%;
+  background:#10a56c;vertical-align:middle;margin-right:4px}
+.calendar-message{margin:5px 0 0;color:#5b7866;font-size:12px;min-height:17px}
+.tab-pdf-button{margin-left:auto;align-self:center;flex:0 0 auto;display:inline-flex;
+  align-items:center;justify-content:center;gap:8px;min-height:38px;
+  border:1px solid #0a9864;border-radius:10px;background:#e4f7eb;
+  color:#08724d;font-size:15px;font-weight:850;padding:9px 16px}
+.tab-pdf-button:hover,.tab-pdf-button:focus-visible{background:#c8efdb;
+  box-shadow:0 0 0 2px #c7e8d6}
+body.pdf-open{overflow:hidden}
+.pdf-overlay{position:fixed;inset:0;z-index:2000;overflow:auto;
+  background:#48524fa8;padding:26px 12px}
+.pdf-preview-shell{width:min(860px,100%);margin:0 auto;border-radius:14px;
+  background:#f3f7f6;padding:20px;box-shadow:0 25px 80px #102d2455}
+.pdf-preview-actions{display:flex;justify-content:space-between;align-items:center;
+  gap:16px;flex-wrap:wrap;margin-bottom:14px}
+.pdf-preview-actions strong{font-size:18px;color:#17372e}
+.pdf-preview-actions p{font-size:13px;color:#567064;margin:5px 0 0}
+.pdf-preview-controls{display:flex;gap:9px;flex-wrap:wrap}
+.pdf-document{background:#fff;width:min(100%,720px);margin:0 auto;padding:32px 36px 40px;
+  min-height:840px;color:#102a37;border:1px solid #e5edec;
+  font-family:Inter,"Nirmala UI","Iskoola Pota","Noto Sans Sinhala",system-ui,sans-serif}
+.pdf-report-header{background:#edf8fa;border-radius:16px;padding:19px 20px;margin-bottom:20px}
+.pdf-brand{font-size:13px!important;font-weight:850!important;color:#0d7885!important;
+  letter-spacing:.01em;margin:0 0 8px!important}
+.pdf-report-header h1{font-size:24px;letter-spacing:-.02em;line-height:1.25;margin:0 0 10px;
+  color:#102a37}
+.pdf-report-header p{font-size:14px;color:#526977;margin:0}
+.pdf-category{margin:14px 0 18px}
+.pdf-category-heading{background:#daf3f6;color:#086f7d;margin:0 0 7px;
+  padding:9px 13px;border-radius:9px;font-size:19px;break-after:avoid}
+.pdf-report-item{background:#eef8fa;border-radius:9px;margin-bottom:6px;padding:12px 14px;
+  display:flex;align-items:center;justify-content:space-between;gap:12px;break-inside:avoid}
+.pdf-report-item-info{display:flex;flex-direction:column;gap:6px;min-width:0;flex:1}
+.pdf-item-name{font-size:18px;color:#122c3a;line-height:1.45;font-weight:850;
+  overflow-wrap:anywhere}
+.pdf-item-quantity{font-size:13px;color:#516b79;font-weight:700;line-height:1.5}
+.pdf-item-cost{min-width:142px;display:flex;flex-direction:column;gap:4px;
+  text-align:right;align-items:flex-end;white-space:nowrap}
+.pdf-item-cost small{font-size:12px;color:#567080}
+.pdf-item-cost strong{font-size:18px;color:#087383}
+.pdf-summary-line{display:flex;justify-content:space-between;align-items:center;gap:18px;
+  border-radius:9px;padding:13px 15px;margin-top:7px;background:#f1f6f7;
+  color:#264654;font-size:13px;font-weight:800;break-inside:avoid}
+.pdf-summary-line strong{font-size:17px;text-align:right;white-space:nowrap}
+.pdf-subtotal{background:#0b7685;color:#fff;font-weight:850}
+.pdf-grand-total{background:#152c39;color:#fff;margin-top:17px}
+.pdf-balance-positive{background:#e5f6eb;color:#076b42}
+.pdf-balance-negative{background:#fff0f0;color:#ad283a}
+.pdf-report-note{font-size:12px;color:#637782;line-height:1.55;margin:14px 3px}
+.pdf-report-footer{font-size:11px;color:#778b90;text-align:center;margin-top:23px;
+  padding-top:11px;border-top:1px solid #e1e9e7}
+@media(max-width:700px){
+  .date-picker-field{flex:1;min-width:158px;width:auto}
+  .date-calendar{left:0;right:auto}
+  .date-trigger{font-size:15px}
+  .tab-pdf-button{font-size:14px;padding:8px 12px;min-height:36px}
+  .pdf-preview-shell{padding:10px}
+  .pdf-document{padding:20px 15px}
+  .pdf-report-header h1{font-size:19px}
+  .pdf-category-heading{font-size:17px}
+  .pdf-item-name,.pdf-item-cost strong{font-size:15px}
+  .pdf-report-item{padding:10px 11px;gap:8px}
+  .pdf-item-cost{min-width:108px}
+  .pdf-item-quantity{font-size:11px}
+  .pdf-preview-controls .button{font-size:13px;padding:10px}
+}
+@media print{
+  @page{size:A4;margin:13mm}
+  body,html{background:#fff!important;margin:0!important;padding:0!important}
+  body>.topbar,body>main{display:none!important}
+  body.pdf-open{overflow:visible!important}
+  #pdf-preview{display:block!important;position:static!important;inset:auto!important;
+    overflow:visible!important;padding:0!important;margin:0!important;
+    background:#fff!important}
+  .pdf-preview-shell{width:100%!important;max-width:none!important;margin:0!important;
+    padding:0!important;background:#fff!important;border:0!important;
+    border-radius:0!important;box-shadow:none!important}
+  .pdf-preview-actions{display:none!important}
+  .pdf-document{width:100%!important;min-height:0!important;margin:0!important;
+    padding:0!important;border:0!important}
+  .pdf-report-header,.pdf-category-heading,.pdf-report-item,.pdf-summary-line{
+    -webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+  .pdf-report-item,.pdf-summary-line{break-inside:avoid-page!important}
+  .pdf-category-heading{break-after:avoid-page!important}
+}
