@@ -84,3 +84,18 @@ https://lkoptqhodgjeuwwfihfr.supabase.co/functions/v1/marketpro-web/
 - Rollback candidate: dpl_3tLzBh4WEyEgMU7MiwabTBeKZato (previous V3).
 - Verification: Node 22 GitHub Actions passed; deployment READY. Owner-authenticated end-to-end viewing/printing must still be manually checked.
 - No database changes, RLS changes, Android changes, or new cloud write access. Static Vercel direct deploy; Git push alone does not auto-deploy.
+
+## Cloud Dashboard V5 — Category-wise Kitchen and Purchases lists (2026-10-22)
+
+- Kitchen Requisitions and Purchase lots render in catalog-driven category sections, ordered Vegetables -> Chinese Vegetables -> Fruits -> other categories.
+- Common category aliases including `Vegetable` and `Chinese Veg` are normalized for display only. Category ownership remains based on item.category_id.
+- All requisitions, including zero quantities, are preserved; initial and additional lots remain separate.
+- Purchases show per-category monetary subtotals plus unchanged all-lots grand total using exact per-lot HALF_UP arithmetic.
+- PR merged: https://github.com/Shanawebs/peliyagoda-market-v2/pull/4
+- Release source commit: f47ee11456975d2b13fd71d0868dc21b4894b47c
+- Published production URL: https://marketpro-cloud-dashboard.vercel.app/
+- Published production deployment READY: dpl_5kpn71NNh6zGTd5nfazMk2Fkra2Q
+- Validated preview READY: dpl_CNWF5ywHvZ2B7rzbYo2a4XrbwwoW
+- Previous production rollback candidate: dpl_8kN5Mom8niTJkGSzgtoSxNLZ6X6V
+- GitHub Actions CI success on branch and post-merge, with tests for category order, record preservation, and total parity.
+- No Android, Supabase database, auth, RLS or PDF generation changes. Signed-in browser UI still requires user verification.
