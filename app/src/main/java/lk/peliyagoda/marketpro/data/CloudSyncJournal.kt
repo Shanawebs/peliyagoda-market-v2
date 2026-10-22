@@ -101,8 +101,35 @@ interface CloudSyncDao {
     @Query("SELECT COUNT(*) FROM cloud_sync_outbox")
     suspend fun pendingCountNow(): Int
 
-    @Query("SELECT * FROM cloud_sync_outbox ORDER BY changedAtMs,entityType,entityKey LIMIT :limit")
+    /** Strict dependency ordering: category → item → financial rows. */
+    @Query("""
+        SELECT * FROM cloud_sync_outbox
+        ORDER BY CASE entityType
+          WHEN 'category' THEN 0 WHEN 'item' THEN 1 ELSE 2 END,
+          changedAtMs,entityType,entityKey LIMIT :limit
+    """)
     suspend fun pending(limit: Int): List<CloudOutboxEntity>
+
+    @Query("SELECT * FROM categories WHERE lower(trim(name)) = :key LIMIT 1")
+    suspend fun findCategory(key: String): CategoryEntity?
+
+    @Query("SELECT * FROM items WHERE id = :id LIMIT 1")
+    suspend fun findItem(id: Long): ItemEntity?
+
+    @Query("SELECT * FROM requisitions WHERE businessDate = :date AND kitchen = :kitchen AND itemId = :itemId LIMIT 1")
+    suspend fun findRequisition(date: String, kitchen: String, itemId: Long): RequisitionEntity?
+
+    @Query("SELECT * FROM purchases WHERE businessDate = :date AND itemId = :itemId LIMIT 1")
+    suspend fun findPurchase(date: String, itemId: Long): PurchaseEntity?
+
+    @Query("SELECT * FROM purchase_additions WHERE id = :id LIMIT 1")
+    suspend fun findAddition(id: Long): PurchaseAdditionEntity?
+
+    @Query("SELECT * FROM daily_cash_received WHERE businessDate = :date LIMIT 1")
+    suspend fun findCash(date: String): DailyCashReceivedEntity?
+
+    @Query("SELECT * FROM cloud_sync_state WHERE name = :name LIMIT 1")
+    fun observeState(name: String): Flow<CloudSyncStateEntity?>
 
     /** Conditional ACK: never delete a newer unsent update. */
     @Query("DELETE FROM cloud_sync_outbox WHERE entityType=:type AND entityKey=:key AND operationId=:operationId")
