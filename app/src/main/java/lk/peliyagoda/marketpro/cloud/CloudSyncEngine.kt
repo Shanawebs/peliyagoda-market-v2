@@ -31,6 +31,7 @@ object CloudSyncConfig {
     const val OWNER_USER_ID = "bf49c22f-f245-4d3c-987e-c5ec081d7cad"
     const val ENABLED = "enrolled"
     const val LAST_SUCCESS = "last_success_utc"
+    const val LAST_ATTEMPT = "last_attempt_utc"
     const val LAST_ERROR = "last_error"
     val ORDERED_TYPES = CloudRecordType.values().toList()
 }
@@ -282,6 +283,9 @@ class CloudSyncEngine(private val context: Context) {
     suspend fun drain(maxChanges: Int = 100): Int = CloudSyncRunGate.runExclusive {
         require(maxChanges in 1..100) { "Cloud batches must contain 1..100 changes" }
         if (!isEnabled()) return@runExclusive 0
+        // Record a real attempt before authentication; this distinguishes a stale
+        // error from a new user-requested retry without exposing credentials.
+        cloud.setState(CloudSyncStateEntity(CloudSyncConfig.LAST_ATTEMPT, Instant.now().toString()))
         val bearer = auth.accessTokenForOwner(CloudSyncConfig.OWNER_USER_ID)
         val device = CloudDeviceIdentity.get(app)
         client.verifyPrimaryOwner(bearer, device)
