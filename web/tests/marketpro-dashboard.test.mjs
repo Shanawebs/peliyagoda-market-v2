@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { exactCents, lkr, kg, lotCostCents, dateIsValid, normalizeDailyRow, summarizeDays, groupKitchens, requirementsByItem, dailyPriceTrends, recentBusinessDays, completedPurchaseReport, calendarMonthDays } from "../marketpro-dashboard/core.mjs";
+import { exactCents, lkr, kg, lotCostCents, dateIsValid, normalizeDailyRow, summarizeDays, groupKitchens, requirementsByItem, dailyPriceTrends, recentBusinessDays, completedPurchaseReport, calendarMonthDays, groupRowsByCatalogCategory } from "../marketpro-dashboard/core.mjs";
 
 test("Android half-up on each 1.5kg lot 101 cents/kg", () => {
   const lot = lotCostCents(1500,101);
@@ -152,4 +152,60 @@ test("calendar highlights only actual saved dates and supports leap-year Februar
   assert.equal(m.firstWeekday,2);
   assert.equal(calendarMonthDays(2027,1,[]).days.length,28);
   assert.throws(()=>calendarMonthDays(2027,12,[]),/Invalid/);
+});
+
+
+test("Kitchens and Purchases list catalog categories in requested Vegetable-Chinese-Fruits order", () => {
+  const items = new Map([
+    ["apple",{id:"apple",name:"ඇපල්",category_id:"cat-f"}],
+    ["kale",{id:"kale",name:"කේල්",category_id:"cat-c"}],
+    ["carrot",{id:"carrot",name:"කැරට්",category_id:"cat-v"}],
+    ["cucumber",{id:"cucumber",name:"පිපිඤ්ඤා",category_id:"cat-v"}],
+    ["other",{id:"other",name:"Other",category_id:"cat-o"}]
+  ]);
+  const cats = new Map([
+    ["cat-f",{id:"cat-f",name:"Fruits"}],
+    ["cat-c",{id:"cat-c",name:"Chinese Veg"}],
+    ["cat-v",{id:"cat-v",name:"Vegetable"}],
+    ["cat-o",{id:"cat-o",name:"Herbs"}]
+  ]);
+  const rows = [
+    {id:1,item_id:"apple",quantity_grams:1000},
+    {id:2,item_id:"kale",quantity_grams:0},
+    {id:3,item_id:"carrot",quantity_grams:2000},
+    {id:4,item_id:"cucumber",quantity_grams:3500},
+    {id:5,item_id:"other",quantity_grams:200},
+    {id:6,item_id:"apple",quantity_grams:500},
+    {id:7,item_id:"missing",quantity_grams:0}
+  ];
+  const frozenOrder = rows.map(x => x.id);
+  const grouped = groupRowsByCatalogCategory(rows,items,cats);
+  assert.deepEqual(grouped.map(x=>x.name),
+    ["Vegetables","Chinese Vegetables","Fruits","Herbs","Uncategorized"]);
+  assert.deepEqual(grouped.map(x=>x.rows.length),[2,1,2,1,1]);
+  assert.deepEqual(grouped.flatMap(x=>x.rows.map(row=>row.id)).sort((a,b)=>a-b),
+    frozenOrder);
+  assert.deepEqual(rows.map(x=>x.id),frozenOrder,"source rows must not change");
+  assert.equal(grouped.flatMap(x=>x.rows).filter(row=>row.quantity_grams===0).length,2,
+    "zero-quantity requisitions remain visible");
+});
+
+test("Multiple initial/additional lots survive category grouping without money duplication", () => {
+  const cats=new Map([["fruit",{name:"Fruit"}],["veg",{name:"Vegetables"}]]);
+  const items=new Map([
+    ["a",{category_id:"fruit"}],
+    ["b",{category_id:"veg"}]
+  ]);
+  const lots=[
+    {id:"a1",item_id:"a",type:"Initial",quantity_grams:12000,price_cents_per_kg:25000},
+    {id:"a2",item_id:"a",type:"Additional",quantity_grams:2000,price_cents_per_kg:12000},
+    {id:"b1",item_id:"b",type:"Initial",quantity_grams:10000,price_cents_per_kg:20000}
+  ];
+  const groups=groupRowsByCatalogCategory(lots,items,cats);
+  assert.deepEqual(groups.map(x=>x.name),["Vegetables","Fruits"]);
+  const subtotals=groups.map(g=>g.rows.reduce((sum,lot)=>
+    sum+lotCostCents(lot.quantity_grams,lot.price_cents_per_kg),0n));
+  assert.deepEqual(subtotals,[200000n,324000n]);
+  assert.equal(subtotals.reduce((a,b)=>a+b,0n),
+    lots.reduce((sum,lot)=>sum+lotCostCents(lot.quantity_grams,lot.price_cents_per_kg),0n));
 });
