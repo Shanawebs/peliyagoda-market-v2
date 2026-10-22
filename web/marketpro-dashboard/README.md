@@ -21,8 +21,8 @@
 
 ## Test
 
-Run `node --test core.test.mjs` and `node --check app.mjs`, `node --check auth-client.mjs`, `node --check core.mjs` in this folder.
-`core.test.mjs` is NOT deployed or served in production and must be excluded from Vercel's published output. If serving raw directory, remove developer-only tests (or place them outside published directory). Tests contain only non-sensitive sample data.
+Run `node --test web/tests/marketpro-dashboard.test.mjs` from repository root, plus `node --check` against the four browser `.mjs` modules. GitHub Actions automatically validates this.
+Tests live outside the deployed web root in `web/tests` and contain non-sensitive sample data.
 
 ## Operational cautions
 
