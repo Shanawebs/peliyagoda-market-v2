@@ -19,6 +19,8 @@ import java.net.URL
 import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.util.UUID
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * V2.31 single-owner DEV workspace. These IDs are public identifiers, not secrets.
@@ -133,6 +135,14 @@ internal data class CloudPreparedChange(
  * Read record data *inside Room transaction*, then call the network outside it.
  */
 class CloudSyncEngine(private val context: Context) {
+    /**
+     * Immediate + periodic WorkManager jobs may overlap. A shared process-level
+     * lock guarantees only one uploader can apply and ACK operations at a time.
+     * Never hold a Room transaction across network requests.
+     */
+    companion object {
+        private val singleWriterMutex = Mutex()
+    }
     private val app = context.applicationContext
     private val db = MarketDatabase.get(app)
     private val dao = db.dao()
@@ -266,8 +276,9 @@ class CloudSyncEngine(private val context: Context) {
     }
 
     /** Runs under WorkManager, never on UI thread; bounded to protect 4GB phones. */
-    suspend fun drain(maxChanges: Int = 100): Int {
-        if (!isEnabled()) return 0
+    suspend fun drain(maxChanges: Int = 100): Int = singleWriterMutex.withLock {
+        require(maxChanges in 1..100) { "Cloud batches must contain 1..100 changes" }
+        if (!isEnabled()) return@withLock 0
         val bearer = auth.accessTokenForOwner(CloudSyncConfig.OWNER_USER_ID)
         val device = CloudDeviceIdentity.get(app)
         client.verifyPrimaryOwner(bearer, device)
@@ -285,7 +296,7 @@ class CloudSyncEngine(private val context: Context) {
             }
             completed++
         }
-        return cloud.pendingCountNow()
+        cloud.pendingCountNow()
     }
 
     suspend fun recordFailure(message: String) {
