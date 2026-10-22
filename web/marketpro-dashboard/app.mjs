@@ -1,6 +1,6 @@
 import { DashboardApi } from "./auth-client.mjs";
 import { REFRESH_INTERVAL_MS } from "./config.mjs";
-import { exactCents, lkr, kg, lotCostCents, dateIsValid, normalizeDailyRow, groupKitchens, requirementsByItem, dailyPriceTrends, recentBusinessDays } from "./core.mjs";
+import { exactCents, lkr, kg, lotCostCents, dateIsValid, normalizeDailyRow, groupKitchens, requirementsByItem, dailyPriceTrends, recentBusinessDays, completedPurchaseReport, calendarMonthDays } from "./core.mjs";
 
 const $ = id => document.getElementById(id);
 const api = new DashboardApi();
@@ -8,7 +8,9 @@ const state = {
   user: null, membership: null, summary: [], categoryById: new Map(), itemById: new Map(),
   data: { requisitions: [], purchases: [], additions: [] }, date: "",
   busy: false, ready: false, tab: "overview", autoTimer: null,
-  chartCategory: null, chartItemId: null, chartHistory: [], chartLoadedFor: null, chartSerial: 0
+  chartCategory: null, chartItemId: null, chartHistory: [], chartLoadedFor: null, chartSerial: 0,
+  calendarOpen: false, calendarYear: 0, calendarMonth: 0, calendarSerial: 0,
+  calendarMarkers: new Set(), pdfOpen: false, pendingDateRefresh: false
 };
 const text = (id, value) => { $(id).textContent = String(value); };
 const show = (id, visible) => $(id).classList.toggle("hidden", !visible);
@@ -87,7 +89,9 @@ function renderHistory() {
     button.addEventListener("click", () => {
       state.date = row.business_date;
       $("date-filter").value = state.date;
-      refresh();
+      syncDateButton();
+      closeCalendar();
+      void refresh();
       window.scrollTo({ top: 0, behavior: "smooth" });
     });
     first.append(button);
@@ -364,6 +368,191 @@ async function loadItemHistory(preserveScroll = false) {
   }
 }
 
+
+
+function syncDateButton() {
+  if (!dateIsValid(state.date)) {
+    text("date-trigger", "Select a date ▦");
+    return;
+  }
+  const [year, month, day] = state.date.split("-");
+  const button = $("date-trigger");
+  button.replaceChildren();
+  button.append(document.createTextNode(day + "/" + month + "/" + year + " "));
+  button.append(elem("span", "▦", "calendar-trigger-icon"));
+}
+function chooseBusinessDate(date) {
+  if (!dateIsValid(date)) return;
+  state.date = date;
+  $("date-filter").value = date;
+  syncDateButton();
+  closeCalendar();
+  if (state.busy) state.pendingDateRefresh = true;
+  else void refresh();
+}
+function closeCalendar(restoreFocus = false) {
+  state.calendarOpen = false;
+  state.calendarSerial++;
+  show("date-calendar", false);
+  $("date-trigger").setAttribute("aria-expanded", "false");
+  if (restoreFocus) $("date-trigger").focus();
+}
+function openCalendar() {
+  if (!state.ready) return;
+  const base = dateIsValid(state.date) ? state.date : todayColombo();
+  state.calendarYear = Number(base.slice(0,4));
+  state.calendarMonth = Number(base.slice(5,7)) - 1;
+  state.calendarOpen = true;
+  $("date-trigger").setAttribute("aria-expanded", "true");
+  show("date-calendar", true);
+  void loadCalendarMonth();
+}
+function shiftCalendar(delta) {
+  const dt = new Date(Date.UTC(state.calendarYear, state.calendarMonth + delta, 1));
+  const yr = dt.getUTCFullYear();
+  if (yr < 1 || yr > 9999) return;
+  state.calendarYear = yr;
+  state.calendarMonth = dt.getUTCMonth();
+  void loadCalendarMonth();
+}
+function renderCalendar() {
+  if (!state.calendarOpen) return;
+  const year = state.calendarYear, month = state.calendarMonth;
+  text("calendar-month", new Intl.DateTimeFormat("en-GB",
+    {month:"long",year:"numeric",timeZone:"UTC"}).format(new Date(Date.UTC(year,month,1))));
+  const result = calendarMonthDays(year, month, state.calendarMarkers);
+  const grid = $("calendar-grid"); grid.replaceChildren();
+  for (let i=0; i<result.firstWeekday; i++) {
+    const blank = elem("span","","calendar-blank");
+    blank.setAttribute("aria-hidden","true");
+    grid.append(blank);
+  }
+  for (const entry of result.days) {
+    const button = elem("button", "", "calendar-day");
+    button.type = "button";
+    button.textContent = String(entry.day);
+    button.setAttribute("aria-label", entry.date + (entry.recorded ? ", data recorded" : ", no recorded summary"));
+    button.setAttribute("aria-pressed", String(entry.date === state.date));
+    if (entry.recorded) {
+      button.classList.add("has-records");
+      button.append(elem("span","","calendar-record-dot"));
+    }
+    if (entry.date === todayColombo()) button.classList.add("is-today");
+    button.addEventListener("click", () => chooseBusinessDate(entry.date));
+    grid.append(button);
+  }
+}
+async function loadCalendarMonth() {
+  if (!state.calendarOpen) return;
+  const year = state.calendarYear, month = state.calendarMonth;
+  const monthStart = String(year).padStart(4,"0")+"-"+String(month+1).padStart(2,"0")+"-01";
+  const next = new Date(Date.UTC(year, month + 1, 1));
+  const monthEnd = String(next.getUTCFullYear()).padStart(4,"0")+"-"+
+    String(next.getUTCMonth()+1).padStart(2,"0")+"-01";
+  // Show known dots immediately, then reconcile the entire month against RLS.
+  state.calendarMarkers = new Set(state.summary.map(x=>x.business_date)
+    .filter(day=>day.startsWith(monthStart.slice(0,7))));
+  renderCalendar();
+  text("calendar-message", "Checking recorded dates…");
+  const seq = ++state.calendarSerial;
+  try {
+    const rows = await api.select("daily_financial_summary", {
+      select:"business_date", workspace_id:"eq."+currentWorkspace(),
+      and:"(business_date.gte."+monthStart+",business_date.lt."+monthEnd+")",
+      order:"business_date.asc",limit:"1000"
+    });
+    if (rows.length >= 1000) throw Error("Too many dates in the selected month");
+    if (seq !== state.calendarSerial || !state.calendarOpen) return;
+    state.calendarMarkers = new Set(rows.map(x=>x.business_date));
+    text("calendar-message", state.calendarMarkers.size ?
+      state.calendarMarkers.size + " recorded date(s) this month" :
+      "No recorded dates in this month");
+    renderCalendar();
+  } catch (error) {
+    if (seq !== state.calendarSerial || !state.calendarOpen) return;
+    text("calendar-message", "Could not check every date. Showing dates already loaded.");
+    renderCalendar();
+  }
+}
+
+function reportLine(label, value, extraClass = "") {
+  const line = elem("div","","pdf-summary-line "+extraClass);
+  line.append(elem("span",label), elem("strong",value));
+  return line;
+}
+function reportCategory(name, rows, subtotal) {
+  const wrapper = elem("section","","pdf-category");
+  wrapper.append(elem("h3",name,"pdf-category-heading"));
+  for (const [index,row] of rows.entries()) {
+    const card = elem("div","","pdf-report-item");
+    const left = elem("div","","pdf-report-item-info");
+    left.append(elem("strong",(index+1)+". "+row.name,"pdf-item-name"),
+      elem("span","Required: "+kg(row.requiredGrams)+"  |  Bought: "+
+        kg(row.purchasedGrams),"pdf-item-quantity"));
+    const right = elem("div","","pdf-item-cost");
+    right.append(elem("small","Final cost"),elem("strong",lkr(row.lineCents)));
+    card.append(left,right); wrapper.append(card);
+  }
+  wrapper.append(reportLine(name+" subtotal",lkr(subtotal),"pdf-subtotal"));
+  return wrapper;
+}
+function openPdfPreview() {
+  if (!state.ready || state.busy) {
+    message("Please finish refreshing the selected business date before viewing the PDF.");
+    return;
+  }
+  try {
+    const report = completedPurchaseReport(state.data.requisitions,
+      state.data.purchases, state.data.additions,
+      state.itemById, state.categoryById);
+    if (!report.completedCount) {
+      message("No fully completed purchased items to include in the report for " + state.date + ".");
+      return;
+    }
+    const matchingDay = state.summary.find(x => x.business_date === state.date);
+    if (!matchingDay) throw Error("No financial summary for this day. Refresh and try again.");
+    if (matchingDay.total_expenses_cents !== report.totalSpentCents) {
+      throw Error("Purchase totals and cloud summary do not currently match. Refresh before generating the report.");
+    }
+    const cashReceived = matchingDay.cash_received_cents;
+    const balance = cashReceived - report.totalSpentCents;
+    const root = $("pdf-document"); root.replaceChildren();
+    const heading = elem("header","","pdf-report-header");
+    heading.append(elem("p","PELIYAGODA MARKET PRO","pdf-brand"),
+      elem("h1","Completed purchases by category"),
+      elem("p","Date: "+state.date));
+    root.append(heading);
+    for (const group of report.groups) {
+      root.append(reportCategory(group.name,group.rows,group.subtotalCents));
+    }
+    const totals = elem("section","","pdf-summary");
+    totals.append(
+      reportLine("COMPLETED FINAL TOTAL ("+report.completedCount+")",
+        lkr(report.completedTotalCents),"pdf-grand-total"),
+      reportLine("CASH RECEIVED",lkr(cashReceived)),
+      reportLine("TOTAL SPENT (ALL PURCHASES)",lkr(report.totalSpentCents)),
+      reportLine("CASH BALANCE",lkr(balance),
+        balance < 0n ? "pdf-balance-negative" : "pdf-balance-positive")
+    );
+    totals.append(elem("p",
+      "Cash balance includes every purchased lot, even when an item is incomplete. "+
+      "Completed final total includes only fully completed items.","pdf-report-note"));
+    root.append(totals,elem("footer","Market Pro | "+state.date+" | Cloud read-only report","pdf-report-footer"));
+    clearMessage();
+    state.pdfOpen = true;
+    document.body.classList.add("pdf-open");
+    show("pdf-preview",true);
+    $("pdf-preview").focus();
+  } catch (error) { message(error); }
+}
+function closePdfPreview() {
+  if (!state.pdfOpen) return;
+  state.pdfOpen = false;
+  document.body.classList.remove("pdf-open");
+  show("pdf-preview",false);
+  $("pdf-button").focus();
+}
+
 function renderAll() {
   renderMetrics();
   renderHistory();
@@ -443,6 +632,7 @@ async function refresh() {
     await Promise.all([readCatalog(), readSummary()]);
     if (!state.date) state.date = state.summary[0]?.business_date || todayColombo();
     $("date-filter").value = state.date;
+    syncDateButton();
     await readDate();
     renderAll();
     if (state.tab === "charts" && state.chartItemId) await loadItemHistory(true);
@@ -455,6 +645,10 @@ async function refresh() {
   } finally {
     state.busy = false;
     $("refresh-button").disabled = false;
+    if (state.pendingDateRefresh && state.ready) {
+      state.pendingDateRefresh = false;
+      void refresh();
+    }
   }
 }
 async function enterDashboard() {
@@ -478,6 +672,11 @@ async function signOut() {
   state.membership = null;
   state.ready = false;
   state.summary = [];
+  state.calendarSerial++;
+  state.pendingDateRefresh = false;
+  state.calendarMarkers = new Set();
+  closeCalendar();
+  closePdfPreview();
   state.categoryById.clear();
   state.itemById.clear();
   state.data = { requisitions: [], purchases: [], additions: [] };
@@ -516,9 +715,25 @@ async function init() {
   $("refresh-button").addEventListener("click", () => void refresh());
   $("date-filter").addEventListener("change", event => {
     if (!dateIsValid(event.target.value)) return;
-    state.date = event.target.value;
-    void refresh();
+    chooseBusinessDate(event.target.value);
   });
+  $("date-trigger").addEventListener("click", () =>
+    state.calendarOpen ? closeCalendar() : openCalendar());
+  $("calendar-prev").addEventListener("click", () => shiftCalendar(-1));
+  $("calendar-next").addEventListener("click", () => shiftCalendar(1));
+  $("calendar-today").addEventListener("click", () => chooseBusinessDate(todayColombo()));
+  $("calendar-close").addEventListener("click", () => closeCalendar(true));
+  document.addEventListener("pointerdown", event => {
+    if (state.calendarOpen && !event.target.closest(".date-picker-field")) closeCalendar();
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key !== "Escape") return;
+    if (state.pdfOpen) { closePdfPreview(); event.preventDefault(); }
+    else if (state.calendarOpen) { closeCalendar(true); event.preventDefault(); }
+  });
+  $("pdf-button").addEventListener("click", openPdfPreview);
+  $("pdf-close-button").addEventListener("click", closePdfPreview);
+  $("pdf-print-button").addEventListener("click", () => window.print());
   document.querySelectorAll(".tab").forEach(button => {
     button.addEventListener("click", () => switchTab(button.dataset.tab));
   });

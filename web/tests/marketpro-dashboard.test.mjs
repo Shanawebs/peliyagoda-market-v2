@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { exactCents, lkr, kg, lotCostCents, dateIsValid, normalizeDailyRow, summarizeDays, groupKitchens, requirementsByItem, dailyPriceTrends, recentBusinessDays } from "../marketpro-dashboard/core.mjs";
+import { exactCents, lkr, kg, lotCostCents, dateIsValid, normalizeDailyRow, summarizeDays, groupKitchens, requirementsByItem, dailyPriceTrends, recentBusinessDays, completedPurchaseReport, calendarMonthDays } from "../marketpro-dashboard/core.mjs";
 
 test("Android half-up on each 1.5kg lot 101 cents/kg", () => {
   const lot = lotCostCents(1500,101);
@@ -98,4 +98,58 @@ test("overview financial table and trend show 10 latest dated records, not oldes
     ["2026-10-03","2026-10-02","2026-10-01"]);
   assert.deepEqual(recentBusinessDays([]), []);
   assert.throws(() => recentBusinessDays(all, 0), /Invalid/);
+});
+
+
+test("PDF report groups completed items by category and reconciles all cash purchases", () => {
+  const requisitions = [
+    {kitchen:"Indian Kitchen",item_id:"apple",quantity_grams:5000},
+    {kitchen:"Main Kitchen",item_id:"apple",quantity_grams:5000},
+    {kitchen:"Main Kitchen",item_id:"carrot",quantity_grams:20000}
+  ];
+  const purchases = [
+    {item_id:"apple",quantity_grams:8000,price_cents_per_kg:12000},
+    {item_id:"carrot",quantity_grams:10000,price_cents_per_kg:3000}
+  ];
+  const additions = [{item_id:"apple",quantity_grams:4000,price_cents_per_kg:13000}];
+  const items = new Map([
+    ["apple",{id:"apple",name:"ඇපල්",category_id:"fruit"}],
+    ["carrot",{id:"carrot",name:"කැරට්",category_id:"veg"}]
+  ]);
+  const categories = new Map([
+    ["fruit",{id:"fruit",name:"Fruits"}],
+    ["veg",{id:"veg",name:"Vegetables"}]
+  ]);
+  const report = completedPurchaseReport(requisitions,purchases,additions,items,categories);
+  assert.equal(report.completedCount,1);
+  assert.equal(report.groups.length,1);
+  assert.equal(report.groups[0].name,"Fruits");
+  assert.equal(report.groups[0].rows[0].requiredGrams,10000);
+  assert.equal(report.groups[0].rows[0].purchasedGrams,12000);
+  assert.equal(report.groups[0].subtotalCents,148000n);
+  assert.equal(report.completedTotalCents,148000n);
+  assert.equal(report.totalSpentCents,178000n,"Incomplete carrot purchase still reduces cash");
+});
+
+test("PDF report sums each lot with Android half-up rounding", () => {
+  const items = new Map([["i",{id:"i",name:"Item",category_id:"c"}]]);
+  const categories = new Map([["c",{id:"c",name:"Category"}]]);
+  const report = completedPurchaseReport([],[
+    {item_id:"i",quantity_grams:1500,price_cents_per_kg:101}
+  ],[{item_id:"i",quantity_grams:1500,price_cents_per_kg:101}],items,categories);
+  assert.equal(report.totalSpentCents,304n);
+  assert.equal(report.completedTotalCents,304n);
+  assert.equal(report.groups[0].rows[0].purchasedGrams,3000);
+});
+
+test("calendar highlights only actual saved dates and supports leap-year February", () => {
+  const dates = ["2028-02-01","2028-02-29","2028-03-01"];
+  const m = calendarMonthDays(2028,1,dates);
+  assert.equal(m.days.length,29);
+  assert.equal(m.days[0].recorded,true);
+  assert.equal(m.days[28].recorded,true);
+  assert.equal(m.days[1].recorded,false);
+  assert.equal(m.firstWeekday,2);
+  assert.equal(calendarMonthDays(2027,1,[]).days.length,28);
+  assert.throws(()=>calendarMonthDays(2027,12,[]),/Invalid/);
 });

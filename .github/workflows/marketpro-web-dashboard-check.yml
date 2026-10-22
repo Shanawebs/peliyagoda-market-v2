@@ -2,7 +2,7 @@ name: Market Pro Cloud Web - Static Security & Unit Tests
 
 on:
   push:
-    branches: [feature/cloud-v1-web-dashboard, feature/cloud-v1-web-ui-improvements, feature/cloud-dashboard-overview-v3]
+    branches: [feature/cloud-v1-web-dashboard, feature/cloud-v1-web-ui-improvements, feature/cloud-dashboard-overview-v3, feature/cloud-dashboard-pdf-calendar-v4]
   workflow_dispatch:
 
 permissions:
