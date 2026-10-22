@@ -232,7 +232,7 @@ async function readItemHistory(itemId) {
         select: "business_date,quantity_grams,price_cents_per_kg",
         workspace_id: "eq." + currentWorkspace(),
         item_id: "eq." + itemId, deleted_at: "is.null",
-        order: "business_date.desc", limit: "1000", offset: String(offset)
+        order: "business_date.desc,id.desc", limit: "1000", offset: String(offset)
       });
       rows.push(...page);
       if (page.length < 1000) return rows;
@@ -319,7 +319,7 @@ function renderItemCharts(preserveScroll = false) {
   }
   const days = full.slice(-180);
   const prev = preserveScroll ? $("price-trend").querySelector(".chart-scroll")?.scrollLeft : null;
-  const totalLots = state.chartHistory.length;
+  const totalLots = full.reduce((sum, day) => sum + day.purchaseLots, 0);
   text("chart-status", full.length + " recorded day(s) · " + totalLots +
     " purchase lot(s)" + (full.length > 180 ? " · Most recent 180 dates shown" : ""));
   show("price-charts", true);
