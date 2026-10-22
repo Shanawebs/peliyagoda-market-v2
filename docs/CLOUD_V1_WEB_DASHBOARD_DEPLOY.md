@@ -70,3 +70,17 @@ https://lkoptqhodgjeuwwfihfr.supabase.co/functions/v1/marketpro-web/
 - **Scope:** no changes to Supabase records, auth/RLS, database schema, price calculations, or Android APK. History view limitation is visual only and does not discard data; item price history Charts tab still uses its own original source.
 - **Deployment architecture:** direct static upload/redeploy to Vercel because GitHub auto-deploy integration remains unlinked; Git commits alone do not publish the website.
 - **Limitations:** Vercel deployment metadata and CI tests verified, not signed-in browser visual/user-data end-to-end testing.
+
+## V4 — PDF preview and recorded-date calendar (2026-10-22)
+
+- New PDF Report button after Charts opens a printable completed-purchases-by-category report (Sinhala item labels, required/bought quantities, category subtotals, completed-only total, all-lots cash spent and cash balance).
+- Print / Save as PDF uses the browser print dialog with A4 CSS, no third-party JS, no photo uploads, and no storage writes.
+- Native browser date input UI replaced by an accessible custom calendar showing green dots on dates with recorded workspace financial summaries; month markers fetched using authenticated RLS queries.
+- GitHub PR: https://github.com/Shanawebs/peliyagoda-market-v2/pull/3 (merged).
+- Release commit: 5c48d2bd4eceebc9746b2361648856b66224f8ab.
+- Production URL: https://marketpro-cloud-dashboard.vercel.app/
+- Production deployment: dpl_8kN5Mom8niTJkGSzgtoSxNLZ6X6V — READY, alias assigned.
+- Verified preview: dpl_B4vFTatG3zwHrjKVbkNFMZqfGzbo — READY.
+- Rollback candidate: dpl_3tLzBh4WEyEgMU7MiwabTBeKZato (previous V3).
+- Verification: Node 22 GitHub Actions passed; deployment READY. Owner-authenticated end-to-end viewing/printing must still be manually checked.
+- No database changes, RLS changes, Android changes, or new cloud write access. Static Vercel direct deploy; Git push alone does not auto-deploy.
