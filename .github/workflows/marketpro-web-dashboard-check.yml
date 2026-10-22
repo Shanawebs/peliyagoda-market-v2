@@ -1,0 +1,38 @@
+name: Market Pro Cloud Web - Static Security & Unit Tests
+
+on:
+  push:
+    branches: [feature/cloud-v1-web-dashboard]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloud-web-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate browser JavaScript module syntax
+        run: |
+          node --check web/marketpro-dashboard/app.mjs
+          node --check web/marketpro-dashboard/auth-client.mjs
+          node --check web/marketpro-dashboard/core.mjs
+          node --check web/marketpro-dashboard/config.mjs
+      - name: Test exact cents, half-up rounding, dates and kitchens
+        run: node --test web/tests/marketpro-dashboard.test.mjs
+      - name: Guard against unsafe frontend tokens and photo upload
+        run: |
+          set -euo pipefail
+          ! grep -ERin 'service.role|service_role|sb_secret_|supabase_secret|invoice[_-]?photo.*upload|localStorage\.setItem' web/marketpro-dashboard/*.mjs
+          ! grep -ERin 'fetch\([^)]*PUT|fetch\([^)]*DELETE' web/marketpro-dashboard/*.mjs
+          test -f web/marketpro-dashboard/index.html
+          test -f web/marketpro-dashboard/vercel.json
