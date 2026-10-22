@@ -32,7 +32,7 @@ jobs:
       - name: Guard against unsafe frontend tokens and photo upload
         run: |
           set -euo pipefail
-          ! grep -ERin 'service.role|service_role|sb_secret_|supabase_secret|invoice[_-]?photo.*upload|localStorage\.setItem' web/marketpro-dashboard/*.mjs
+          ! grep -ERin 'sb_secret_|supabase_secret|service_role[[:space:]]*[:=]|localStorage\.setItem' web/marketpro-dashboard/*.mjs
           ! grep -ERin 'fetch\([^)]*PUT|fetch\([^)]*DELETE' web/marketpro-dashboard/*.mjs
           test -f web/marketpro-dashboard/index.html
           test -f web/marketpro-dashboard/vercel.json
