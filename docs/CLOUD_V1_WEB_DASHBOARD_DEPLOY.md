@@ -55,3 +55,18 @@ https://lkoptqhodgjeuwwfihfr.supabase.co/functions/v1/marketpro-web/
 - **Hosting model unchanged:** Vercel static deployment from inline files; no active GitHub auto-deploy integration. Future GitHub commits alone do **not** update the deployed dashboard.
 - **Scope unchanged:** read-only web views, no backend migrations, no RLS modifications, and no change to Android V2.31 writer or Android APK.
 - **Verification scope:** GitHub unit/security checks and Vercel deployment status/file delivery metadata were validated. This session did not have an authenticated browser session for owner-only end-to-end data testing; manually verify signed-in production tabs.
+
+
+## Overview V3 release — 2026-10-22
+
+- **User request:** financial history and overview financial trend both display the 10 most recent recorded business-day summary entries; financial chart gets wider desktop area, daily activity narrower; stronger contrast and larger typography throughout the dashboard.
+- **Published production URL:** https://marketpro-cloud-dashboard.vercel.app/
+- **GitHub PR:** https://github.com/Shanawebs/peliyagoda-market-v2/pull/2 (merged)
+- **Published source SHA:** \`1bf6e881b3f7df453d9d3f884ce6f7b279969e3f\`, source branch \`feature/cloud-v1-web-dashboard\`.
+- **Production deployment:** \`dpl_3tLzBh4WEyEgMU7MiwabTBeKZato\`, READY with production domain assigned.
+- **Verified preview:** \`dpl_GPt2UPEFa8zsH9Zkqo9c7BPXKfix\`, READY.
+- **Rollback candidate:** previous production \`dpl_HbB7P3KCbidPMY9arp1iU8iH8ZHm\`.
+- **Tests:** Node 22 GitHub Actions validate-web succeeded on new feature branch and merged branch; latest-ten selector has regression coverage.
+- **Scope:** no changes to Supabase records, auth/RLS, database schema, price calculations, or Android APK. History view limitation is visual only and does not discard data; item price history Charts tab still uses its own original source.
+- **Deployment architecture:** direct static upload/redeploy to Vercel because GitHub auto-deploy integration remains unlinked; Git commits alone do not publish the website.
+- **Limitations:** Vercel deployment metadata and CI tests verified, not signed-in browser visual/user-data end-to-end testing.
