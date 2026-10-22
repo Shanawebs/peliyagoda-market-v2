@@ -74,12 +74,12 @@ fun CloudOwnerLoginDialog(onDismiss: () -> Unit) {
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("DEV only. Login alone does not upload any records. Cloud Sync requires explicit activation. Invoice photos always remain local.")
+                Text("DEV Only. Login Alone Does Not Upload Any Records. Cloud Sync Requires Explicit Activation. Invoice Photos Always Remain Local.")
                 if (account == null) {
                     OutlinedTextField(
                         value = email,
                         onValueChange = { email = it.take(254) },
-                        label = { Text("Owner email") },
+                        label = { Text("Owner Email") },
                         singleLine = true,
                         enabled = !working,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
@@ -88,7 +88,7 @@ fun CloudOwnerLoginDialog(onDismiss: () -> Unit) {
                     OutlinedTextField(
                         value = password,
                         onValueChange = { password = it.take(128) },
-                        label = { Text("Password (12+ characters for sign up)") },
+                        label = { Text("Password (12+ Characters For Sign Up)") },
                         singleLine = true,
                         enabled = !working,
                         visualTransformation = PasswordVisualTransformation(),
@@ -140,7 +140,7 @@ fun CloudOwnerLoginDialog(onDismiss: () -> Unit) {
                     }, enabled = !working) { Text("Sign Out") }
                 }
                 Text(status)
-                Text("You do not need to share passwords, verification links or access tokens in chat.")
+                Text("You Do Not Need To Share Passwords, Verification Links Or Access Tokens In Chat.")
             }
         },
         confirmButton = { TextButton(onClick = onDismiss, enabled = !working) { Text("Close") } }

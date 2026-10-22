@@ -68,9 +68,9 @@ fun CloudSyncDialog(onDismiss: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(9.dp)
             ) {
                 Text(if (enabled) "Cloud Sync: ENABLED" else "Cloud Sync: NOT ENABLED")
-                Text("Pending changes: $pending")
-                Text("Last successful upload: ${lastSuccess?.value ?: "none"}")
-                if (!lastError?.value.isNullOrBlank()) Text("Last sync problem: ${lastError?.value}")
+                Text("Pending Changes: $pending")
+                Text("Last Successful Upload: ${lastSuccess?.value ?: "none"}")
+                if (!lastError?.value.isNullOrBlank()) Text("Last Sync Problem: ${lastError?.value}")
                 Text("Primary Phone ID: $deviceUuid")
                 TextButton(onClick = {
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -78,16 +78,16 @@ fun CloudSyncDialog(onDismiss: () -> Unit) {
                     information = "Device ID copied."
                 }) { Text("Copy Device ID") }
 
-                Text("Invoice Photos are ALWAYS local. Only Items, Kitchens, Purchases, Extra Lots and Cash are uploaded.")
+                Text("Invoice Photos Are ALWAYS Local. Only Items, Kitchens, Purchases, Extra Lots And Cash Are Uploaded.")
                 if (!enabled) {
-                    Text("IMPORTANT: V2.31 installs separately from V2.28 and V2.30 because GitHub DEV APK signing differs. Sign in again here. To sync existing V2.28 records, export its JSON backup and Restore into THIS V2.31 app BEFORE enabling. Original invoice images are not in JSON and stay in V2.28.")
+                    Text("IMPORTANT: V2.31 Installs Separately From V2.28 And V2.30 Because GitHub DEV APK Signing Differs. Sign In Again Here. To Sync Existing V2.28 Records, Export Its JSON Backup And Restore Into THIS V2.31 App BEFORE Enabling. Original Invoice Images Are Not In JSON And Stay In V2.28.")
                     androidx.compose.foundation.layout.Row {
                         Checkbox(
                             checked = reviewedBackup,
                             onCheckedChange = { reviewedBackup = it },
                             enabled = !busy
                         )
-                        Text("I have restored my V2.28 JSON backup OR I intentionally want a fresh Cloud dataset.")
+                        Text("I Have Restored My V2.28 JSON Backup OR I Intentionally Want A Fresh Cloud Dataset.")
                     }
                     Button(
                         enabled = reviewedBackup && !busy,
@@ -107,7 +107,7 @@ fun CloudSyncDialog(onDismiss: () -> Unit) {
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("Enable Verified DEV Cloud Sync") }
                 } else {
-                    Text("A connected network triggers Background Sync. The server acknowledges each record before the local queue is cleared.")
+                    Text("A Connected Network Triggers Background Sync. The Server Acknowledges Each Record Before The Local Queue Is Cleared.")
                     Button(
                         enabled = !busy,
                         onClick = {
