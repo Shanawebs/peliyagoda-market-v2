@@ -69,13 +69,13 @@ fun CloudSyncDialog(onDismiss: () -> Unit) {
             ) {
                 Text(if (enabled) "Cloud Sync: ENABLED" else "Cloud Sync: NOT ENABLED")
                 Text("Pending Changes: $pending")
-                Text("Last Successful Upload: ${lastSuccess?.value ?: "none"}")
+                Text("Last Successful Upload: ${lastSuccess?.value ?: "None"}")
                 if (!lastError?.value.isNullOrBlank()) Text("Last Sync Problem: ${lastError?.value}")
                 Text("Primary Phone ID: $deviceUuid")
                 TextButton(onClick = {
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     clipboard.setPrimaryClip(ClipData.newPlainText("DEV Device ID", deviceUuid))
-                    information = "Device ID copied."
+                    information = "Device ID Copied."
                 }) { Text("Copy Device ID") }
 
                 Text("Invoice Photos Are ALWAYS Local. Only Items, Kitchens, Purchases, Extra Lots And Cash Are Uploaded.")
@@ -98,9 +98,9 @@ fun CloudSyncDialog(onDismiss: () -> Unit) {
                                     val queued = withContext(Dispatchers.IO) {
                                         CloudSyncEngine(context).enableAfterOwnerConfirmation()
                                     }
-                                    information = "Initial snapshot safely queued ($queued pending). Automatic sync enabled."
+                                    information = "Initial Snapshot Safely Queued ($queued Pending). Automatic Sync Enabled."
                                 } catch (e: Exception) {
-                                    information = e.message?.take(160) ?: "Cloud enrollment failed; no changes uploaded."
+                                    information = e.message?.take(160) ?: "Cloud Enrollment Failed; No Changes Uploaded."
                                 } finally { busy = false }
                             }
                         },
@@ -112,7 +112,7 @@ fun CloudSyncDialog(onDismiss: () -> Unit) {
                         enabled = !busy,
                         onClick = {
                             CloudSyncScheduler.kick(context)
-                            information = "Sync work requested. Pending records remain until server confirmation."
+                            information = "Sync Work Requested. Pending Records Remain Until Server Confirmation."
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("Sync Now") }

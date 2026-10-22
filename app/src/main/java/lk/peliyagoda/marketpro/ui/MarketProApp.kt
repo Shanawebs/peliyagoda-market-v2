@@ -210,7 +210,7 @@ fun MarketProApp(vm: MarketViewModel) {
                     context.contentResolver.openOutputStream(uri)?.use { it.write(data) }
                         ?: error("Could not open destination")
                 }.isSuccess
-                message(if (saved) "Unicode Excel report saved (.xlsx)" else "Excel export failed")
+                message(if (saved) "Unicode Excel Report Saved (.xlsx)" else "Excel Export Failed")
             }
         }
         fun exportExcel() {
@@ -273,7 +273,7 @@ fun MarketProApp(vm: MarketViewModel) {
         ) { uri ->
             if (uri != null) {
                 val saved = runCatching { saveText(context, uri, pendingBackup) }.isSuccess
-                message(if (saved) "Backup saved. Keep the file safe." else "Backup save failed")
+                message(if (saved) "Backup Saved. Keep The File Safe." else "Backup Save Failed")
             }
         }
         val backupPicker = rememberLauncherForActivityResult(
@@ -299,8 +299,8 @@ fun MarketProApp(vm: MarketViewModel) {
                         val text = restoreText ?: return@Button
                         restoreText = null
                         vm.restoreBackup(text) { result ->
-                            message(if (result.isSuccess) "Backup restored successfully" else
-                                "Restore failed: ${result.exceptionOrNull()?.message ?: "Invalid file"}")
+                            message(if (result.isSuccess) "Backup Restored Successfully" else
+                                "Restore Failed: ${result.exceptionOrNull()?.message ?: "Invalid file"}")
                         }
                     }) { Text("Replace & Restore") }
                 }
@@ -339,7 +339,7 @@ fun MarketProApp(vm: MarketViewModel) {
             categories = categories,
             onClose = { catalogOpen = false },
             add = { name, category -> vm.addItem(name, category) {
-                message(if (it) "Item added" else "Item already exists or name is invalid")
+                message(if (it) "Item Added" else "Item Already Exists Or Name Is Invalid")
             } },
             rename = { id, newName, done -> vm.renameItem(id, newName, done) },
             addCategory = { name, done -> vm.addCategory(name, done) }

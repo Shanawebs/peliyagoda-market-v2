@@ -438,7 +438,7 @@ fun KitchensScreen(
                     }
                 }
                 if (current.isEmpty()) item {
-                    EmptyState("No items selected", "Use the Add Items button to create this kitchen's requisition.")
+                    EmptyState("No Items Selected", "Use The Add Items Button To Create This Kitchen's Requisition.")
                 }
                 grouped.forEach { group ->
                     item(key = "category:${kitchen}:${group.category}") {
@@ -500,8 +500,8 @@ fun KitchensScreen(
                             onDelete = {
                                 vm.removeRequirement(kitchen, item.id) { result ->
                                     message(
-                                        if (result.isSuccess) "Item removed"
-                                        else "Could not remove item"
+                                        if (result.isSuccess) "Item Removed"
+                                        else "Could Not Remove Item"
                                     )
                                 }
                             }
@@ -529,7 +529,7 @@ fun KitchensScreen(
         onDismiss = { pickerOpen = false },
         onConfirm = { ids ->
             vm.addRequirements(kitchen, ids) { result ->
-                message(if (result.isSuccess) "${ids.size} item(s) added" else "Could not add items")
+                message(if (result.isSuccess) "${ids.size} Item(s) Added" else "Could Not Add Items")
             }
             pickerOpen = false
         }
@@ -649,7 +649,7 @@ private fun CategoryStrip(
                                 name = ""
                             } else error = true
                         }
-                    }) { Text(if (busy) "Saving…" else "Add category") }
+                    }) { Text(if (busy) "Saving…" else "Add Category") }
             }
         )
     }
@@ -734,7 +734,7 @@ private fun ItemPickerSheet(
                             } else newItemError = true
                         }
                     }
-                ) { Text(if (newItemBusy) "Adding…" else "Add item") }
+                ) { Text(if (newItemBusy) "Adding…" else "Add Item") }
             },
             dismissButton = {
                 TextButton(enabled = !newItemBusy,
@@ -893,7 +893,7 @@ fun MarketScreen(
                         isError = !valid,
                         supportingText = {
                             Text(if (valid) "Saves Automatically. Clear To Reset To Zero."
-                            else "Enter a valid amount with up to 2 decimals.")
+                            else "Enter A Valid Amount With Up To 2 Decimals.")
                         },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
@@ -1267,7 +1267,7 @@ private fun PurchaseCard(
                             }
                         }
                     }
-                ) { Text(if (savingAddition) "Saving…" else "Add purchase") }
+                ) { Text(if (savingAddition) "Saving…" else "Add Purchase") }
             }
         )
     }
@@ -1581,7 +1581,7 @@ fun CatalogSheet(
                     },
                     enabled = !renameSaving && editedName.trim().isNotEmpty() &&
                         editedName.trim().length <= 80
-                ) { Text(if (renameSaving) "Saving…" else "Save name") }
+                ) { Text(if (renameSaving) "Saving…" else "Save Name") }
             }
         )
     }

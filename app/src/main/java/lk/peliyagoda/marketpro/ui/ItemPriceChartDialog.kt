@@ -139,8 +139,8 @@ fun ItemPriceChartDialog(
                         enabled = categoryItems.isNotEmpty()
                     ) {
                         Text(
-                            selectedItem?.name ?: if (categoryItems.isEmpty()) "No items in category"
-                                else "Choose an item (${categoryItems.size})",
+                            selectedItem?.name ?: if (categoryItems.isEmpty()) "No Items In Category"
+                                else "Choose An Item (${categoryItems.size})",
                             modifier = Modifier.weight(1f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis

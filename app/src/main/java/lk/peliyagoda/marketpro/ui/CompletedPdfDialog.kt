@@ -170,18 +170,18 @@ fun CompletedPdfDialog(
                                 color = ProColors.muted
                             )
                             ReportMoneyRow(
-                                "Completed final total", finalCents,
+                                "Completed Final Total", finalCents,
                                 ProColors.teal, prominent = true
                             )
                             ReportMoneyRow(
-                                "Cash received", cashReceivedCents
+                                "Cash Received", cashReceivedCents
                             )
                             ReportMoneyRow(
-                                "Total spent (all purchases)", totalSpent
+                                "Total Spent (All Purchases)", totalSpent
                             )
                             HorizontalDivider()
                             ReportMoneyRow(
-                                "Cash balance", balance,
+                                "Cash Balance", balance,
                                 if (balance >= 0L) ProColors.green else ProColors.red,
                                 prominent = true
                             )

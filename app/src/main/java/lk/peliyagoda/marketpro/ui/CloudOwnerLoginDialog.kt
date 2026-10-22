@@ -45,9 +45,9 @@ fun CloudOwnerLoginDialog(onDismiss: () -> Unit) {
         val restored = runCatching { client.currentAccount() }
         account = restored.getOrNull()
         status = when {
-            account != null -> "Signed in. Open Cloud Sync & Backup to check enrollment, pending records and opt-in status."
-            restored.isFailure -> "Could not verify saved session. Connect to the internet and sign in."
-            else -> "Create or sign in to your Market Pro DEV account."
+            account != null -> "Signed In. Open Cloud Sync & Backup To Check Enrollment, Pending Records And Opt-In Status."
+            restored.isFailure -> "Could Not Verify Saved Session. Connect To The Internet And Sign In."
+            else -> "Create Or Sign In To Your Market Pro DEV Account."
         }
         working = false
     }
@@ -57,7 +57,7 @@ fun CloudOwnerLoginDialog(onDismiss: () -> Unit) {
         scope.launch {
             try { action() }
             catch (e: Exception) {
-                status = e.message?.take(180) ?: "Authentication failed. Please try again."
+                status = e.message?.take(180) ?: "Authentication Failed. Please Try Again."
             } finally {
                 password = ""
                 working = false
@@ -101,7 +101,7 @@ fun CloudOwnerLoginDialog(onDismiss: () -> Unit) {
                             val enteredPassword = password
                             start {
                                 client.signIn(enteredEmail, enteredPassword).also { account = it }
-                                status = "Email authenticated. Check Cloud Sync & Backup for device enrollment and upload status."
+                                status = "Email Authenticated. Check Cloud Sync & Backup For Device Enrollment And Upload Status."
                             }
                         },
                         enabled = !working && email.isNotBlank() && password.isNotBlank(),
@@ -113,7 +113,7 @@ fun CloudOwnerLoginDialog(onDismiss: () -> Unit) {
                             val enteredPassword = password
                             start {
                                 client.createAccount(enteredEmail, enteredPassword)
-                                status = "Check your email (including Spam) for the Supabase confirmation link. Confirm it, then return here and Sign In. If already registered, use Sign In."
+                                status = "Check Your Email (Including Spam) For The Supabase Confirmation Link. Confirm It, Then Return Here And Sign In. If Already Registered, Use Sign In."
                             }
                         },
                         enabled = !working && CloudOwnerAuth.validEmail(email) &&
@@ -129,13 +129,13 @@ fun CloudOwnerLoginDialog(onDismiss: () -> Unit) {
                         clipboard.setPrimaryClip(
                             ClipData.newPlainText("Supabase Auth User ID", account!!.userId)
                         )
-                        status = "Auth User ID copied."
+                        status = "Auth User ID Copied."
                     }) { Text("Copy Auth User ID") }
                     TextButton(onClick = {
                         start {
                             client.signOut()
                             account = null
-                            status = "Signed out on this phone. Pending local changes are retained until you sign in again."
+                            status = "Signed Out On This Phone. Pending Local Changes Are Retained Until You Sign In Again."
                         }
                     }, enabled = !working) { Text("Sign Out") }
                 }
