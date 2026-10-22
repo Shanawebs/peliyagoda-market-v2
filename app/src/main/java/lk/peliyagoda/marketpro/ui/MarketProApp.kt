@@ -186,6 +186,7 @@ fun MarketProApp(vm: MarketViewModel) {
         val priceHistory by vm.chartHistory.collectAsState()
         var menuOpen by remember { mutableStateOf(false) }
         var cloudStatusOpen by remember { mutableStateOf(false) }
+        var ownerLoginOpen by remember { mutableStateOf(false) }
         var calendarOpen by remember { mutableStateOf(false) }
         var pendingXlsx by remember { mutableStateOf<ByteArray?>(null) }
         var pdfDialogOpen by remember { mutableStateOf(false) }
@@ -318,6 +319,8 @@ fun MarketProApp(vm: MarketViewModel) {
             )
         }
 
+        if (ownerLoginOpen) CloudOwnerLoginDialog(onDismiss = { ownerLoginOpen = false })
+
         if (cloudStatusOpen) {
             val deviceUuid = remember(context) { CloudDeviceIdentity.get(context) }
             AlertDialog(
@@ -399,6 +402,10 @@ fun MarketProApp(vm: MarketViewModel) {
                                 Icon(Icons.Filled.MoreVert, contentDescription = "More options")
                             }
                             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                                DropdownMenuItem(text = { Text("Cloud Owner Login / Sign Up") }, onClick = {
+                                    menuOpen = false
+                                    ownerLoginOpen = true
+                                })
                                 DropdownMenuItem(text = { Text("Cloud Sync Status (Preview)") }, onClick = {
                                     menuOpen = false
                                     cloudStatusOpen = true
