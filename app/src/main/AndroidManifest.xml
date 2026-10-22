@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="Market Pro Cloud DEV 2.29"
+        android:label="Market Pro Cloud DEV 2.30"
         android:icon="@drawable/ic_market"
         android:roundIcon="@drawable/ic_market"
         android:allowBackup="false"
