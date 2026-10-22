@@ -281,7 +281,7 @@ class CloudSyncEngine(private val context: Context) {
     /** Runs under WorkManager, never on UI thread; bounded to protect 4GB phones. */
     suspend fun drain(maxChanges: Int = 100): Int = CloudSyncRunGate.runExclusive {
         require(maxChanges in 1..100) { "Cloud batches must contain 1..100 changes" }
-        if (!isEnabled()) return@withLock 0
+        if (!isEnabled()) return@runExclusive 0
         val bearer = auth.accessTokenForOwner(CloudSyncConfig.OWNER_USER_ID)
         val device = CloudDeviceIdentity.get(app)
         client.verifyPrimaryOwner(bearer, device)
