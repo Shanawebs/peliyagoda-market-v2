@@ -66,3 +66,53 @@ export function groupKitchens(rows) {
   const order = ["Main Kitchen","Indian Kitchen","Pastry Kitchen"];
   return [...groups.values()].sort((a,b) => order.indexOf(a.kitchen) - order.indexOf(b.kitchen));
 }
+
+
+/**
+ * Item demand is daily and may come from several kitchens. Keep one unique
+ * requirement per item, never add it again for each purchase lot.
+ */
+export function requirementsByItem(rows) {
+  const result = new Map();
+  for (const row of rows) {
+    const grams = Number(row.quantity_grams);
+    if (!Number.isSafeInteger(grams) || grams < 0) throw Error("Invalid requisition grams");
+    const current = result.get(row.item_id) || { grams: 0, kitchens: new Map() };
+    current.grams += grams;
+    current.kitchens.set(row.kitchen, (current.kitchens.get(row.kitchen) || 0) + grams);
+    result.set(row.item_id, current);
+  }
+  return new Map([...result].map(([id, item]) => [id, {
+    grams: item.grams,
+    kitchens: [...item.kitchens].sort(([a], [b]) => a.localeCompare(b))
+      .map(([kitchen, quantity_grams]) => ({ kitchen, quantity_grams }))
+  }]));
+}
+
+/**
+ * Same business rule as Android PriceTrends.kt:
+ * each date combines initial + additional lots into a quantity-weighted
+ * unit price (HALF_UP to integer cents); dates without lots are not filled.
+ */
+export function dailyPriceTrends(lots) {
+  const byDay = new Map();
+  for (const row of lots) {
+    const grams = exactCents(row.quantity_grams);
+    const price = exactCents(row.price_cents_per_kg);
+    if (grams <= 0n || price < 0n) continue;
+    if (!dateIsValid(row.business_date)) throw Error("Invalid price history date");
+    const current = byDay.get(row.business_date) ||
+      { date: row.business_date, grams: 0n, weighted: 0n, purchaseLots: 0 };
+    current.grams += grams;
+    current.weighted += grams * price;
+    current.purchaseLots++;
+    byDay.set(row.business_date, current);
+  }
+  return [...byDay.values()].sort((a, b) => a.date.localeCompare(b.date))
+    .map(day => ({
+      date: day.date,
+      quantityGrams: Number(day.grams),
+      weightedPriceCentsPerKg: (day.weighted + day.grams / 2n) / day.grams,
+      purchaseLots: day.purchaseLots
+    }));
+}
