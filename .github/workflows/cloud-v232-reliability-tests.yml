@@ -1,9 +1,10 @@
-name: V2.32 Cloud Sync Reliability CI (test-only)
+name: V2.32/V2.33 Cloud Sync Recovery CI (test-only)
 
 on:
   push:
     branches:
       - feature/cloud-v1-reliability-v232
+      - feature/cloud-v233-manual-sync-recovery
   workflow_dispatch:
 
 permissions:
