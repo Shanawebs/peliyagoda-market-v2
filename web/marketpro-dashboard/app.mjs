@@ -1,13 +1,14 @@
 import { DashboardApi } from "./auth-client.mjs";
 import { REFRESH_INTERVAL_MS } from "./config.mjs";
-import { exactCents, lkr, kg, lotCostCents, dateIsValid, normalizeDailyRow, groupKitchens } from "./core.mjs";
+import { exactCents, lkr, kg, lotCostCents, dateIsValid, normalizeDailyRow, groupKitchens, requirementsByItem, dailyPriceTrends } from "./core.mjs";
 
 const $ = id => document.getElementById(id);
 const api = new DashboardApi();
 const state = {
   user: null, membership: null, summary: [], categoryById: new Map(), itemById: new Map(),
   data: { requisitions: [], purchases: [], additions: [] }, date: "",
-  busy: false, ready: false, tab: "overview", autoTimer: null
+  busy: false, ready: false, tab: "overview", autoTimer: null,
+  chartCategory: null, chartItemId: null, chartHistory: [], chartLoadedFor: null, chartSerial: 0
 };
 const text = (id, value) => { $(id).textContent = String(value); };
 const show = (id, visible) => $(id).classList.toggle("hidden", !visible);
@@ -141,36 +142,242 @@ function renderPurchases() {
     ...state.data.purchases.map(r => ({ ...r, type: "Initial" })),
     ...state.data.additions.map(r => ({ ...r, type: "Additional" }))
   ].sort((a, b) => itemName(a.item_id).localeCompare(itemName(b.item_id)));
-  if (!lots.length) return emptyRow(body, 5, "No purchases for selected date.");
+  if (!lots.length) return emptyRow(body, 6, "No purchases for selected date.");
+  const demandByItem = requirementsByItem(state.data.requisitions);
   let subtotal = 0n;
   for (const lot of lots) {
     const cents = lotCostCents(lot.quantity_grams, lot.price_cents_per_kg);
     subtotal += cents;
     const tr = elem("tr"), first = elem("td");
     first.append(elem("span", lot.type, lot.type === "Additional" ? "tag tag-lot" : "tag"));
-    tr.append(first, td(itemName(lot.item_id)), td(kg(lot.quantity_grams), "right"),
+    const need = elem("td");
+    const requirement = demandByItem.get(lot.item_id);
+    if (requirement) {
+      need.append(elem("strong", kg(requirement.grams), "need-total"));
+      for (const kitchen of requirement.kitchens) {
+        need.append(elem("span", kitchen.kitchen + " · " + kg(kitchen.quantity_grams), "need-breakdown"));
+      }
+    } else {
+      need.append(elem("span", "Not requested", "need-absent"));
+    }
+    tr.append(first, td(itemName(lot.item_id)), need, td(kg(lot.quantity_grams), "right"),
       td(lkr(lot.price_cents_per_kg), "right"), td(lkr(cents), "right"));
     body.append(tr);
   }
-  const total = elem("tr");
-  total.append(td("Total lots"), td(""), td(""), td(""), td(lkr(subtotal), "right"));
+  const total = elem("tr", "", "purchase-total");
+  total.append(td("Total lots"), td(""), td(""), td(""), td(""), td(lkr(subtotal), "right"));
   body.append(total);
 }
+
+
+function renderChartControls() {
+  const categories = [...state.categoryById.values()].sort((a, b) => a.name.localeCompare(b.name));
+  const withItems = categories.filter(category =>
+    [...state.itemById.values()].some(item => item.category_id === category.id));
+  if (!withItems.some(category => category.id === state.chartCategory)) {
+    state.chartCategory = withItems[0]?.id || null;
+    state.chartSerial++;
+    state.chartItemId = null;
+    state.chartHistory = [];
+    state.chartLoadedFor = null;
+  }
+  const strip = $("chart-categories"); strip.replaceChildren();
+  for (const category of withItems) {
+    const chip = elem("button", category.name, "category-chip");
+    chip.type = "button";
+    chip.setAttribute("aria-pressed", String(category.id === state.chartCategory));
+    chip.addEventListener("click", () => {
+      if (state.chartCategory === category.id) return;
+      state.chartCategory = category.id;
+      state.chartItemId = null;
+      state.chartHistory = [];
+      state.chartLoadedFor = null;
+      state.chartSerial++;
+      show("price-charts", false);
+      text("chart-status", "Select an item to view its historical charts.");
+      renderChartControls();
+    });
+    strip.append(chip);
+  }
+  const dropdown = $("chart-item");
+  dropdown.replaceChildren();
+  const prompt = elem("option", "Choose an item");
+  prompt.value = "";
+  dropdown.append(prompt);
+  const eligible = [...state.itemById.values()]
+    .filter(item => item.category_id === state.chartCategory)
+    .sort((a,b) => a.name.localeCompare(b.name));
+  for (const item of eligible) {
+    const opt = elem("option", item.name); opt.value = item.id; dropdown.append(opt);
+  }
+  dropdown.disabled = eligible.length === 0;
+  if (!eligible.some(item => item.id === state.chartItemId)) {
+    state.chartItemId = null;
+    state.chartHistory = [];
+    state.chartLoadedFor = null;
+    show("price-charts", false);
+  }
+  dropdown.value = state.chartItemId || "";
+  if (!withItems.length) {
+    text("chart-status", "No catalog categories or items are available.");
+    show("price-charts", false);
+  }
+}
+
+async function readItemHistory(itemId) {
+  async function pageThrough(table) {
+    const rows = [];
+    for (let offset = 0; offset < 10000; offset += 1000) {
+      const page = await api.select(table, {
+        select: "business_date,quantity_grams,price_cents_per_kg",
+        workspace_id: "eq." + currentWorkspace(),
+        item_id: "eq." + itemId, deleted_at: "is.null",
+        order: "business_date.desc,id.desc", limit: "1000", offset: String(offset)
+      });
+      rows.push(...page);
+      if (page.length < 1000) return rows;
+    }
+    throw Error("Over 10,000 historical lots in " + table + ". Chart omitted to avoid an incomplete trend.");
+  }
+  const [initial, additional] = await Promise.all([
+    pageThrough("purchases"), pageThrough("purchase_additions")
+  ]);
+  return [...initial, ...additional];
+}
+
+function svgNode(tag, attrs = {}, label) {
+  const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, String(value));
+  if (label !== undefined) node.textContent = String(label);
+  return node;
+}
+
+function drawPriceChart(id, days, metric, color, decimals) {
+  const target = $(id); target.replaceChildren();
+  const viewportHeight = 225, top = 28, bottom = 183, step = 86;
+  const width = Math.max(550, 72 + (days.length - 1) * step);
+  const values = days.map(metric);
+  const min = Math.min(...values), max = Math.max(...values);
+  const margin = Math.max(1, max - min) * .3;
+  const low = Math.max(0, min - margin), high = max + margin;
+  const range = Math.max(.0001, high - low);
+  const y = val => bottom - (val - low) / range * (bottom - top);
+  const axis = elem("div", "", "chart-axis");
+  const scroller = elem("div", "", "chart-scroll");
+  scroller.setAttribute("tabindex", "0");
+  scroller.setAttribute("aria-label", "Scroll horizontally to view older and newer purchase dates");
+  const svg = svgNode("svg", {
+    width, height: viewportHeight, viewBox: "0 0 " + width + " " + viewportHeight,
+    role: "img", "aria-label": id === "price-trend" ? "Historical weighted average price per kilogram" : "Historical purchased quantity"
+  });
+  for (let t = 0; t <= 3; t++) {
+    const value = low + (high - low) * t / 3;
+    const yy = y(value);
+    const tick = elem("span", value.toFixed(decimals), "chart-axis-label");
+    tick.style.top = yy + "px";
+    axis.append(tick);
+    svg.append(svgNode("line", { x1: 0, x2: width, y1: yy, y2: yy,
+      stroke: "#dae6e1", "stroke-width": 1 }));
+  }
+  const points = values.map((value, index) => ({
+    x: 36 + index * step, y: y(value), value, date: days[index].date
+  }));
+  if (points.length > 1) svg.append(svgNode("polyline", {
+    points: points.map(p => p.x + "," + p.y).join(" "),
+    fill: "none", stroke: color, "stroke-width": 2.8,
+    "stroke-linecap": "round", "stroke-linejoin": "round"
+  }));
+  for (const p of points) {
+    const group = svgNode("g");
+    group.append(svgNode("circle", {
+      cx: p.x, cy: p.y, r: 4.4, fill: color
+    }));
+    group.append(svgNode("text", {
+      x: p.x, y: Math.max(14, p.y - 11),
+      "text-anchor": "middle", fill: "#263d31", "font-size": 12, "font-weight": 700
+    }, p.value.toFixed(2)));
+    group.append(svgNode("text", {
+      x: p.x, y: 214, "text-anchor": "middle", fill: "#61756a", "font-size": 12
+    }, p.date.slice(5)));
+    group.append(svgNode("title", {}, p.date + " · " + p.value.toFixed(2)));
+    svg.append(group);
+  }
+  scroller.append(svg);
+  target.append(axis, scroller);
+  return scroller;
+}
+
+function renderItemCharts(preserveScroll = false) {
+  if (!state.chartItemId || state.chartLoadedFor !== state.chartItemId) {
+    show("price-charts", false); return;
+  }
+  const full = dailyPriceTrends(state.chartHistory);
+  if (!full.length) {
+    text("chart-status", "No recorded purchases for this item yet.");
+    show("price-charts", false);
+    return;
+  }
+  const days = full.slice(-180);
+  const prev = preserveScroll ? $("price-trend").querySelector(".chart-scroll")?.scrollLeft : null;
+  const totalLots = full.reduce((sum, day) => sum + day.purchaseLots, 0);
+  text("chart-status", full.length + " recorded day(s) · " + totalLots +
+    " purchase lot(s)" + (full.length > 180 ? " · Most recent 180 dates shown" : ""));
+  show("price-charts", true);
+  const price = drawPriceChart("price-trend", days,
+    day => Number(day.weightedPriceCentsPerKg) / 100, "#0b9870", 0);
+  const qty = drawPriceChart("quantity-trend", days,
+    day => day.quantityGrams / 1000, "#806ac4", 1);
+  let syncing = false;
+  function sync(from, to) {
+    if (syncing) return;
+    syncing = true; to.scrollLeft = from.scrollLeft; syncing = false;
+  }
+  price.addEventListener("scroll", () => sync(price, qty), { passive: true });
+  qty.addEventListener("scroll", () => sync(qty, price), { passive: true });
+  price.scrollLeft = prev === null || prev === undefined ? price.scrollWidth : prev;
+  qty.scrollLeft = price.scrollLeft;
+}
+
+async function loadItemHistory(preserveScroll = false) {
+  const itemId = state.chartItemId;
+  if (!itemId || !state.ready) return;
+  const requestId = ++state.chartSerial;
+  if (!preserveScroll || state.chartLoadedFor !== itemId) {
+    show("price-charts", false);
+    text("chart-status", "Loading purchase history…");
+  }
+  try {
+    const rows = await readItemHistory(itemId);
+    if (requestId !== state.chartSerial || itemId !== state.chartItemId || !state.ready) return;
+    state.chartHistory = rows;
+    state.chartLoadedFor = itemId;
+    renderItemCharts(preserveScroll);
+  } catch (error) {
+    if (requestId !== state.chartSerial || itemId !== state.chartItemId) return;
+    // Never show a partial chart after any failed or truncated source query.
+    state.chartHistory = [];
+    state.chartLoadedFor = null;
+    show("price-charts", false);
+    text("chart-status", "Could not load complete item history: " + (error?.message || "Unknown error"));
+  }
+}
+
 function renderAll() {
   renderMetrics();
   renderHistory();
   renderChart();
   renderKitchens();
   renderPurchases();
+  renderChartControls();
 }
 function switchTab(which) {
-  if (!["overview","kitchens","purchases","cash"].includes(which)) return;
+  if (!["overview","kitchens","purchases","cash","charts"].includes(which)) return;
   state.tab = which;
   document.querySelectorAll(".tab").forEach(button => {
     button.classList.toggle("active", button.dataset.tab === which);
     button.setAttribute("aria-selected", String(button.dataset.tab === which));
   });
-  for (const k of ["overview", "kitchens", "purchases", "cash"]) show("panel-" + k, k === which);
+  for (const k of ["overview", "kitchens", "purchases", "cash", "charts"]) show("panel-" + k, k === which);
 }
 function setConnection(message) { text("last-updated", message); }
 function stopPolling() {
@@ -236,6 +443,7 @@ async function refresh() {
     $("date-filter").value = state.date;
     await readDate();
     renderAll();
+    if (state.tab === "charts" && state.chartItemId) await loadItemHistory(true);
     setConnection("Updated " + new Date().toLocaleTimeString("en-GB", {
       timeZone: "Asia/Colombo", hour: "2-digit", minute: "2-digit", second: "2-digit"
     }) + " (Sri Lanka)");
@@ -271,7 +479,14 @@ async function signOut() {
   state.categoryById.clear();
   state.itemById.clear();
   state.data = { requisitions: [], purchases: [], additions: [] };
-  for (const id of ["history-body","requisitions-body","purchases-body","trend-chart","kitchen-summary"]) clear(id);
+  state.chartSerial++;
+  state.chartCategory = null;
+  state.chartItemId = null;
+  state.chartHistory = [];
+  state.chartLoadedFor = null;
+  for (const id of ["history-body","requisitions-body","purchases-body","trend-chart","kitchen-summary",
+    "chart-categories","price-trend","quantity-trend"]) clear(id);
+  show("price-charts", false);
   show("logout-button", false);
   show("dashboard-screen", false);
   show("login-screen", true);
@@ -304,6 +519,18 @@ async function init() {
   });
   document.querySelectorAll(".tab").forEach(button => {
     button.addEventListener("click", () => switchTab(button.dataset.tab));
+  });
+  $("chart-item").addEventListener("change", event => {
+    const id = event.target.value;
+    state.chartSerial++;
+    state.chartItemId = id || null;
+    state.chartHistory = [];
+    state.chartLoadedFor = null;
+    if (id) void loadItemHistory(false);
+    else {
+      show("price-charts", false);
+      text("chart-status", "Select an item to view its historical charts.");
+    }
   });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible" && state.ready) void refresh();

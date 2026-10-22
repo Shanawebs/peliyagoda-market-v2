@@ -88,6 +88,7 @@
         <button class="tab" role="tab" aria-selected="false" id="tab-kitchens" data-tab="kitchens">Kitchens</button>
         <button class="tab" role="tab" aria-selected="false" id="tab-purchases" data-tab="purchases">Purchases</button>
         <button class="tab" role="tab" aria-selected="false" id="tab-cash" data-tab="cash">Cash & Expenses</button>
+        <button class="tab" role="tab" aria-selected="false" id="tab-charts" data-tab="charts">Charts</button>
       </div>
 
       <section id="panel-overview" class="tab-panel" role="tabpanel" aria-labelledby="tab-overview">
@@ -126,8 +127,8 @@
       </section>
 
       <section id="panel-purchases" class="tab-panel hidden" role="tabpanel" aria-labelledby="tab-purchases">
-        <article class="report-card wide"><div class="section-header"><div><h3>Purchase lots</h3><p>Initial and additional lots are accounted for separately.</p></div></div>
-          <div class="table-scroll"><table><thead><tr><th>Lot type</th><th>Item</th><th class="right">Quantity</th><th class="right">Price / kg</th><th class="right">Line total</th></tr></thead><tbody id="purchases-body"></tbody></table></div>
+        <article class="report-card wide"><div class="section-header"><div><h3>Purchase lots</h3><p>Initial and additional lots are accounted for separately. Kitchen quantities show the daily item total across kitchens.</p></div></div>
+          <div class="table-scroll"><table><thead><tr><th>Lot type</th><th>Item</th><th class="need-column">Kitchen required</th><th class="right">Quantity</th><th class="right">Price / kg</th><th class="right">Line total</th></tr></thead><tbody id="purchases-body"></tbody></table></div>
         </article>
       </section>
 
@@ -144,6 +145,32 @@
           </article>
           <article class="report-card"><div class="section-header"><div><h3>Data protection</h3><p>Secure workspace reporting</p></div></div>
             <div class="security-list"><p>✓ Supabase email/password login</p><p>✓ Workspace Row Level Security</p><p>✓ Read-only report access</p><p>✓ Auto-refresh while this tab is open</p><p>✓ No invoice photo uploads</p></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="panel-charts" class="tab-panel hidden" role="tabpanel" aria-labelledby="tab-charts">
+        <article class="report-card wide chart-controls">
+          <div class="section-header"><div>
+            <h3>Items price chart</h3>
+            <p>Historical weighted-average price and purchased quantity — initial and additional lots together.</p>
+          </div></div>
+          <p class="chart-label">Item category</p>
+          <div id="chart-categories" class="category-strip" role="group" aria-label="Choose item category"></div>
+          <label class="chart-label" for="chart-item">Choose an item</label>
+          <select id="chart-item" class="chart-select" aria-label="Choose an item">
+            <option value="">Select an item to view its history</option>
+          </select>
+          <p id="chart-status" class="chart-status subtle" role="status" aria-live="polite">Select an item to view its historical charts.</p>
+        </article>
+        <div id="price-charts" class="price-charts hidden">
+          <article class="report-card chart-panel">
+            <h3>Price trend · Rs./kg</h3>
+            <div id="price-trend" class="chart-viewport"></div>
+          </article>
+          <article class="report-card chart-panel">
+            <h3>Purchased quantity · kg</h3>
+            <div id="quantity-trend" class="chart-viewport"></div>
           </article>
         </div>
       </section>
