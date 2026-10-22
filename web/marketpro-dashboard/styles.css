@@ -304,3 +304,63 @@ body.pdf-open{overflow:hidden}
   .pdf-report-item,.pdf-summary-line{break-inside:avoid-page!important}
   .pdf-category-heading{break-after:avoid-page!important}
 }
+
+
+/* V5: catalog categories render as full-width section bands in both reports. */
+#panel-kitchens .category-band-cell,
+#panel-purchases .category-band-cell{
+  padding:14px 18px!important;
+  background:#dff3e9!important;
+  color:#08734e!important;
+  border-top:16px solid #fff!important;
+  border-bottom:1px solid #bbdfce!important;
+}
+#panel-kitchens .category-band:first-child .category-band-cell,
+#panel-purchases .category-band:first-child .category-band-cell{
+  border-top-width:3px!important;
+}
+#panel-kitchens .category-band-name,
+#panel-purchases .category-band-name{
+  font-size:19px;
+  font-weight:900;
+  color:#086e4b;
+  letter-spacing:-.01em;
+}
+#panel-kitchens .category-band-count,
+#panel-purchases .category-band-count{
+  display:inline-block;
+  margin-left:13px;
+  color:#487d64;
+  font-size:13px;
+  font-weight:650;
+}
+#panel-kitchens tbody tr.category-band:hover,
+#panel-purchases tbody tr.category-band:hover{background:transparent}
+#panel-kitchens tbody tr.category-band,
+#panel-purchases tbody tr.category-band{background:transparent}
+#panel-purchases .category-subtotal td{
+  padding:14px 18px!important;
+  background:#ecf8f0!important;
+  border-top:1px solid #c7e8d4;
+  border-bottom:2px solid #c7e8d4;
+  font-weight:850;
+  color:#086e4b;
+  font-size:15px;
+}
+#panel-purchases .category-subtotal-value{
+  font-variant-numeric:tabular-nums;
+  font-size:16px!important;
+}
+#panel-purchases .purchase-total td{
+  background:#d5f0e1!important;
+  color:#075f41!important;
+  font-size:17px!important;
+}
+@media(max-width:700px){
+  #panel-kitchens .category-band-cell,
+  #panel-purchases .category-band-cell{padding:12px 11px!important}
+  #panel-kitchens .category-band-name,
+  #panel-purchases .category-band-name{font-size:17px}
+  #panel-kitchens .category-band-count,
+  #panel-purchases .category-band-count{font-size:12px;margin-left:8px}
+}
