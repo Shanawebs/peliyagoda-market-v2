@@ -1,6 +1,6 @@
 import { DashboardApi } from "./auth-client.mjs";
 import { REFRESH_INTERVAL_MS } from "./config.mjs";
-import { exactCents, lkr, kg, lotCostCents, dateIsValid, normalizeDailyRow, groupKitchens, requirementsByItem, dailyPriceTrends, recentBusinessDays, completedPurchaseReport, calendarMonthDays } from "./core.mjs";
+import { exactCents, lkr, kg, lotCostCents, dateIsValid, normalizeDailyRow, groupKitchens, requirementsByItem, dailyPriceTrends, recentBusinessDays, completedPurchaseReport, calendarMonthDays, groupRowsByCatalogCategory } from "./core.mjs";
 
 const $ = id => document.getElementById(id);
 const api = new DashboardApi();
@@ -122,6 +122,16 @@ function renderChart() {
     target.append(group);
   }
 }
+function categoryHeading(name, count, span) {
+  const tr = elem("tr", "", "category-band");
+  const cell = elem("td", "", "category-band-cell");
+  cell.colSpan = span;
+  cell.append(elem("strong", name, "category-band-name"),
+    elem("span", count + (span === 3 ? " requisition entries" : " purchase lots"),
+      "category-band-count"));
+  tr.append(cell);
+  return tr;
+}
 function renderKitchens() {
   const summary = $("kitchen-summary"); summary.replaceChildren();
   const groups = groupKitchens(state.data.requisitions);
@@ -133,13 +143,21 @@ function renderKitchens() {
     summary.append(card);
   }
   const body = $("requisitions-body"); body.replaceChildren();
-  const rows = [...state.data.requisitions].sort((a, b) =>
-    a.kitchen.localeCompare(b.kitchen) || itemName(a.item_id).localeCompare(itemName(b.item_id)));
+  const rows = [...state.data.requisitions];
   if (!rows.length) return emptyRow(body, 3, "No requisitions for selected date.");
-  for (const r of rows) {
-    const tr = elem("tr");
-    tr.append(td(r.kitchen), td(itemName(r.item_id)), td(kg(r.quantity_grams), "right"));
-    body.append(tr);
+  const categoryGroups = groupRowsByCatalogCategory(
+    rows, state.itemById, state.categoryById);
+  for (const category of categoryGroups) {
+    body.append(categoryHeading(category.name, category.rows.length, 3));
+    const within = [...category.rows].sort((a, b) =>
+      a.kitchen.localeCompare(b.kitchen) ||
+      itemName(a.item_id).localeCompare(itemName(b.item_id), "si") ||
+      String(a.id).localeCompare(String(b.id)));
+    for (const row of within) {
+      const tr = elem("tr");
+      tr.append(td(row.kitchen), td(itemName(row.item_id)), td(kg(row.quantity_grams), "right"));
+      body.append(tr);
+    }
   }
 }
 function renderPurchases() {
@@ -147,34 +165,51 @@ function renderPurchases() {
   const lots = [
     ...state.data.purchases.map(r => ({ ...r, type: "Initial" })),
     ...state.data.additions.map(r => ({ ...r, type: "Additional" }))
-  ].sort((a, b) => itemName(a.item_id).localeCompare(itemName(b.item_id)));
+  ];
   if (!lots.length) return emptyRow(body, 6, "No purchases for selected date.");
   const demandByItem = requirementsByItem(state.data.requisitions);
+  const categoryGroups = groupRowsByCatalogCategory(
+    lots, state.itemById, state.categoryById);
   let subtotal = 0n;
-  for (const lot of lots) {
-    const cents = lotCostCents(lot.quantity_grams, lot.price_cents_per_kg);
-    subtotal += cents;
-    const tr = elem("tr"), first = elem("td");
-    first.append(elem("span", lot.type, lot.type === "Additional" ? "tag tag-lot" : "tag"));
-    const need = elem("td");
-    const requirement = demandByItem.get(lot.item_id);
-    if (requirement) {
-      need.append(elem("strong", kg(requirement.grams), "need-total"));
-      for (const kitchen of requirement.kitchens) {
-        need.append(elem("span", kitchen.kitchen + " · " + kg(kitchen.quantity_grams), "need-breakdown"));
+  for (const category of categoryGroups) {
+    body.append(categoryHeading(category.name, category.rows.length, 6));
+    const within = [...category.rows].sort((a, b) =>
+      itemName(a.item_id).localeCompare(itemName(b.item_id), "si") ||
+      (a.type === b.type ? 0 : (a.type === "Initial" ? -1 : 1)) ||
+      String(a.id).localeCompare(String(b.id)));
+    let categorySubtotal = 0n;
+    for (const lot of within) {
+      const cents = lotCostCents(lot.quantity_grams, lot.price_cents_per_kg);
+      subtotal += cents;
+      categorySubtotal += cents;
+      const tr = elem("tr"), first = elem("td");
+      first.append(elem("span", lot.type, lot.type === "Additional" ? "tag tag-lot" : "tag"));
+      const need = elem("td");
+      const requirement = demandByItem.get(lot.item_id);
+      if (requirement) {
+        need.append(elem("strong", kg(requirement.grams), "need-total"));
+        for (const kitchen of requirement.kitchens) {
+          need.append(elem("span", kitchen.kitchen + " · " + kg(kitchen.quantity_grams), "need-breakdown"));
+        }
+      } else {
+        need.append(elem("span", "Not requested", "need-absent"));
       }
-    } else {
-      need.append(elem("span", "Not requested", "need-absent"));
+      tr.append(first, td(itemName(lot.item_id)), need, td(kg(lot.quantity_grams), "right"),
+        td(lkr(lot.price_cents_per_kg), "right"), td(lkr(cents), "right"));
+      body.append(tr);
     }
-    tr.append(first, td(itemName(lot.item_id)), need, td(kg(lot.quantity_grams), "right"),
-      td(lkr(lot.price_cents_per_kg), "right"), td(lkr(cents), "right"));
-    body.append(tr);
+    const categoryTotalRow = elem("tr", "", "category-subtotal");
+    const label = td(category.name + " subtotal", "category-subtotal-label");
+    label.colSpan = 5;
+    categoryTotalRow.append(label, td(lkr(categorySubtotal), "right category-subtotal-value"));
+    body.append(categoryTotalRow);
   }
   const total = elem("tr", "", "purchase-total");
-  total.append(td("Total lots"), td(""), td(""), td(""), td(""), td(lkr(subtotal), "right"));
+  const label = td("Total lots");
+  label.colSpan = 5;
+  total.append(label, td(lkr(subtotal), "right"));
   body.append(total);
 }
-
 
 function renderChartControls() {
   const categories = [...state.categoryById.values()].sort((a, b) => a.name.localeCompare(b.name));
