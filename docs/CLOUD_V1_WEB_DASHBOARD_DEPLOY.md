@@ -29,3 +29,14 @@ https://lkoptqhodgjeuwwfihfr.supabase.co/functions/v1/marketpro-web/
 - Verify Vercel-assigned URL and user login on both phone and desktop; then switch to Vercel-hosted domain if preferred.
 - Never change Supabase device enrollment or grant anonymous database access to fix hosting problems.
 - HTTP reachability from this execution environment could not be tested (outbound HTTP/DNS unavailable); the Supabase function deployment and bundled assets are verified via hosted administration. Have an actual browser verify end-to-end sign-in.
+
+## Vercel static deployment (2026-10-22)
+
+- **Production alias assigned:** https://marketpro-cloud-dashboard.vercel.app/
+- Vercel project: `marketpro-cloud-dashboard`; deployment ID `dpl_3sNPLWLpKXLZSHRBzSyMA1Xc4otD`; server state **READY**, static source files verified present in Vercel deployment.
+- Source branch/commit deployed: `feature/cloud-v1-web-dashboard` at `7caabe704a9efd4d7b28dfd09230b96680af5eb3`.
+- Deployment used **direct Vercel API file upload**, because Vercel Git-linked project creation is still denied by team-scope permission (403). Future Git pushes will **not** automatically redeploy this site until the Git integration is linked correctly.
+- Vercel project root directory reset to project root for inline file deploy, rather than monorepo Git source root `web/marketpro-dashboard`. Git-linked setup in the future should restore that root setting.
+- Vercel SSO deployment protection was disabled for this project so visitors can see the public login screen; Supabase Auth and workspace RLS still gate private records. No anonymous business data permitted.
+- Vercel deployment API reports READY and Vercel file listing confirms index.html, JS and CSS. Independent public HTTP fetch and end-to-end user login could NOT be verified from available environment (network/access limitations), so ask user to open the URL in browser and report any error.
+- This note supersedes the earlier 'Vercel not deployed' status above. Old Supabase Edge web URL displayed HTML as text due Edge Function response limitations and should not be used.
