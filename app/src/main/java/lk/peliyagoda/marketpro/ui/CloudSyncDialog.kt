@@ -80,7 +80,7 @@ fun CloudSyncDialog(onDismiss: () -> Unit) {
 
                 Text("Invoice Photos are ALWAYS local. Only Items, Kitchens, Purchases, Extra Lots and Cash are uploaded.")
                 if (!enabled) {
-                    Text("IMPORTANT: V2.28 and V2.31 have DIFFERENT private databases. If you want old V2.28 records in Cloud, export JSON backup from V2.28 and Restore it into THIS DEV app BEFORE enabling. Original invoice images cannot be included in that JSON.")
+                    Text("IMPORTANT: V2.31 installs separately from V2.28 and V2.30 because GitHub DEV APK signing differs. Sign in again here. To sync existing V2.28 records, export its JSON backup and Restore into THIS V2.31 app BEFORE enabling. Original invoice images are not in JSON and stay in V2.28.")
                     androidx.compose.foundation.layout.Row {
                         Checkbox(
                             checked = reviewedBackup,
