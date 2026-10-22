@@ -57,7 +57,7 @@ fun RecordCalendarDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Select date", fontWeight = FontWeight.Bold) },
+        title = { Text("Select Date", fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 Row(
@@ -143,7 +143,7 @@ fun RecordCalendarDialog(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Box(Modifier.size(12.dp).clip(CircleShape).background(amber))
-                    Text("Dates with entered data", color = ProColors.muted,
+                    Text("Dates With Entered Data", color = ProColors.muted,
                         style = MaterialTheme.typography.labelMedium)
                 }
             }

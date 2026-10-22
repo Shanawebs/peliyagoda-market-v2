@@ -108,14 +108,14 @@ fun ItemPriceChartDialog(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Items price chart", color = ProColors.navy,
+                        Text("Items Price Chart", color = ProColors.navy,
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.ExtraBold)
 
                     }
                     TextButton(onClick = onDismiss) { Text("Close") }
                 }
-                Text("Item category", color = ProColors.navy,
+                Text("Item Category", color = ProColors.navy,
                     fontWeight = FontWeight.Bold)
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     lazyItems(categories) { c ->
@@ -139,14 +139,14 @@ fun ItemPriceChartDialog(
                         enabled = categoryItems.isNotEmpty()
                     ) {
                         Text(
-                            selectedItem?.name ?: if (categoryItems.isEmpty()) "No items in category"
-                                else "Choose an item (${categoryItems.size})",
+                            selectedItem?.name ?: if (categoryItems.isEmpty()) "No Items In Category"
+                                else "Choose An Item (${categoryItems.size})",
                             modifier = Modifier.weight(1f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                         androidx.compose.material3.Icon(
-                            Icons.Filled.ArrowDropDown, contentDescription = "Open item list"
+                            Icons.Filled.ArrowDropDown, contentDescription = "Open Item List"
                         )
                     }
                     DropdownMenu(
@@ -167,25 +167,25 @@ fun ItemPriceChartDialog(
                 }
                 when {
                     selectedItemId == null -> {
-                        Text("Select a category and an item to view its historical charts.",
+                        Text("Select A Category And An Item To View Its Historical Charts.",
                             modifier = Modifier.padding(vertical = 32.dp),
                             color = ProColors.muted)
                     }
                     visibleTrend.isEmpty() -> {
-                        Text("No recorded purchases for this item yet.",
+                        Text("No Recorded Purchases For This Item Yet.",
                             modifier = Modifier.padding(vertical = 32.dp),
                             color = ProColors.muted)
                     }
                     else -> {
                         Text(
-                            "${trend.size} recorded day(s) • ${history.size} purchase lot(s)",
+                            "${trend.size} Recorded Day(s) • ${history.size} Purchase Lot(s)",
                             color = ProColors.teal,
                             fontWeight = FontWeight.Bold,
                             style = MaterialTheme.typography.bodyMedium
                         )
 
                         if (trend.size > 180) {
-                            Text("Chart shows the most recent 180 recorded dates.",
+                            Text("Chart Shows The Most Recent 180 Recorded Dates.",
                                 color = ProColors.muted,
                                 style = MaterialTheme.typography.labelSmall)
                         }
@@ -195,7 +195,7 @@ fun ItemPriceChartDialog(
                             val panelHeight = (maxHeight - gap) / 2
                             Column(verticalArrangement = Arrangement.spacedBy(gap)) {
                                 TrendPanel(
-                                    title = "Price trend • Rs./kg",
+                                    title = "Price Trend • Rs./kg",
                                     points = visibleTrend,
                                     metric = { it.weightedPriceCentsPerKg / 100f },
                                     color = ProColors.teal,
@@ -208,7 +208,7 @@ fun ItemPriceChartDialog(
                                     }
                                 )
                                 TrendPanel(
-                                    title = "Purchased quantity • kg",
+                                    title = "Purchased Quantity • kg",
                                     points = visibleTrend,
                                     metric = { it.quantityGrams / 1000f },
                                     color = ProColors.purple,

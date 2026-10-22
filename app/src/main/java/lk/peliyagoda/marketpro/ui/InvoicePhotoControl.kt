@@ -137,11 +137,11 @@ fun InvoicePhotoControl(
             refresh++
             photoDialog = true
             onPhotoSaved()
-            message("Full-resolution invoice photo saved")
+            message("Full-Resolution Invoice Photo Saved")
         } else {
             // Camera cancellations must not leave empty placeholder JPEG files.
             file?.takeIf { it.length() == 0L }?.delete()
-            message("Photo was not captured")
+            message("Photo Was Not Captured")
         }
     }
 
@@ -154,7 +154,7 @@ fun InvoicePhotoControl(
             pendingPath.takeIf { it.isNotBlank() }?.let(::File)
                 ?.takeIf { it.exists() && it.length() == 0L }?.delete()
             pendingPath = ""
-            message("Could not open the camera")
+            message("Could Not Open The Camera")
         }
     }
 
@@ -167,7 +167,7 @@ fun InvoicePhotoControl(
     ) {
         Icon(
             if (photos.isNullOrEmpty()) Icons.Default.CameraAlt else Icons.Default.PhotoLibrary,
-            contentDescription = "Invoice photos (${photos?.size ?: 0}) for $itemName",
+            contentDescription = "Invoice Photos (${photos?.size ?: 0}) For $itemName",
             tint = ProColors.teal
         )
     }
@@ -175,10 +175,10 @@ fun InvoicePhotoControl(
     if (photoDialog) {
         AlertDialog(
             onDismissRequest = { photoDialog = false },
-            title = { Text("Invoice photos • $itemName") },
+            title = { Text("Invoice Photos • $itemName") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Original photos are saved on this device.",
+                    Text("Original Photos Are Saved On This Device.",
                         color = ProColors.muted,
                         style = MaterialTheme.typography.bodySmall)
                     LazyColumn(
@@ -203,7 +203,7 @@ fun InvoicePhotoControl(
                                 if (thumbnail != null) {
                                     Image(
                                         bitmap = thumbnail.asImageBitmap(),
-                                        contentDescription = "Invoice thumbnail",
+                                        contentDescription = "Invoice Thumbnail",
                                         modifier = Modifier.size(62.dp)
                                             .clip(RoundedCornerShape(9.dp)),
                                         contentScale = ContentScale.Crop
@@ -217,7 +217,7 @@ fun InvoicePhotoControl(
                                     Text(file.nameWithoutExtension.take(34),
                                         fontWeight = FontWeight.SemiBold,
                                         style = MaterialTheme.typography.bodySmall)
-                                    Text("${file.length() / 1024} KB • Tap to preview",
+                                    Text("${file.length() / 1024} KB • Tap To Preview",
                                         color = ProColors.muted,
                                         style = MaterialTheme.typography.labelSmall)
                                 }
@@ -229,11 +229,11 @@ fun InvoicePhotoControl(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Icon(Icons.Default.Add, contentDescription = null)
-                                Text(" + Capture another photo")
+                                Text(" + Capture Another Photo")
                             }
                         }
                     }
-                    Text("Note: JSON backup does not include invoice images.",
+                    Text("Note: JSON Backup Does Not Include Invoice Images.",
                         color = ProColors.muted,
                         style = MaterialTheme.typography.labelSmall)
                 }
@@ -247,7 +247,7 @@ fun InvoicePhotoControl(
     fullPreview?.let { file ->
         AlertDialog(
             onDismissRequest = { fullPreview = null },
-            title = { Text("Invoice photo") },
+            title = { Text("Invoice Photo") },
             text = {
                 val image by produceState<Bitmap?>(
                     initialValue = null, file.absolutePath
@@ -258,18 +258,18 @@ fun InvoicePhotoControl(
                 }
                 val previewBitmap = image
                 if (previewBitmap == null) {
-                    Text("Loading invoice preview…")
+                    Text("Loading Invoice Preview…")
                 } else {
                     Image(
                         bitmap = previewBitmap.asImageBitmap(),
-                        contentDescription = "Captured invoice photo",
+                        contentDescription = "Captured Invoice Photo",
                         modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp),
                         contentScale = ContentScale.Fit
                     )
                 }
             },
             confirmButton = {
-                TextButton(onClick = { fullPreview = null }) { Text("Back to photos") }
+                TextButton(onClick = { fullPreview = null }) { Text("Back To Photos") }
             }
         )
     }

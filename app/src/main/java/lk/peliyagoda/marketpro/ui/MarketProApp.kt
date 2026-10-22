@@ -210,7 +210,7 @@ fun MarketProApp(vm: MarketViewModel) {
                     context.contentResolver.openOutputStream(uri)?.use { it.write(data) }
                         ?: error("Could not open destination")
                 }.isSuccess
-                message(if (saved) "Unicode Excel report saved (.xlsx)" else "Excel export failed")
+                message(if (saved) "Unicode Excel Report Saved (.xlsx)" else "Excel Export Failed")
             }
         }
         fun exportExcel() {
@@ -223,7 +223,7 @@ fun MarketProApp(vm: MarketViewModel) {
                 }.onSuccess { bytes ->
                     pendingXlsx = bytes
                     excelSaver.launch("Market-" + day + ".xlsx")
-                }.onFailure { message("Could not create Excel report") }
+                }.onFailure { message("Could Not Create Excel Report") }
             }
         }
         val pdfSaver = rememberLauncherForActivityResult(
@@ -243,8 +243,8 @@ fun MarketProApp(vm: MarketViewModel) {
                                 MarketPdf.write(day, snapshot, cashSnapshot, output)
                             } ?: error("Cannot open PDF destination")
                         }
-                    }.onSuccess { message("Completed purchase PDF saved") }
-                        .onFailure { message("Could not save PDF: " +
+                    }.onSuccess { message("Completed Purchase PDF Saved") }
+                        .onFailure { message("Could Not Save PDF: " +
                             (it.message ?: "Unknown error")) }
                 }
             }
@@ -273,7 +273,7 @@ fun MarketProApp(vm: MarketViewModel) {
         ) { uri ->
             if (uri != null) {
                 val saved = runCatching { saveText(context, uri, pendingBackup) }.isSuccess
-                message(if (saved) "Backup saved. Keep the file safe." else "Backup save failed")
+                message(if (saved) "Backup Saved. Keep The File Safe." else "Backup Save Failed")
             }
         }
         val backupPicker = rememberLauncherForActivityResult(
@@ -284,25 +284,25 @@ fun MarketProApp(vm: MarketViewModel) {
                     context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
                         ?: error("Cannot read file")
                 }.onSuccess { restoreText = it }
-                    .onFailure { message("Could not read backup file") }
+                    .onFailure { message("Could Not Read Backup File") }
             }
         }
 
         if (restoreText != null) {
             AlertDialog(
                 onDismissRequest = { restoreText = null },
-                title = { Text("Restore backup?") },
-                text = { Text("All current catalog, kitchen and purchase records will be replaced. Export a backup of current records before continuing.") },
+                title = { Text("Restore Backup?") },
+                text = { Text("All Current Catalog, Kitchen And Purchase Records Will Be Replaced. Export A Backup Of Current Records Before Continuing.") },
                 dismissButton = { TextButton(onClick = { restoreText = null }) { Text("Cancel") } },
                 confirmButton = {
                     Button(onClick = {
                         val text = restoreText ?: return@Button
                         restoreText = null
                         vm.restoreBackup(text) { result ->
-                            message(if (result.isSuccess) "Backup restored successfully" else
-                                "Restore failed: ${result.exceptionOrNull()?.message ?: "Invalid file"}")
+                            message(if (result.isSuccess) "Backup Restored Successfully" else
+                                "Restore Failed: ${result.exceptionOrNull()?.message ?: "Invalid file"}")
                         }
-                    }) { Text("Replace & restore") }
+                    }) { Text("Replace & Restore") }
                 }
             )
         }
@@ -339,7 +339,7 @@ fun MarketProApp(vm: MarketViewModel) {
             categories = categories,
             onClose = { catalogOpen = false },
             add = { name, category -> vm.addItem(name, category) {
-                message(if (it) "Item added" else "Item already exists or name is invalid")
+                message(if (it) "Item Added" else "Item Already Exists Or Name Is Invalid")
             } },
             rename = { id, newName, done -> vm.renameItem(id, newName, done) },
             addCategory = { name, done -> vm.addCategory(name, done) }
@@ -368,43 +368,49 @@ fun MarketProApp(vm: MarketViewModel) {
                                 fontWeight = FontWeight.ExtraBold, color = ProVisual.itemInk)
                         }
                         IconButton(onClick = { catalogOpen = true }) {
-                            Icon(Icons.Filled.Inventory2, contentDescription = "Item catalog", tint = ProColors.teal)
+                            Icon(Icons.Filled.Inventory2, contentDescription = "Item Catalog", tint = ProColors.teal)
                         }
                         Box {
                             IconButton(onClick = { menuOpen = true }) {
-                                Icon(Icons.Filled.MoreVert, contentDescription = "More options")
+                                Icon(Icons.Filled.MoreVert, contentDescription = "More Options")
                             }
-                            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                                DropdownMenuItem(text = { Text("Cloud Owner Login / Sign Up") }, onClick = {
-                                    menuOpen = false
-                                    ownerLoginOpen = true
-                                })
-                                DropdownMenuItem(text = { Text("Cloud Sync & Backup (DEV)") }, onClick = {
-                                    menuOpen = false
-                                    cloudStatusOpen = true
-                                })
-                                DropdownMenuItem(text = { Text("Items Price Chart") }, onClick = {
+                            DropdownMenu(
+                                expanded = menuOpen,
+                                onDismissRequest = { menuOpen = false },
+                                shape = RoundedCornerShape(20.dp),
+                                containerColor = Color(0xFFF9F7FD)
+                            ) {
+                                DropdownMenuItem(text = { Text("Items Price Chart", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
                                     menuOpen = false
                                     vm.selectChartItem(null)
                                     chartOpen = true
                                 })
-                                DropdownMenuItem(text = { Text("Export Excel (.xlsx)") }, onClick = {
+                                DropdownMenuItem(text = { Text("Export Excel (.xlsx)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
                                     menuOpen = false
                                     exportExcel()
                                 })
-                                DropdownMenuItem(text = { Text("Backup all records (JSON)") }, onClick = {
+                                DropdownMenuItem(text = { Text("Backup All Records (JSON)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
                                     menuOpen = false
                                     vm.prepareBackup { result ->
                                         result.onSuccess {
                                             pendingBackup = it
                                             backupSaver.launch("MarketPro-Backup-${LocalDate.now()}.json")
-                                        }.onFailure { message("Could not prepare backup") }
+                                        }.onFailure { message("Could Not Prepare Backup") }
                                     }
                                 })
-                                DropdownMenuItem(text = { Text("Restore backup (JSON)") }, onClick = {
+                                DropdownMenuItem(text = { Text("Restore Backup (JSON)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
                                     menuOpen = false
                                     backupPicker.launch(arrayOf("application/json", "text/plain", "*/*"))
                                 })
+                                DropdownMenuItem(text = { Text("Cloud Owner Login / Sign Up", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
+                                    menuOpen = false
+                                    ownerLoginOpen = true
+                                })
+                                DropdownMenuItem(text = { Text("Cloud Sync & Backup (DEV)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
+                                    menuOpen = false
+                                    cloudStatusOpen = true
+                                })
+
                             }
                         }
                     }
@@ -414,7 +420,7 @@ fun MarketProApp(vm: MarketViewModel) {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         IconButton(onClick = { vm.shiftDate(-1) }) {
-                            Icon(Icons.Filled.ArrowBackIosNew, contentDescription = "Previous day")
+                            Icon(Icons.Filled.ArrowBackIosNew, contentDescription = "Previous Day")
                         }
                         Row(
                             Modifier.background(Color.White, RoundedCornerShape(50))
@@ -427,7 +433,7 @@ fun MarketProApp(vm: MarketViewModel) {
                                 style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                         }
                         IconButton(onClick = { vm.shiftDate(1) }) {
-                            Icon(Icons.Filled.ArrowForwardIos, contentDescription = "Next day")
+                            Icon(Icons.Filled.ArrowForwardIos, contentDescription = "Next Day")
                         }
                     }
                 }
@@ -499,7 +505,7 @@ fun MarketProApp(vm: MarketViewModel) {
                             cashReceivedCents = cashReceivedCents,
                             onSaveCash = { cents ->
                                 vm.saveCashReceived(cents) { result ->
-                                    if (result.isFailure) message("Could not save Cash Received")
+                                    if (result.isFailure) message("Could Not Save Cash Received")
                                 }
                             },
                             message = ::message,

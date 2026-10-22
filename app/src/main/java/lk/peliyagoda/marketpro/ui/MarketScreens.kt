@@ -116,10 +116,10 @@ private fun SectionCard(modifier: Modifier = Modifier, content: @Composable () -
 @Composable
 private fun Metric(label: String, value: String, modifier: Modifier = Modifier, accent: Color = ProColors.teal) {
     val (fill, outline) = when (label) {
-        "Total required" -> ProVisual.metricTeal to ProVisual.metricTealBorder
+        "Total Required" -> ProVisual.metricTeal to ProVisual.metricTealBorder
         "Purchased" -> ProVisual.metricPurchased to ProVisual.metricPurchasedBorder
-        "Estimated bill" -> ProVisual.metricPurple to ProVisual.metricPurpleBorder
-        "Item count" -> ProVisual.metricNeutral to ProVisual.metricNeutralBorder
+        "Estimated Bill" -> ProVisual.metricPurple to ProVisual.metricPurpleBorder
+        "Item Count" -> ProVisual.metricNeutral to ProVisual.metricNeutralBorder
         else -> ProVisual.metricNeutral to ProVisual.metricNeutralBorder
     }
     Surface(
@@ -230,9 +230,9 @@ fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, categories: Li
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween) {
                     Column(Modifier.weight(1f)) {
-                        Text("Consolidated requirements", style = MaterialTheme.typography.titleLarge,
+                        Text("Consolidated Requirements", style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.ExtraBold, color = ProVisual.itemInk)
-                        Text("All kitchens • Sorted A–Z", color = ProColors.muted,
+                        Text("All Kitchens • Sorted A–Z", color = ProColors.muted,
                             style = MaterialTheme.typography.bodySmall)
                     }
                     OutlinedButton(onClick = onExport) {
@@ -242,12 +242,12 @@ fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, categories: Li
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Metric("Total required", "${MarketMath.kg(totalReq)} kg", Modifier.weight(1f))
+                    Metric("Total Required", "${MarketMath.kg(totalReq)} kg", Modifier.weight(1f))
                     Metric("Purchased", "${MarketMath.kg(totalPurch)} kg", Modifier.weight(1f))
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Metric("Estimated bill", "Rs. ${MarketMath.lkr(totalCents)}", Modifier.weight(1f), ProColors.purple)
-                    Metric("Item count", "${rows.size}", Modifier.weight(1f), ProColors.navy)
+                    Metric("Estimated Bill", "Rs. ${MarketMath.lkr(totalCents)}", Modifier.weight(1f), ProColors.purple)
+                    Metric("Item Count", "${rows.size}", Modifier.weight(1f), ProColors.navy)
                 }
             }
         }
@@ -272,7 +272,7 @@ fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, categories: Li
             }
         }
         if (shown.isEmpty()) {
-            item { EmptyState("No requirements yet", "Open Kitchens to select items and enter the required quantities.") }
+            item { EmptyState("No Requirements Yet", "Open Kitchens To Select Items And Enter The Required Quantities.") }
         } else {
             lazyItems(shown, key = { it.item.id }, contentType = { "dashboard-row" }) { row ->
                 SectionCard {
@@ -430,7 +430,7 @@ fun KitchensScreen(
                             Text(kitchen, style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.ExtraBold, color = ProVisual.itemInk)
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("${current.size} selected items", color = ProColors.muted)
+                                Text("${current.size} Selected Items", color = ProColors.muted)
                                 Text("${MarketMath.kg(current.sumOf { it.quantityGrams })} kg",
                                     color = ProColors.teal, fontWeight = FontWeight.Bold)
                             }
@@ -438,7 +438,7 @@ fun KitchensScreen(
                     }
                 }
                 if (current.isEmpty()) item {
-                    EmptyState("No items selected", "Use the Add Items button to create this kitchen's requisition.")
+                    EmptyState("No Items Selected", "Use The Add Items Button To Create This Kitchen's Requisition.")
                 }
                 grouped.forEach { group ->
                     item(key = "category:${kitchen}:${group.category}") {
@@ -464,7 +464,7 @@ fun KitchensScreen(
                                         fontWeight = FontWeight.ExtraBold
                                     )
                                     Text(
-                                        "${group.itemCount} item(s)",
+                                        "${group.itemCount} Item(s)",
                                         color = ProColors.muted,
                                         style = MaterialTheme.typography.labelMedium
                                     )
@@ -494,14 +494,14 @@ fun KitchensScreen(
                             onFieldFocused = { focusedKitchenItemId = item.id },
                             onSave = { grams ->
                                 vm.saveRequirement(kitchen, item.id, grams) { result ->
-                                    if (result.isFailure) message("Could not auto-save quantity")
+                                    if (result.isFailure) message("Could Not Auto-Save Quantity")
                                 }
                             },
                             onDelete = {
                                 vm.removeRequirement(kitchen, item.id) { result ->
                                     message(
-                                        if (result.isSuccess) "Item removed"
-                                        else "Could not remove item"
+                                        if (result.isSuccess) "Item Removed"
+                                        else "Could Not Remove Item"
                                     )
                                 }
                             }
@@ -513,7 +513,7 @@ fun KitchensScreen(
                 onClick = { pickerOpen = true },
                 modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text("Add items") },
+                text = { Text("Add Items") },
                 containerColor = ProColors.teal,
                 contentColor = Color.White
             )
@@ -529,7 +529,7 @@ fun KitchensScreen(
         onDismiss = { pickerOpen = false },
         onConfirm = { ids ->
             vm.addRequirements(kitchen, ids) { result ->
-                message(if (result.isSuccess) "${ids.size} item(s) added" else "Could not add items")
+                message(if (result.isSuccess) "${ids.size} Item(s) Added" else "Could Not Add Items")
             }
             pickerOpen = false
         }
@@ -550,7 +550,7 @@ private fun RequirementCard(
     if (confirmDelete) AlertDialog(
         onDismissRequest = { confirmDelete = false },
         title = { Text("Remove " + item.name + "?") },
-        text = { Text("This kitchen's requirement for this date will be removed. Other kitchens are unaffected.") },
+        text = { Text("This Kitchen's Requirement For This Date Will Be Removed. Other Kitchens Are Unaffected.") },
         dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
         confirmButton = { TextButton(onClick = {
             confirmDelete = false
@@ -621,16 +621,16 @@ private fun CategoryStrip(
     if (adding) {
         AlertDialog(
             onDismissRequest = { if (!busy) adding = false },
-            title = { Text("New item category") },
+            title = { Text("New Item Category") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Create a new category for vegetables, fruits, or other market items.")
+                    Text("Create A New Category For Vegetables, Fruits, Or Other Market Items.")
                     OutlinedTextField(
                         value = name, onValueChange = { name = it; error = false },
-                        label = { Text("Category name") },
+                        label = { Text("Category Name") },
                         singleLine = true, isError = error
                     )
-                    if (error) Text("Category already exists or is invalid", color = ProColors.red)
+                    if (error) Text("Category Already Exists Or Is Invalid", color = ProColors.red)
                 }
             },
             dismissButton = {
@@ -649,7 +649,7 @@ private fun CategoryStrip(
                                 name = ""
                             } else error = true
                         }
-                    }) { Text(if (busy) "Saving…" else "Add category") }
+                    }) { Text(if (busy) "Saving…" else "Add Category") }
             }
         )
     }
@@ -699,7 +699,7 @@ private fun ItemPickerSheet(
     if (newItemDialog) {
         AlertDialog(
             onDismissRequest = { if (!newItemBusy) newItemDialog = false },
-            title = { Text("Add new master item") },
+            title = { Text("Add New Master Item") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Category: $category", color = ProColors.teal,
@@ -707,13 +707,13 @@ private fun ItemPickerSheet(
                     OutlinedTextField(
                         value = newItemName,
                         onValueChange = { newItemName = it; newItemError = false },
-                        label = { Text("New item name") },
+                        label = { Text("New Item Name") },
                         isError = newItemError,
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp)
                     )
                     if (newItemError) {
-                        Text("Item already exists or name is invalid", color = ProColors.red)
+                        Text("Item Already Exists Or Name Is Invalid", color = ProColors.red)
                     }
                 }
             },
@@ -734,7 +734,7 @@ private fun ItemPickerSheet(
                             } else newItemError = true
                         }
                     }
-                ) { Text(if (newItemBusy) "Adding…" else "Add item") }
+                ) { Text(if (newItemBusy) "Adding…" else "Add Item") }
             },
             dismissButton = {
                 TextButton(enabled = !newItemBusy,
@@ -765,13 +765,13 @@ private fun ItemPickerSheet(
             Modifier.fillMaxWidth().padding(horizontal = 20.dp).fillMaxHeight(0.97f),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text("Select items • $kitchen", style = MaterialTheme.typography.titleLarge,
+            Text("Select Items • $kitchen", style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold)
             OutlinedTextField(
                 value = search, onValueChange = { search = it },
                 modifier = Modifier.fillMaxWidth(), singleLine = true,
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                placeholder = { Text("Search master catalog") }
+                placeholder = { Text("Search Master Catalog") }
             )
             CategoryStrip(
                 categories = categories,
@@ -783,7 +783,7 @@ private fun ItemPickerSheet(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("New selections: ${selected.size}", color = ProColors.teal,
+                Text("New Selections: ${selected.size}", color = ProColors.teal,
                     style = MaterialTheme.typography.labelLarge)
                 Spacer(Modifier.weight(1f))
                 Button(
@@ -821,7 +821,7 @@ private fun ItemPickerSheet(
                             })
                         Column(Modifier.weight(1f)) {
                             Text(item.name, fontWeight = FontWeight.Medium)
-                            if (alreadyAdded) Text("Already selected", color = ProColors.muted,
+                            if (alreadyAdded) Text("Already Selected", color = ProColors.muted,
                                 style = MaterialTheme.typography.labelSmall)
                         }
                     }
@@ -870,7 +870,7 @@ fun MarketScreen(
             title = { Text("Cash Received", fontWeight = FontWeight.ExtraBold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Cash amount received for " + businessDate,
+                    Text("Cash Amount Received For " + businessDate,
                         color = ProColors.muted)
                     OutlinedTextField(
                         value = cashDraft,
@@ -892,16 +892,16 @@ fun MarketScreen(
                         visualTransformation = CashThousandsVisualTransformation,
                         isError = !valid,
                         supportingText = {
-                            Text(if (valid) "Saves automatically. Clear to reset to zero."
-                            else "Enter a valid amount with up to 2 decimals.")
+                            Text(if (valid) "Saves Automatically. Clear To Reset To Zero."
+                            else "Enter A Valid Amount With Up To 2 Decimals.")
                         },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
                     )
-                    Text("Total spent: Rs. " + MarketMath.lkr(rows.sumOf { it.lineCents }),
+                    Text("Total Spent: Rs. " + MarketMath.lkr(rows.sumOf { it.lineCents }),
                         color = ProColors.muted)
                     Text(
-                        "Cash balance: Rs. " +
+                        "Cash Balance: Rs. " +
                             MarketMath.lkr((parsed?.takeIf { valid } ?: cashReceivedCents) -
                                 rows.sumOf { it.lineCents }),
                         color = if ((parsed?.takeIf { valid } ?: cashReceivedCents) >=
@@ -1024,9 +1024,9 @@ fun MarketScreen(
                     Modifier.fillMaxWidth().padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Market purchase & billing", style = MaterialTheme.typography.titleLarge,
+                    Text("Market Purchase & Billing", style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.ExtraBold, color = ProVisual.itemInk)
-                    Text("Enter quantities and prices • Saves automatically",
+                    Text("Enter Quantities And Prices • Saves Automatically",
                         color = ProColors.muted, style = MaterialTheme.typography.bodySmall)
                     Row(
                         Modifier.fillMaxWidth(),
@@ -1108,9 +1108,9 @@ fun MarketScreen(
         }
         if (shown.isEmpty()) item {
             EmptyState(
-                if (rows.isEmpty()) "No purchasing items" else "No items in $filter",
-                if (rows.isEmpty()) "Enter requirements in Kitchens first."
-                else "Select another category to view purchasing items."
+                if (rows.isEmpty()) "No Purchasing Items" else "No Items In $filter",
+                if (rows.isEmpty()) "Enter Requirements In Kitchens First."
+                else "Select Another Category To View Purchasing Items."
             )
         }
         lazyItems(shown, key = { it.item.id }, contentType = { "market-purchase-row" }) { row ->
@@ -1120,7 +1120,7 @@ fun MarketScreen(
                 onFieldFocused = { focusedMarketItemId = row.item.id },
                 onSave = { grams, cents ->
                     vm.savePurchase(row.item.id, grams, cents) { result ->
-                        if (result.isFailure) message("Could not auto-save purchase")
+                        if (result.isFailure) message("Could Not Auto-Save Purchase")
                     }
                 },
                 onAdd = { grams, cents, done ->
@@ -1128,7 +1128,7 @@ fun MarketScreen(
                 },
                 onEdit = { lotId, grams, cents ->
                     vm.editPurchaseAddition(row.item.id, lotId, grams, cents) { result ->
-                        if (result.isFailure) message("Could not save additional purchase change")
+                        if (result.isFailure) message("Could Not Save Additional Purchase Change")
                     }
                 },
                 onPhotoSaved = { photoVersion++ },
@@ -1192,11 +1192,11 @@ private fun PurchaseCard(
     if (showInitialPurchaseHelp) {
         AlertDialog(
             onDismissRequest = { showInitialPurchaseHelp = false },
-            title = { Text("Enter the initial purchase first") },
+            title = { Text("Enter The Initial Purchase First") },
             text = {
                 Text(
-                    "Please enter the original Purchased quantity and Market Price first. " +
-                        "Use + Add Purchase only if there is still a shortage.\n\n" +
+                    "Please Enter The Original Purchased Quantity And Market Price First. " +
+                        "Use + Add Purchase Only If There Is Still A Shortage.\n\n" +
                         "මුලින් Purchased Qty සහ Market Price ඇතුළත් කරන්න. " +
                         "හිඟ ප්‍රමාණයක් තිබේ නම් පමණක් + භාවිත කරන්න."
                 )
@@ -1214,16 +1214,16 @@ private fun PurchaseCard(
         val extraPrice = MarketMath.parsePriceCents(additionalPrice)
         AlertDialog(
             onDismissRequest = { if (!savingAddition) addOpen = false },
-            title = { Text("Additional purchase • " + row.item.name) },
+            title = { Text("Additional Purchase • " + row.item.name) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Still required: ${MarketMath.kg(shortGrams)} kg")
-                    Text("This creates a separate purchase record at its own market price.",
+                    Text("Still Required: ${MarketMath.kg(shortGrams)} kg")
+                    Text("This Creates A Separate Purchase Record At Its Own Market Price.",
                         style = MaterialTheme.typography.bodySmall, color = ProColors.muted)
                     OutlinedTextField(
                         value = additionalQty,
                         onValueChange = { additionalQty = it },
-                        label = { Text("Additional quantity (kg)") },
+                        label = { Text("Additional Quantity (kg)") },
                         suffix = { Text("kg") },
                         singleLine = true,
                         shape = RoundedCornerShape(11.dp),
@@ -1232,7 +1232,7 @@ private fun PurchaseCard(
                     OutlinedTextField(
                         value = additionalPrice,
                         onValueChange = { additionalPrice = it },
-                        label = { Text("Price for this purchase") },
+                        label = { Text("Price For This Purchase") },
                         prefix = { Text("Rs.") },
                         suffix = { Text("/kg") },
                         singleLine = true,
@@ -1261,13 +1261,13 @@ private fun PurchaseCard(
                                 addOpen = false
                                 additionalQty = ""
                                 additionalPrice = ""
-                                message("Additional purchase saved")
+                                message("Additional Purchase Saved")
                             } else {
-                                message("Could not save additional purchase")
+                                message("Could Not Save Additional Purchase")
                             }
                         }
                     }
-                ) { Text(if (savingAddition) "Saving…" else "Add purchase") }
+                ) { Text(if (savingAddition) "Saving…" else "Add Purchase") }
             }
         )
     }
@@ -1360,7 +1360,7 @@ private fun PurchaseCard(
                     )
                 }
                 Text(
-                    "Initial cost: Rs. ${MarketMath.lkr(originalCents)}",
+                    "Initial Cost: Rs. ${MarketMath.lkr(originalCents)}",
                     modifier = Modifier.fillMaxWidth(),
                     color = ProVisual.purpleAmount,
                     textAlign = TextAlign.End,
@@ -1371,7 +1371,7 @@ private fun PurchaseCard(
             if (row.additions.isNotEmpty()) {
                 HorizontalDivider(color = ProColors.pale)
                 Text(
-                    "Additional purchases (${row.additions.size})",
+                    "Additional Purchases (${row.additions.size})",
                     color = ProColors.teal,
                     fontWeight = FontWeight.ExtraBold,
                     style = MaterialTheme.typography.labelLarge
@@ -1397,7 +1397,7 @@ private fun PurchaseCard(
                     }) {
                         Surface(shape = RoundedCornerShape(50), color = ProColors.teal) {
                             Icon(Icons.Default.Add,
-                                contentDescription = "Add purchase for " + row.item.name,
+                                contentDescription = "Add Purchase For " + row.item.name,
                                 tint = Color.White,
                                 modifier = Modifier.padding(7.dp))
                         }
@@ -1474,7 +1474,7 @@ private fun AdditionalPurchaseEditor(
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Text(
-            "Additional purchase $ordinal",
+            "Additional Purchase $ordinal",
             color = ProColors.teal,
             fontWeight = FontWeight.Bold,
             style = MaterialTheme.typography.labelMedium
@@ -1521,7 +1521,7 @@ private fun AdditionalPurchaseEditor(
             )
         }
         Text(
-            "Additional cost: Rs. ${MarketMath.lkr(amount)}",
+            "Additional Cost: Rs. ${MarketMath.lkr(amount)}",
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.End,
             color = ProVisual.purpleAmount,
@@ -1552,16 +1552,16 @@ fun CatalogSheet(
             title = { Text("Rename " + item.name) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Past requisitions and purchases will remain linked to this item.")
+                    Text("Past Requisitions And Purchases Will Remain Linked To This Item.")
                     OutlinedTextField(
                         value = editedName,
                         onValueChange = { editedName = it; renameError = false },
-                        label = { Text("Item name") },
+                        label = { Text("Item Name") },
                         shape = RoundedCornerShape(12.dp),
                         singleLine = true,
                         isError = renameError,
                         supportingText = {
-                            if (renameError) Text("This name exists already or could not be saved.")
+                            if (renameError) Text("This Name Exists Already Or Could Not Be Saved.")
                         }
                     )
                 }
@@ -1581,7 +1581,7 @@ fun CatalogSheet(
                     },
                     enabled = !renameSaving && editedName.trim().isNotEmpty() &&
                         editedName.trim().length <= 80
-                ) { Text(if (renameSaving) "Saving…" else "Save name") }
+                ) { Text(if (renameSaving) "Saving…" else "Save Name") }
             }
         )
     }
@@ -1611,14 +1611,14 @@ fun CatalogSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Master item catalog",
+                    "Master Item Catalog",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
                 )
                 TextButton(onClick = onClose) { Text("Close") }
             }
-            Text("Add or rename items in any category.", color = ProColors.muted)
+            Text("Add Or Rename Items In Any Category.", color = ProColors.muted)
             Row(
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1628,7 +1628,7 @@ fun CatalogSheet(
                     value = name,
                     onValueChange = { name = it },
                     modifier = Modifier.weight(1f),
-                    label = { Text("New item name") },
+                    label = { Text("New Item Name") },
                     shape = RoundedCornerShape(12.dp),
                     singleLine = true
                 )
@@ -1649,14 +1649,14 @@ fun CatalogSheet(
             OutlinedTextField(value = search, onValueChange = { search = it },
                 modifier = Modifier.fillMaxWidth(),
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                placeholder = { Text("Find an item") },
+                placeholder = { Text("Find An Item") },
                 shape = RoundedCornerShape(12.dp), singleLine = true)
             val filteredItems = remember(items, category, search) {
                 items.filter { item ->
                     item.category == category && item.name.contains(search, ignoreCase = true)
                 }
             }
-            Text("${filteredItems.size} ${category} item(s)", color = ProColors.muted,
+            Text("${filteredItems.size} ${category} Item(s)", color = ProColors.muted,
                 style = MaterialTheme.typography.labelMedium)
             LazyColumn(
                 modifier = Modifier.weight(1f),
@@ -1666,7 +1666,7 @@ fun CatalogSheet(
                 if (filteredItems.isEmpty()) {
                     item {
                         Text(
-                            "No items in this category. Add an item above.",
+                            "No Items In This Category. Add An Item Above.",
                             color = ProColors.muted,
                             modifier = Modifier.padding(vertical = 16.dp)
                         )

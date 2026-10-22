@@ -89,7 +89,7 @@ fun CompletedPdfDialog(
         onDismissRequest = onClose,
         title = {
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text("Completed purchases by category", fontWeight = FontWeight.ExtraBold)
+                Text("Completed Purchases By Category", fontWeight = FontWeight.ExtraBold)
                 Text(
                     date.toString(),
                     style = MaterialTheme.typography.bodySmall,
@@ -105,7 +105,7 @@ fun CompletedPdfDialog(
                 if (completed.isEmpty()) {
                     item(key = "empty") {
                         Text(
-                            "No completed purchases on this date. Items must be fully bought first.",
+                            "No Completed Purchases On This Date. Items Must Be Fully Bought First.",
                             color = ProColors.muted
                         )
                     }
@@ -152,7 +152,7 @@ fun CompletedPdfDialog(
                                 HorizontalDivider()
                             }
                             ReportMoneyRow(
-                                label = group.name + " subtotal",
+                                label = group.name + " Subtotal",
                                 cents = group.subtotalCents,
                                 color = ProColors.teal,
                                 prominent = true
@@ -166,22 +166,22 @@ fun CompletedPdfDialog(
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text(
-                                "Completed items: " + completed.size,
+                                "Completed Items: " + completed.size,
                                 color = ProColors.muted
                             )
                             ReportMoneyRow(
-                                "Completed final total", finalCents,
+                                "Completed Final Total", finalCents,
                                 ProColors.teal, prominent = true
                             )
                             ReportMoneyRow(
-                                "Cash received", cashReceivedCents
+                                "Cash Received", cashReceivedCents
                             )
                             ReportMoneyRow(
-                                "Total spent (all purchases)", totalSpent
+                                "Total Spent (All Purchases)", totalSpent
                             )
                             HorizontalDivider()
                             ReportMoneyRow(
-                                "Cash balance", balance,
+                                "Cash Balance", balance,
                                 if (balance >= 0L) ProColors.green else ProColors.red,
                                 prominent = true
                             )
