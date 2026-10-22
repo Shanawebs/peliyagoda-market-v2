@@ -13,7 +13,7 @@ android {
         // Only PUBLIC Supabase identifiers; never put service-role credentials in an APK.
         buildConfigField("String", "MARKETPRO_SUPABASE_URL", "\"https://lkoptqhodgjeuwwfihfr.supabase.co\"")
         buildConfigField("String", "MARKETPRO_SUPABASE_PUBLISHABLE_KEY", "\"sb_publishable__7F9sfydgBtHiZNPV9kNzg_hGfazjxg\"")
-        applicationId = "lk.peliyagoda.marketpro.v230.clouddev"
+        applicationId = "lk.peliyagoda.marketpro.v231.clouddev"
         minSdk = 26
         targetSdk = 35
         versionCode = 32
