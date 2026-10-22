@@ -181,6 +181,18 @@ class CloudOwnerAuth(private val app: Context) {
         account
     }
 
+    /**
+     * Return only a validated Supabase Auth token for the one enrolled DEV owner.
+     * The token is transient and never added to job input data, logs or plain files.
+     */
+    suspend fun accessTokenForOwner(expectedUserId: String): String = withContext(Dispatchers.IO) {
+        val account = currentAccount() ?: error("Sign in to your Cloud Owner account first")
+        check(account.userId == expectedUserId) {
+            "Signed-in account is not the enrolled Market Pro owner"
+        }
+        saved()?.accessToken ?: error("Encrypted Cloud Owner session unavailable")
+    }
+
     suspend fun signOut() = withContext(Dispatchers.IO) {
         val old = saved()
         try {
