@@ -1,6 +1,6 @@
 import { DashboardApi } from "./auth-client.mjs";
 import { REFRESH_INTERVAL_MS } from "./config.mjs";
-import { exactCents, lkr, kg, lotCostCents, dateIsValid, normalizeDailyRow, groupKitchens, requirementsByItem, dailyPriceTrends } from "./core.mjs";
+import { exactCents, lkr, kg, lotCostCents, dateIsValid, normalizeDailyRow, groupKitchens, requirementsByItem, dailyPriceTrends, recentBusinessDays } from "./core.mjs";
 
 const $ = id => document.getElementById(id);
 const api = new DashboardApi();
@@ -80,7 +80,7 @@ function renderMetrics() {
 function renderHistory() {
   const body = $("history-body"); body.replaceChildren();
   if (state.summary.length === 0) return emptyRow(body, 4, "No cloud financial history yet.");
-  for (const row of state.summary) {
+  for (const row of recentBusinessDays(state.summary, 10)) {
     const tr = elem("tr"), first = elem("td");
     const button = elem("button", formattedDate(row.business_date), "table-button");
     button.type = "button";
@@ -99,13 +99,15 @@ function renderHistory() {
 }
 function renderChart() {
   const target = $("trend-chart"); target.replaceChildren();
-  const days = [...state.summary].reverse().slice(-7);
+  const days = recentBusinessDays(state.summary, 10).reverse();
   if (!days.length) { target.append(elem("p", "No dated records yet.", "subtle")); return; }
   const max = Math.max(1, ...days.flatMap(x => [
     Math.abs(Number(x.total_expenses_cents)), Math.abs(Number(x.cash_received_cents))
   ]));
   for (const row of days) {
     const group = elem("div", "", "trend-group");
+    group.setAttribute("aria-label", formattedDate(row.business_date) + ": " +
+      lkr(row.total_expenses_cents) + " spent, " + lkr(row.cash_received_cents) + " received");
     const expense = elem("div", "", "trend-bar trend-expenses");
     const cash = elem("div", "", "trend-bar trend-cash");
     expense.style.height = Math.max(2, Math.abs(Number(row.total_expenses_cents)) / max * 100) + "%";
