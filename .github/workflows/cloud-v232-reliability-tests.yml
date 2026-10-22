@@ -1,0 +1,44 @@
+name: V2.32 Cloud Sync Reliability CI (test-only)
+
+on:
+  push:
+    branches:
+      - feature/cloud-v1-reliability-v232
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: market-v232-audit-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  cloud-sync-reliability:
+    name: Compile + unit tests without deployable APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${ANDROID_HOME:-}"
+          TOOL="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          test -n "$TOOL"
+          yes | "$TOOL" --licenses >/dev/null 2>&1 || true
+          "$TOOL" --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Unit tests, Room queries and Android compile
+        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug
+      - name: Prevent accidental release of ephemeral-signed APK
+        run: |
+          echo "V2.32 is TEST-ONLY. No APK artifact is published."
+          echo "Installed V2.31 and its local data MUST NOT be replaced or uninstalled."
