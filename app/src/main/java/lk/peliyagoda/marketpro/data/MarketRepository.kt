@@ -13,6 +13,9 @@ class MarketRepository(private val db: MarketDatabase) {
     private val cloudDao = db.cloudDao()
     private val journal = CloudChangeJournal(cloudDao)
     val cloudPendingCount: Flow<Int> = cloudDao.observePendingCount()
+    suspend fun cloudSyncEnabled(): Boolean =
+        cloudDao.state(lk.peliyagoda.marketpro.cloud.CloudSyncConfig.ENABLED) == "true"
+
     val items: Flow<List<ItemEntity>> = dao.observeItems()
     // Includes only current selectable master items. Historical rows still use
     // the full items flow so reports and invoice item IDs remain resolvable.
