@@ -19,6 +19,8 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * This is a DEV-only sign-in client. No business records or photos are sent.
@@ -31,6 +33,9 @@ class CloudOwnerAuth(private val app: Context) {
         private const val PREFS = "marketpro_cloud_owner_auth"
         private const val KEY = "encrypted_session"
         private const val ALIAS = "marketpro_cloud_owner_auth_aes_v1"
+        // All CloudOwnerAuth instances share one lock, preventing parallel
+        // Supabase refresh-token rotation and overwriting newer sessions.
+        private val sessionMutex = Mutex()
 
         fun normalizedEmail(input: String): String = input.trim().lowercase(Locale.ROOT)
         fun validEmail(input: String): Boolean {
@@ -142,6 +147,7 @@ class CloudOwnerAuth(private val app: Context) {
     }
 
     suspend fun signIn(emailInput: String, password: String): Account = withContext(Dispatchers.IO) {
+        sessionMutex.withLock {
         val email = normalizedEmail(emailInput)
         require(validEmail(email) && password.isNotBlank()) { "Enter your email and password." }
         val response = request(
@@ -154,10 +160,12 @@ class CloudOwnerAuth(private val app: Context) {
         check(normalizedEmail(profile.getString("email")) == email) { "Account email mismatch." }
         remember(tokens)
         Account(email, profile.getString("id"))
+        }
     }
 
     suspend fun currentAccount(): Account? = withContext(Dispatchers.IO) {
-        val old = saved() ?: return@withContext null
+        sessionMutex.withLock {
+        val old = saved() ?: return@withLock null
         val first = runCatching { request("/auth/v1/user", "GET", accessToken = old.accessToken) }
         var profile = first.getOrNull()
         if (profile == null) {
@@ -179,6 +187,7 @@ class CloudOwnerAuth(private val app: Context) {
         )
         check(account.email == old.email) { "Saved account did not match authenticated identity." }
         account
+        }
     }
 
     /**
@@ -194,6 +203,7 @@ class CloudOwnerAuth(private val app: Context) {
     }
 
     suspend fun signOut() = withContext(Dispatchers.IO) {
+        sessionMutex.withLock {
         val old = saved()
         try {
             if (old != null) request("/auth/v1/logout", "POST", accessToken = old.accessToken)
@@ -202,6 +212,7 @@ class CloudOwnerAuth(private val app: Context) {
             // Remote tokens expire according to the project's Auth settings.
         } finally {
             prefs.edit().remove(KEY).commit()
+        }
         }
     }
 }
