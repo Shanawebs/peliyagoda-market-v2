@@ -98,6 +98,10 @@ interface CloudSyncDao {
     @Query("SELECT COUNT(*) FROM cloud_sync_outbox")
     fun observePendingCount(): Flow<Int>
 
+    /** Small scalar update signal; avoids allocating or rendering a large queue. */
+    @Query("SELECT MAX(changedAtMs) FROM cloud_sync_outbox")
+    fun observeLatestMutation(): Flow<Long?>
+
     @Query("SELECT COUNT(*) FROM cloud_sync_outbox")
     suspend fun pendingCountNow(): Int
 
