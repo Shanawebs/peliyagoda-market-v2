@@ -10,7 +10,7 @@ const state = {
   busy: false, ready: false, tab: "overview", autoTimer: null,
   chartCategory: null, chartItemId: null, chartHistory: [], chartLoadedFor: null, chartSerial: 0,
   calendarOpen: false, calendarYear: 0, calendarMonth: 0, calendarSerial: 0,
-  calendarMarkers: new Set(), pdfOpen: false
+  calendarMarkers: new Set(), pdfOpen: false, pendingDateRefresh: false
 };
 const text = (id, value) => { $(id).textContent = String(value); };
 const show = (id, visible) => $(id).classList.toggle("hidden", !visible);
@@ -387,7 +387,8 @@ function chooseBusinessDate(date) {
   $("date-filter").value = date;
   syncDateButton();
   closeCalendar();
-  void refresh();
+  if (state.busy) state.pendingDateRefresh = true;
+  else void refresh();
 }
 function closeCalendar(restoreFocus = false) {
   state.calendarOpen = false;
@@ -644,6 +645,10 @@ async function refresh() {
   } finally {
     state.busy = false;
     $("refresh-button").disabled = false;
+    if (state.pendingDateRefresh && state.ready) {
+      state.pendingDateRefresh = false;
+      void refresh();
+    }
   }
 }
 async function enterDashboard() {
@@ -668,6 +673,7 @@ async function signOut() {
   state.ready = false;
   state.summary = [];
   state.calendarSerial++;
+  state.pendingDateRefresh = false;
   state.calendarMarkers = new Set();
   closeCalendar();
   closePdfPreview();
