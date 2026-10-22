@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { exactCents, lkr, kg, lotCostCents, dateIsValid, normalizeDailyRow, summarizeDays, groupKitchens } from "../marketpro-dashboard/core.mjs";
+import { exactCents, lkr, kg, lotCostCents, dateIsValid, normalizeDailyRow, summarizeDays, groupKitchens, requirementsByItem, dailyPriceTrends } from "../marketpro-dashboard/core.mjs";
 
 test("Android half-up on each 1.5kg lot 101 cents/kg", () => {
   const lot = lotCostCents(1500,101);
@@ -31,4 +31,52 @@ test("reject malformed calendar days", () => {
   assert.equal(dateIsValid("2026-10-21"),true);
   assert.equal(dateIsValid("2026-02-30"),false);
   assert.equal(dateIsValid("2026-1-1"),false);
+});
+
+
+test("purchase demand aggregates kitchens uniquely, not for every purchase lot", () => {
+  const demand = requirementsByItem([
+    {item_id:"A",kitchen:"Main Kitchen",quantity_grams:20000},
+    {item_id:"A",kitchen:"Indian Kitchen",quantity_grams:35000},
+    {item_id:"A",kitchen:"Main Kitchen",quantity_grams:5000},
+    {item_id:"B",kitchen:"Pastry Kitchen",quantity_grams:0}
+  ]);
+  assert.equal(demand.get("A").grams,60000);
+  assert.deepEqual(demand.get("A").kitchens,[
+    {kitchen:"Indian Kitchen",quantity_grams:35000},
+    {kitchen:"Main Kitchen",quantity_grams:25000}
+  ]);
+  assert.equal(demand.get("B").grams,0);
+  assert.equal(demand.has("C"),false);
+  assert.throws(() => requirementsByItem([{item_id:"A",kitchen:"Main",quantity_grams:-100}]),/Invalid/);
+});
+
+test("weighted price equals Android dailyPriceTrends HALF_UP, not simple average", () => {
+  const rows = [
+    {business_date:"2026-10-20",quantity_grams:1000,price_cents_per_kg:10000},
+    {business_date:"2026-10-20",quantity_grams:3000,price_cents_per_kg:20000},
+    {business_date:"2026-10-21",quantity_grams:1500,price_cents_per_kg:101},
+    {business_date:"2026-10-21",quantity_grams:500,price_cents_per_kg:102},
+    {business_date:"2026-10-22",quantity_grams:0,price_cents_per_kg:9999}
+  ];
+  const days = dailyPriceTrends(rows);
+  assert.equal(days.length,2);
+  assert.equal(days[0].date,"2026-10-20");
+  assert.equal(days[0].quantityGrams,4000);
+  assert.equal(days[0].weightedPriceCentsPerKg,17500n);
+  assert.equal(days[0].purchaseLots,2);
+  assert.equal(days[1].quantityGrams,2000);
+  assert.equal(days[1].weightedPriceCentsPerKg,101n);
+  assert.equal(days[1].purchaseLots,2);
+});
+
+test("charts never invent missing purchase days and reject invalid calendar data", () => {
+  const days = dailyPriceTrends([
+    {business_date:"2026-10-01",quantity_grams:1000,price_cents_per_kg:30000},
+    {business_date:"2026-10-05",quantity_grams:500,price_cents_per_kg:40000}
+  ]);
+  assert.deepEqual(days.map(day=>day.date),["2026-10-01","2026-10-05"]);
+  assert.throws(()=>dailyPriceTrends([{
+    business_date:"2026-02-30",quantity_grams:1000,price_cents_per_kg:100
+  }]),/Invalid/);
 });
