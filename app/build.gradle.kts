@@ -10,11 +10,14 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "lk.peliyagoda.marketpro.v229.clouddev"
+        // Only PUBLIC Supabase identifiers; never put service-role credentials in an APK.
+        buildConfigField("String", "MARKETPRO_SUPABASE_URL", "\\"https://lkoptqhodgjeuwwfihfr.supabase.co\\"")
+        buildConfigField("String", "MARKETPRO_SUPABASE_PUBLISHABLE_KEY", "\\"sb_publishable__7F9sfydgBtHiZNPV9kNzg_hGfazjxg\\"")
+        applicationId = "lk.peliyagoda.marketpro.v230.clouddev"
         minSdk = 26
         targetSdk = 35
-        versionCode = 30
-        versionName = "2.29.0-cloud-preview"
+        versionCode = 31
+        versionName = "2.30.0-cloud-auth-dev"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -31,7 +34,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
     packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }
 }
 
