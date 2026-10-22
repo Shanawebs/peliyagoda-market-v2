@@ -131,18 +131,21 @@ internal data class CloudPreparedChange(
 )
 
 /**
+ * Enforces exactly one active uploader per Android process. This protects against
+ * WorkManager's immediate and periodic workers running simultaneously. Server-side
+ * operation-ID deduplication remains the fallback for process crashes/retries.
+ */
+internal object CloudSyncRunGate {
+    private val mutex = Mutex()
+    suspend fun <T> runExclusive(work: suspend () -> T): T =
+        mutex.withLock { work() }
+}
+
+/**
  * No image/file references are ever consulted here.
  * Read record data *inside Room transaction*, then call the network outside it.
  */
 class CloudSyncEngine(private val context: Context) {
-    /**
-     * Immediate + periodic WorkManager jobs may overlap. A shared process-level
-     * lock guarantees only one uploader can apply and ACK operations at a time.
-     * Never hold a Room transaction across network requests.
-     */
-    companion object {
-        private val singleWriterMutex = Mutex()
-    }
     private val app = context.applicationContext
     private val db = MarketDatabase.get(app)
     private val dao = db.dao()
@@ -276,7 +279,7 @@ class CloudSyncEngine(private val context: Context) {
     }
 
     /** Runs under WorkManager, never on UI thread; bounded to protect 4GB phones. */
-    suspend fun drain(maxChanges: Int = 100): Int = singleWriterMutex.withLock {
+    suspend fun drain(maxChanges: Int = 100): Int = CloudSyncRunGate.runExclusive {
         require(maxChanges in 1..100) { "Cloud batches must contain 1..100 changes" }
         if (!isEnabled()) return@withLock 0
         val bearer = auth.accessTokenForOwner(CloudSyncConfig.OWNER_USER_ID)
