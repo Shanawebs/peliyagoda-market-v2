@@ -50,3 +50,131 @@
  .chart-panel{padding:14px}
  .chart-axis{font-size:11px}
 }
+
+
+/* Cloud dashboard overview V3 — readable finance typography, clearer color hierarchy,
+   latest-ten chart density, wider trend area and compact activity panel. */
+:root{
+  --bg:#f3f8f5;
+  --paper:#ffffff;
+  --ink:#102b22;
+  --muted:#526e61;
+  --edge:#dbe9e0;
+  --green:#087e57;
+  --red:#c53b46;
+}
+body{font-size:16px}
+.dashboard{color:var(--ink)}
+.dashboard .page-heading h1{color:#103e30}
+.dashboard .page-heading .subtle{font-size:15px;color:#547568}
+.dashboard .eyebrow{font-size:12.5px;color:#087a55}
+.dashboard .date-label{font-size:14px;color:#3c6755}
+.dashboard .date-label input{font-size:15px;border-color:#bddac9}
+.dashboard .heading-actions .button{font-size:15px}
+.dashboard .status-strip{
+  font-size:14px;
+  background:#e6f7ed;
+  border-color:#bae8ce;
+  color:#126849;
+}
+.dashboard .status-strip .subtle{color:#4b7561}
+.dashboard .read-only-label{color:#087750;font-weight:750}
+.dashboard .kpi{
+  border-color:#d9e9e0;
+  box-shadow:0 7px 24px #1b65410a;
+  min-height:190px;
+}
+.dashboard .kpi p{font-size:14.5px;color:#416857;font-weight:750}
+.dashboard .kpi h2{font-size:clamp(22px,2.17vw,30px);color:#102c25;font-weight:850}
+.dashboard .kpi>span{font-size:13px;color:#5c796a;font-weight:550}
+.dashboard .kpi.highlight{
+  background:linear-gradient(152deg,#ecfaf2 0%,#fff 85%);
+  border-color:#98dcc0;
+}
+.dashboard .kpi.highlight h2{color:#087a55}
+.dashboard .tabbar{border-bottom-color:#cfded4}
+.dashboard .tab{font-size:15.5px;font-weight:800;color:#557466}
+.dashboard .tab:hover{color:#076c4b;background:#edf8f1}
+.dashboard .tab.active{color:#076f4d;border-bottom-color:#0c9361}
+.dashboard .report-card{
+  border-color:#dbe7df;
+  box-shadow:0 6px 22px #15392708;
+}
+.dashboard .section-header h3{font-size:21px;font-weight:850;color:#14382d}
+.dashboard .section-header p{font-size:14px;color:#587666;line-height:1.55}
+.dashboard .mini-tag{font-size:13px;color:#286b4b;background:#eaf7f0}
+.dashboard .activity-list span{font-size:15.5px;color:#496e5d}
+.dashboard .activity-list strong{font-size:19px;color:#102f26}
+.dashboard .activity-list>div{padding:17px 0;border-color:#dce9e1}
+.dashboard .notice{font-size:14px;color:#4c715e;background:#eaf8ef}
+.dashboard .notice strong{color:#08744d}
+.dashboard th{font-size:13px;color:#4f7360;background:#edf6f0;padding:17px 14px}
+.dashboard td{font-size:15.5px;color:#28493a;padding:16px 14px;border-bottom-color:#e7eee8}
+.dashboard tbody tr:nth-child(even){background:#fbfdfb}
+.dashboard tbody tr:hover{background:#eff8f2}
+.dashboard .table-button{font-size:15.5px;color:#087c54;font-weight:850}
+.dashboard .small-metric p{font-size:14.5px}
+.dashboard .small-metric strong{color:#0b684b}
+.dashboard .small-metric small{font-size:13.5px;color:#557565}
+.dashboard .tag{font-size:13px}
+.dashboard .security-list p{font-size:15px;color:#426d58}
+.dashboard .chart-label{font-size:16px}
+.dashboard .chart-status{font-size:15px}
+.dashboard .category-chip{font-size:15px}
+.dashboard .chart-axis{font-size:13px}
+.dashboard .chart-panel h3{font-size:19px}
+.dashboard .footer{font-size:13px;color:#607b6c}
+.dashboard .negative{color:#c33643!important}
+#panel-overview>.content-grid{grid-template-columns:minmax(0,2.25fr) minmax(300px,.95fr);gap:18px}
+#panel-overview>.content-grid>.report-card{min-width:0}
+#panel-overview .trend-chart{
+  height:262px;
+  gap:5px;
+  border-bottom-color:#d6e6dc;
+  padding-top:13px;
+}
+#panel-overview .trend-group{gap:6px;max-width:none;min-width:0}
+#panel-overview .trend-bar{max-width:25px;min-width:5px;border-radius:5px 5px 0 0}
+#panel-overview .trend-expenses{background:#0caa77}
+#panel-overview .trend-cash{background:#76bba0}
+#panel-overview .trend-day{font-size:12px;color:#466e5a;bottom:-25px}
+#panel-overview .chart-legend{font-size:14px;color:#426b58;padding-top:36px}
+#panel-overview .chart-legend i{width:12px;height:12px}
+#panel-overview .legend-expense{background:#0caa77}
+#panel-overview .legend-cash{background:#76bba0}
+#panel-overview .activity-list>div{gap:10px}
+#panel-overview .activity-list span{font-size:15px}
+#panel-overview .activity-list strong{font-size:20px;color:#08764f}
+#panel-overview .notice{line-height:1.7}
+#panel-overview #history-body td{font-size:16px;font-variant-numeric:tabular-nums}
+#panel-overview #history-body .table-button{font-size:16px}
+#panel-overview .report-card.wide{margin-top:20px}
+#panel-purchases .need-breakdown{color:#3d6e54;font-size:14px}
+#panel-purchases .need-absent{color:#627c6d}
+#panel-kitchens td,#panel-purchases td{font-size:16px}
+@media(max-width:1090px){
+  #panel-overview>.content-grid{grid-template-columns:minmax(0,1fr)}
+  #panel-overview .trend-chart{height:248px}
+}
+@media(max-width:700px){
+  .dashboard .page-heading .subtle{font-size:14px}
+  .dashboard .status-strip{font-size:12.5px}
+  .dashboard .kpi{min-height:160px}
+  .dashboard .kpi h2{font-size:clamp(18px,4.4vw,23px)}
+  .dashboard .kpi p{font-size:13px}
+  .dashboard .kpi>span{font-size:12px}
+  .dashboard .tab{font-size:14px;padding:12px 13px}
+  .dashboard .section-header h3{font-size:19px}
+  .dashboard .section-header p{font-size:13.5px}
+  .dashboard .report-card{padding:17px}
+  #panel-overview .trend-chart{height:210px;gap:3px}
+  #panel-overview .trend-group{gap:3px}
+  #panel-overview .trend-bar{max-width:14px;min-width:3px}
+  #panel-overview .trend-day{font-size:10px}
+  #panel-overview .chart-legend{font-size:13px}
+  .dashboard th{font-size:12.5px}
+  .dashboard td{font-size:14.5px}
+  .dashboard .activity-list span{font-size:14.5px}
+  #panel-overview #history-body td{font-size:15px}
+  #panel-overview #history-body .table-button{font-size:15px}
+}

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { exactCents, lkr, kg, lotCostCents, dateIsValid, normalizeDailyRow, summarizeDays, groupKitchens, requirementsByItem, dailyPriceTrends } from "../marketpro-dashboard/core.mjs";
+import { exactCents, lkr, kg, lotCostCents, dateIsValid, normalizeDailyRow, summarizeDays, groupKitchens, requirementsByItem, dailyPriceTrends, recentBusinessDays } from "../marketpro-dashboard/core.mjs";
 
 test("Android half-up on each 1.5kg lot 101 cents/kg", () => {
   const lot = lotCostCents(1500,101);
@@ -79,4 +79,23 @@ test("charts never invent missing purchase days and reject invalid calendar data
   assert.throws(()=>dailyPriceTrends([{
     business_date:"2026-02-30",quantity_grams:1000,price_cents_per_kg:100
   }]),/Invalid/);
+});
+
+
+test("overview financial table and trend show 10 latest dated records, not oldest", () => {
+  const all = Array.from({length: 14}, (_, index) => ({
+    business_date: "2026-10-" + String(index + 1).padStart(2, "0"),
+    total_expenses_cents: BigInt(index + 1)
+  }));
+  const original = [...all];
+  const recent = recentBusinessDays([...all].reverse().sort((a, b) =>
+    a.business_date.localeCompare(b.business_date)), 10);
+  assert.equal(recent.length, 10);
+  assert.equal(recent[0].business_date, "2026-10-14");
+  assert.equal(recent.at(-1).business_date, "2026-10-05");
+  assert.deepEqual(all, original, "source daily financial records must not be mutated");
+  assert.deepEqual(recentBusinessDays(all.slice(0, 3)).map(x=>x.business_date),
+    ["2026-10-03","2026-10-02","2026-10-01"]);
+  assert.deepEqual(recentBusinessDays([]), []);
+  assert.throws(() => recentBusinessDays(all, 0), /Invalid/);
 });
