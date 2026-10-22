@@ -2,23 +2,45 @@ package lk.peliyagoda.marketpro.ui
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.LocalMall
+import androidx.compose.material.icons.outlined.Phone
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import lk.peliyagoda.marketpro.R
+
+// Sinhala: bundled Noto Sans Sinhala (SIL OFL). English: system sans-serif.
+// Google Sans is not redistributed because no redistribution license is provided.
+private val sinhalaGuideFont = FontFamily(Font(R.font.noto_sans_sinhala))
+private val ink = Color(0xFF102A37)
+private val dividerColor = Color(0xFFE1E5E7)
 
 private data class MarketHelpSection(val heading: String, val description: String)
 
@@ -77,81 +99,153 @@ private val helpSections = listOf(
     )
 )
 
+
 @Composable
 fun MarketHelpDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
-    AlertDialog(
+    Dialog(
         onDismissRequest = onDismiss,
-        title = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.94f).fillMaxHeight(0.92f),
+            shape = RoundedCornerShape(28.dp),
+            color = Color(0xFFF8F8FC),
+            shadowElevation = 12.dp
+        ) {
+            Column(
+                Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 Text(
-                    "Market Pro for Purchasing Department - Bellagio Ltd",
-                    style = MaterialTheme.typography.titleMedium,
+                    "Market Pro for Purchasing\nDepartment - Bellagio Ltd",
+                    modifier = Modifier.fillMaxWidth(),
+                    color = ink,
+                    fontFamily = FontFamily.SansSerif,
                     fontWeight = FontWeight.ExtraBold,
-                    color = ProColors.navy
+                    fontSize = 19.sp,
+                    lineHeight = 27.sp,
+                    textAlign = TextAlign.Center
                 )
                 Text(
                     "භාවිත මාර්ගෝපදේශය",
-                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
                     color = ProColors.teal,
-                    fontWeight = FontWeight.Bold
+                    fontFamily = sinhalaGuideFont,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 21.sp,
+                    lineHeight = 32.sp,
+                    textAlign = TextAlign.Center
                 )
-            }
-        },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth()
-                    .heightIn(max = 490.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(13.dp)
-            ) {
-                Text(
-                    "Market Pro මඟින් කුස්සි අවශ්‍යතා, මිලදී ගැනීම්, මිල ගණන් සහ වියදම් පහසුවෙන් කළමනාකරණය කළ හැකිය.",
-                    style = MaterialTheme.typography.bodyMedium
+                HorizontalDivider(
+                    modifier = Modifier.padding(top = 12.dp, bottom = 6.dp),
+                    color = dividerColor
                 )
-                helpSections.forEach { section ->
-                    Text(
-                        section.heading,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = ProColors.navy
-                    )
-                    Text(section.description, style = MaterialTheme.typography.bodyMedium)
-                }
-                HorizontalDivider()
-                Text(
-                    "Market Pro for Purchasing Department - Bellagio Ltd",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.ExtraBold
-                )
-                TextButton(
-                    onClick = {
-                        // ACTION_DIAL opens the phone dialer without placing a call.
-                        val dial = Intent(Intent.ACTION_DIAL, Uri.parse("tel:0705505250"))
-                        // Avoid package-visibility false negatives on Android 11+.
-                        // No CALL_PHONE permission is needed for ACTION_DIAL.
-                        runCatching { context.startActivity(dial) }
-                    },
-                    modifier = Modifier.fillMaxWidth()
+
+                // Keep the heading and close button stationary while guide scrolls.
+                Column(
+                    modifier = Modifier.weight(1f).fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(top = 8.dp, bottom = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(17.dp)
                 ) {
-                    Text("☎ Help Line: 0705505250", fontWeight = FontWeight.Bold)
+                    Text(
+                        "Market Pro මඟින් කුස්සි අවශ්‍යතා, මිලදී ගැනීම්, මිල ගණන් සහ වියදම් පහසුවෙන් කළමනාකරණය කළ හැකිය.",
+                        fontFamily = sinhalaGuideFont,
+                        fontSize = 18.sp,
+                        lineHeight = 31.sp,
+                        color = ink
+                    )
+                    helpSections.forEach { section ->
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                section.heading,
+                                fontFamily = sinhalaGuideFont,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 19.sp,
+                                lineHeight = 31.sp,
+                                color = ink
+                            )
+                            Text(
+                                section.description,
+                                fontFamily = sinhalaGuideFont,
+                                fontSize = 18.sp,
+                                lineHeight = 31.sp,
+                                color = Color(0xFF3D4650)
+                            )
+                        }
+                    }
+                    MarketHelpContactCard {
+                        val dial = Intent(Intent.ACTION_DIAL, Uri.parse("tel:0705505250"))
+                        runCatching { context.startActivity(dial) }
+                    }
                 }
-                Text(
-                    "Concept & Developed By",
-                    fontWeight = FontWeight.SemiBold,
-                    style = MaterialTheme.typography.bodySmall
-                )
-                Text(
-                    "Shanaka Wijesooriya",
-                    fontWeight = FontWeight.ExtraBold,
-                    color = ProColors.navy,
-                    style = MaterialTheme.typography.bodyLarge
-                )
+                HorizontalDivider(color = dividerColor)
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 9.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Close", fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
+                            color = ProColors.teal)
+                    }
+                }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Close") }
-        },
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp)
-    )
+        }
+    }
+}
+
+@Composable
+private fun MarketHelpContactCard(onCall: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+        shape = RoundedCornerShape(24.dp),
+        color = Color.White,
+        border = BorderStroke(1.dp, dividerColor),
+        shadowElevation = 1.dp
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 22.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            Icon(Icons.Outlined.LocalMall, contentDescription = null,
+                tint = ink, modifier = Modifier.size(32.dp))
+            Text(
+                "Market Pro for Purchasing\nDepartment - Bellagio Ltd",
+                modifier = Modifier.fillMaxWidth(),
+                fontFamily = FontFamily.SansSerif,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 18.sp,
+                lineHeight = 26.sp,
+                textAlign = TextAlign.Center,
+                color = ink
+            )
+            HorizontalDivider(color = dividerColor)
+            TextButton(onClick = onCall, modifier = Modifier.fillMaxWidth()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.Phone, contentDescription = null,
+                        tint = ProColors.teal, modifier = Modifier.size(22.dp))
+                    Text("Help Line: 0705505250",
+                        color = ink, fontSize = 17.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.SansSerif)
+                }
+            }
+            HorizontalDivider(color = dividerColor)
+            Text("Concept & Developed By", color = Color(0xFF64727A),
+                fontFamily = FontFamily.SansSerif, fontSize = 16.sp,
+                textAlign = TextAlign.Center)
+            Text(
+                "Shanaka Wijesooriya",
+                modifier = Modifier.fillMaxWidth(),
+                fontFamily = FontFamily.SansSerif,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 20.sp,
+                textAlign = TextAlign.Center,
+                color = ink
+            )
+        }
+    }
 }
