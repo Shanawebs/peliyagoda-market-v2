@@ -38,6 +38,6 @@
 Supabase project: `lkoptqhodgjeuwwfihfr`.
 Workspace: `e46b90c5-ed6a-4952-82e9-8582fac06d89`.
 Owner UUID: `bf49c22f-f245-4d3c-987e-c5ec081d7cad`.
-Old V2.30 registered Device ID (to be disabled upon explicit cutover): `73532d0b-5db2-4cb2-a895-3f4d39501c7a`.
+Old V2.30 registered Device ID: verify directly in Supabase DEV before cutover; do not publish device identifiers or auth tokens in the public GitHub repository.
 
 These IDs are identifiers, not security credentials. No passwords or API secret keys are included.
