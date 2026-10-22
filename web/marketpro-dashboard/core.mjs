@@ -127,3 +127,76 @@ export function recentBusinessDays(rows, limit = 10) {
   return [...rows].sort((a, b) =>
     String(b.business_date).localeCompare(String(a.business_date))).slice(0, limit);
 }
+
+
+/**
+ * Matches Android MarketPdf.completedCategoryGroups: consolidate daily initial
+ * and additional purchase lots per item, include purchased > 0 and >= required,
+ * sort into categories, and sum per-lot HALF_UP costs in integer cents.
+ * Incomplete purchases still contribute to total cash spent.
+ */
+export function completedPurchaseReport(requisitions, purchases, additions, items, categories) {
+  const required = requirementsByItem(requisitions);
+  const aggregate = new Map();
+  for (const lot of [...purchases, ...additions]) {
+    const grams = Number(lot.quantity_grams);
+    if (!Number.isSafeInteger(grams) || grams < 0) throw Error("Invalid purchased quantity");
+    const cents = lotCostCents(lot.quantity_grams, lot.price_cents_per_kg);
+    const current = aggregate.get(lot.item_id) ||
+      { item_id: lot.item_id, purchasedGrams: 0, lineCents: 0n };
+    current.purchasedGrams += grams;
+    current.lineCents += cents;
+    aggregate.set(lot.item_id, current);
+  }
+  let totalSpentCents = 0n;
+  const grouped = new Map();
+  for (const row of aggregate.values()) {
+    totalSpentCents += row.lineCents;
+    const neededGrams = required.get(row.item_id)?.grams || 0;
+    if (row.purchasedGrams <= 0 || row.purchasedGrams < neededGrams) continue;
+    const item = items.get(row.item_id);
+    if (!item) throw Error("Cannot report a purchased item missing from the catalog");
+    const category = categories.get(item.category_id)?.name || "Uncategorized";
+    const previous = grouped.get(category) || [];
+    previous.push({
+      id: row.item_id, name: item.name,
+      requiredGrams: neededGrams, purchasedGrams: row.purchasedGrams,
+      lineCents: row.lineCents
+    });
+    grouped.set(category, previous);
+  }
+  const groups = [...grouped.entries()]
+    .sort(([a],[b]) => a.localeCompare(b))
+    .map(([name, rows]) => {
+      rows.sort((a,b) => a.name.localeCompare(b.name));
+      return {
+        name, rows,
+        subtotalCents: rows.reduce((sum,row)=>sum+row.lineCents,0n)
+      };
+    });
+  return {
+    groups,
+    completedCount: groups.reduce((sum,g)=>sum+g.rows.length,0),
+    completedTotalCents: groups.reduce((sum,g)=>sum+g.subtotalCents,0n),
+    totalSpentCents
+  };
+}
+
+/** Day markers are fetched from the authenticated workspace's daily summary. */
+export function calendarMonthDays(year, monthIndex, dates) {
+  if (!Number.isInteger(year) || year < 1 || year > 9999 ||
+    !Number.isInteger(monthIndex) || monthIndex < 0 || monthIndex > 11) {
+    throw Error("Invalid calendar month");
+  }
+  const count = new Date(Date.UTC(year, monthIndex+1, 0)).getUTCDate();
+  const firstWeekday = new Date(Date.UTC(year, monthIndex, 1)).getUTCDay();
+  const saved = new Set(dates);
+  return {
+    firstWeekday,
+    days: Array.from({length:count},(_,i)=>{
+      const date = String(year).padStart(4,"0")+"-"+
+        String(monthIndex+1).padStart(2,"0")+"-"+String(i+1).padStart(2,"0");
+      return {date, day:i+1, recorded:saved.has(date)};
+    })
+  };
+}
