@@ -27,7 +27,7 @@ import kotlinx.coroutines.withContext
  */
 class CloudOwnerAuth(private val app: Context) {
     companion object {
-        const val PROJECT_URL = BuildConfig.MARKETPRO_SUPABASE_URL
+        val PROJECT_URL = BuildConfig.MARKETPRO_SUPABASE_URL
         private const val PREFS = "marketpro_cloud_owner_auth"
         private const val KEY = "encrypted_session"
         private const val ALIAS = "marketpro_cloud_owner_auth_aes_v1"
