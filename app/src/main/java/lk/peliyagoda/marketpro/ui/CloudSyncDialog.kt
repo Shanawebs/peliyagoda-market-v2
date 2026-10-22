@@ -30,6 +30,7 @@ import lk.peliyagoda.marketpro.cloud.CloudSyncEngine
 import lk.peliyagoda.marketpro.cloud.CloudSyncScheduler
 import lk.peliyagoda.marketpro.data.CloudDeviceIdentity
 import lk.peliyagoda.marketpro.data.MarketDatabase
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -44,6 +45,7 @@ fun CloudSyncDialog(onDismiss: () -> Unit) {
     val newestEdit by cloudDao.observeLatestMutation().collectAsState(initial = null)
     val enrolledState by cloudDao.observeState(CloudSyncConfig.ENABLED).collectAsState(initial = null)
     val lastSuccess by cloudDao.observeState(CloudSyncConfig.LAST_SUCCESS).collectAsState(initial = null)
+    val lastAttempt by cloudDao.observeState(CloudSyncConfig.LAST_ATTEMPT).collectAsState(initial = null)
     val lastError by cloudDao.observeState(CloudSyncConfig.LAST_ERROR).collectAsState(initial = null)
     val enabled = enrolledState?.value == "true"
     val scope = rememberCoroutineScope()
@@ -70,6 +72,7 @@ fun CloudSyncDialog(onDismiss: () -> Unit) {
                 Text(if (enabled) "Cloud Sync: ENABLED" else "Cloud Sync: NOT ENABLED")
                 Text("Pending changes: $pending")
                 Text("Last successful upload: ${lastSuccess?.value ?: "none"}")
+                Text("Last sync attempt: ${lastAttempt?.value ?: "none"}")
                 if (!lastError?.value.isNullOrBlank()) Text("Last sync problem: ${lastError?.value}")
                 Text("Primary Phone ID: $deviceUuid")
                 TextButton(onClick = {
@@ -108,14 +111,47 @@ fun CloudSyncDialog(onDismiss: () -> Unit) {
                     ) { Text("Enable Verified DEV Cloud Sync") }
                 } else {
                     Text("A connected network triggers Background Sync. The server acknowledges each record before the local queue is cleared.")
+                    Text("Sync Now uploads directly from this phone and reports the actual result. " +
+                        "The usual 15-minute background sync remains active.")
                     Button(
                         enabled = !busy,
                         onClick = {
-                            CloudSyncScheduler.kick(context)
-                            information = "Sync work requested. Pending records remain until server confirmation."
+                            busy = true
+                            information = "Connecting and uploading pending changes…"
+                            scope.launch {
+                                val engine = CloudSyncEngine(context)
+                                try {
+                                    // Do not queue another KEEP job: an existing retry can
+                                    // suppress it. Run a bounded upload immediately on IO.
+                                    // V2.32 CloudSyncRunGate serializes overlapping workers.
+                                    val remaining = withContext(Dispatchers.IO) {
+                                        engine.drain(maxChanges = 100)
+                                    }
+                                    information = if (remaining == 0) {
+                                        "Sync verified. Pending changes: 0. " +
+                                            "Refresh the Cloud dashboard to see uploaded values."
+                                    } else {
+                                        "Cloud accepted this batch; $remaining pending " +
+                                            "change(s) remain. Background sync is scheduled."
+                                    }
+                                    if (remaining > 0) CloudSyncScheduler.kick(context)
+                                } catch (e: CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    val detail = e.message?.take(160)
+                                        ?: "Cloud request failed; please check login and network."
+                                    withContext(Dispatchers.IO) {
+                                        engine.recordFailure(detail)
+                                    }
+                                    information = "Sync failed: $detail. " +
+                                        "Your local pending changes remain saved."
+                                } finally {
+                                    busy = false
+                                }
+                            }
                         },
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Sync Now") }
+                    ) { Text(if (busy) "Syncing…" else "Sync Now — Verify Upload") }
                 }
                 if (information.isNotBlank()) Text(information)
             }
