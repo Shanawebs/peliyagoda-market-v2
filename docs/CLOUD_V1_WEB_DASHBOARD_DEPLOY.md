@@ -40,3 +40,18 @@ https://lkoptqhodgjeuwwfihfr.supabase.co/functions/v1/marketpro-web/
 - Vercel SSO deployment protection was disabled for this project so visitors can see the public login screen; Supabase Auth and workspace RLS still gate private records. No anonymous business data permitted.
 - Vercel deployment API reports READY and Vercel file listing confirms index.html, JS and CSS. Independent public HTTP fetch and end-to-end user login could NOT be verified from available environment (network/access limitations), so ask user to open the URL in browser and report any error.
 - This note supersedes the earlier 'Vercel not deployed' status above. Old Supabase Edge web URL displayed HTML as text due Edge Function response limitations and should not be used.
+
+
+## Cloud Web Dashboard UI update — 2026-10-22
+
+- User-requested changes deployed: larger Kitchen Requisitions and Purchases table fonts; per-purchased-item Kitchen Required total and per-kitchen breakdown; new Charts tab with category/item selection, weighted-average daily item price Rs./kg and purchased quantity kg, synchronized scrolling.
+- **Live production URL:** https://marketpro-cloud-dashboard.vercel.app/
+- **GitHub PR:** https://github.com/Shanawebs/peliyagoda-market-v2/pull/1 (squash merged)
+- **Production source branch/commit:** \`feature/cloud-v1-web-dashboard\` at \`5115f25adfd74e710afd41dd93e03d6b2b56b99c\`.
+- **Production deployment:** \`dpl_HbB7P3KCbidPMY9arp1iU8iH8ZHm\`; Vercel reports \`READY\`, aliases include \`marketpro-cloud-dashboard.vercel.app\`.
+- **Previous production rollback candidate:** \`dpl_3sNPLWLpKXLZSHRBzSyMA1Xc4otD\`.
+- **Preview deployment:** \`dpl_5Eocesiikm4kdcJdrYGboGPH2cNx\` (\`READY\`).
+- Node 22 GitHub Actions \`validate-web\` passed on the source branch and merged base branch, with regression coverage for unique per-item kitchen requirements, quantity-weighted price, and missing-day handling.
+- **Hosting model unchanged:** Vercel static deployment from inline files; no active GitHub auto-deploy integration. Future GitHub commits alone do **not** update the deployed dashboard.
+- **Scope unchanged:** read-only web views, no backend migrations, no RLS modifications, and no change to Android V2.31 writer or Android APK.
+- **Verification scope:** GitHub unit/security checks and Vercel deployment status/file delivery metadata were validated. This session did not have an authenticated browser session for owner-only end-to-end data testing; manually verify signed-in production tabs.
