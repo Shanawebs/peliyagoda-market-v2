@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://lkoptqhodgjeuwwfihfr.supabase.co; img-src 'self' data:; font-src 'self'; form-action 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'">
+  <title>Market Pro — Cloud Dashboard</title>
+  <meta name="description" content="Private, read-only dashboard for Peliyagoda Market Pro cloud purchase, kitchen and cash records.">
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./app.mjs" type="module"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <div class="brand" aria-label="Peliyagoda Market Pro">
+        <div class="brand-mark" aria-hidden="true">P</div>
+        <div class="brand-copy"><span class="brand-eyebrow">PELIYAGODA</span><strong>Market Pro<span class="brand-dot">.</span></strong></div>
+      </div>
+      <div class="top-actions">
+        <span class="security-pill"><span aria-hidden="true">●</span> <span>Private cloud</span></span>
+        <button id="logout-button" type="button" class="button button-ghost hidden">Sign out</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <section id="login-screen" class="login-wrap">
+      <div class="login-panel">
+        <div class="login-illustration" aria-hidden="true"><span>↗</span></div>
+        <p class="eyebrow">SECURE OWNER ACCESS</p>
+        <h1>Market intelligence.<br><span class="text-accent">Anywhere.</span></h1>
+        <p class="login-description">View live-updating purchases, requisitions and cash balances synced from your Android phone.</p>
+        <form id="login-form">
+          <label for="email">Email address</label>
+          <input id="email" name="email" type="email" autocomplete="username" placeholder="name@example.com" required maxlength="254" spellcheck="false">
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" required minlength="1">
+          <button id="login-button" class="button button-primary full-width" type="submit">Sign in to dashboard <span aria-hidden="true">→</span></button>
+        </form>
+        <p id="login-error" class="message error hidden" role="alert"></p>
+        <p class="auth-note">Use the same Supabase Owner credentials as the Market Pro Cloud Android app. No signup or write access is available here.</p>
+      </div>
+      <div class="login-side" aria-label="Dashboard preview">
+        <div class="feature-graphic" aria-hidden="true">
+          <div class="graphic-heading"><span>Business overview</span><span>↗</span></div>
+          <div class="placeholder-kpis"><span></span><span></span><span></span></div>
+          <div class="placeholder-chart"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        </div>
+        <p>One connected market. <strong>Clearer decisions.</strong></p>
+      </div>
+    </section>
+
+    <section id="dashboard-screen" class="dashboard hidden" aria-label="Cloud Dashboard">
+      <div class="page-heading">
+        <div>
+          <p class="eyebrow">CLOUD CONTROL CENTER</p>
+          <h1>Market overview<span class="brand-dot">.</span></h1>
+          <p class="subtle" id="workspace-label">Loading workspace…</p>
+        </div>
+        <div class="heading-actions">
+          <label class="date-label" for="date-filter">Business date
+            <input id="date-filter" type="date">
+          </label>
+          <button id="refresh-button" class="button button-outline" type="button"><span aria-hidden="true">⟳</span> Refresh</button>
+        </div>
+      </div>
+
+      <div class="status-strip">
+        <span class="pulse-dot" aria-hidden="true"></span>
+        <span id="connection-label">Auto-updating every 15 seconds</span>
+        <span class="status-divider">·</span>
+        <span id="last-updated" class="subtle" role="status" aria-live="polite">Checking cloud data…</span>
+        <span class="status-spacer"></span>
+        <span class="read-only-label">Read-only access</span>
+      </div>
+
+      <section class="kpis" aria-label="Financial snapshot for selected day">
+        <article class="kpi"><div class="kpi-icon green-bg" aria-hidden="true">▤</div><p>Kitchen Requisitions</p><h2 id="kpi-kitchen">—</h2><span id="kpi-kitchen-sub">Total required weight</span></article>
+        <article class="kpi"><div class="kpi-icon violet-bg" aria-hidden="true">↗</div><p>Total Expenses</p><h2 id="kpi-expenses">—</h2><span id="kpi-expenses-sub">Including additional lots</span></article>
+        <article class="kpi"><div class="kpi-icon blue-bg" aria-hidden="true">↓</div><p>Cash Received</p><h2 id="kpi-cash">—</h2><span>Recorded daily receipts</span></article>
+        <article class="kpi highlight"><div class="kpi-icon dark-green-bg" aria-hidden="true">◈</div><p>Cash Balance</p><h2 id="kpi-balance">—</h2><span>Cash received − expenses</span></article>
+      </section>
+
+      <div class="tabbar" role="tablist" aria-label="Cloud reports">
+        <button class="tab active" role="tab" aria-selected="true" id="tab-overview" data-tab="overview">Overview</button>
+        <button class="tab" role="tab" aria-selected="false" id="tab-kitchens" data-tab="kitchens">Kitchens</button>
+        <button class="tab" role="tab" aria-selected="false" id="tab-purchases" data-tab="purchases">Purchases</button>
+        <button class="tab" role="tab" aria-selected="false" id="tab-cash" data-tab="cash">Cash & Expenses</button>
+      </div>
+
+      <section id="panel-overview" class="tab-panel" role="tabpanel" aria-labelledby="tab-overview">
+        <div class="content-grid">
+          <article class="report-card">
+            <div class="section-header"><div><h3>Financial trend</h3><p>Recent business days · expenses vs receipts</p></div><span class="mini-tag">LKR</span></div>
+            <div id="trend-chart" class="trend-chart" aria-label="Expenses and cash received by business day"></div>
+            <div class="chart-legend"><span><i class="legend-expense"></i> Expenses</span><span><i class="legend-cash"></i> Cash received</span></div>
+          </article>
+          <article class="report-card">
+            <div class="section-header"><div><h3>Daily activity</h3><p id="activity-date">Selected business date</p></div></div>
+            <div class="activity-list">
+              <div><span>Purchased items</span><strong id="count-purchases">—</strong></div>
+              <div><span>Additional purchase lots</span><strong id="count-additions">—</strong></div>
+              <div><span>Kitchen requisition entries</span><strong id="count-requisitions">—</strong></div>
+              <div><span>Catalog items</span><strong id="count-items">—</strong></div>
+              <div><span>Catalog categories</span><strong id="count-categories">—</strong></div>
+            </div>
+            <div class="notice"><strong>Photos stay on the phone.</strong> Original invoice images are not uploaded or shown in this dashboard.</div>
+          </article>
+        </div>
+        <article class="report-card wide">
+          <div class="section-header"><div><h3>Financial history</h3><p>Select a row to view that day's records.</p></div></div>
+          <div class="table-scroll"><table>
+            <thead><tr><th>Date</th><th class="right">Total expenses</th><th class="right">Cash received</th><th class="right">Cash balance</th></tr></thead>
+            <tbody id="history-body"></tbody>
+          </table></div>
+        </article>
+      </section>
+
+      <section id="panel-kitchens" class="tab-panel hidden" role="tabpanel" aria-labelledby="tab-kitchens">
+        <div id="kitchen-summary" class="small-metrics"></div>
+        <article class="report-card wide"><div class="section-header"><div><h3>Kitchen Requisitions</h3><p>Live cloud quantities for the selected date.</p></div></div>
+          <div class="table-scroll"><table><thead><tr><th>Kitchen</th><th>Item</th><th class="right">Required quantity</th></tr></thead><tbody id="requisitions-body"></tbody></table></div>
+        </article>
+      </section>
+
+      <section id="panel-purchases" class="tab-panel hidden" role="tabpanel" aria-labelledby="tab-purchases">
+        <article class="report-card wide"><div class="section-header"><div><h3>Purchase lots</h3><p>Initial and additional lots are accounted for separately.</p></div></div>
+          <div class="table-scroll"><table><thead><tr><th>Lot type</th><th>Item</th><th class="right">Quantity</th><th class="right">Price / kg</th><th class="right">Line total</th></tr></thead><tbody id="purchases-body"></tbody></table></div>
+        </article>
+      </section>
+
+      <section id="panel-cash" class="tab-panel hidden" role="tabpanel" aria-labelledby="tab-cash">
+        <div class="content-grid cash-grid">
+          <article class="report-card"><div class="section-header"><div><h3>Cash reconciliation</h3><p>Exact values sourced from the secure cloud view.</p></div></div>
+            <div class="activity-list finance-breakdown">
+              <div><span>Cash received</span><strong id="detail-cash">—</strong></div>
+              <div><span>Initial purchase expenses</span><strong id="detail-initial">—</strong></div>
+              <div><span>Additional lot expenses</span><strong id="detail-additional">—</strong></div>
+              <div class="total"><span>Total expenses</span><strong id="detail-expenses">—</strong></div>
+              <div class="total balance-row"><span>Cash balance</span><strong id="detail-balance">—</strong></div>
+            </div>
+          </article>
+          <article class="report-card"><div class="section-header"><div><h3>Data protection</h3><p>Secure workspace reporting</p></div></div>
+            <div class="security-list"><p>✓ Supabase email/password login</p><p>✓ Workspace Row Level Security</p><p>✓ Read-only report access</p><p>✓ Auto-refresh while this tab is open</p><p>✓ No invoice photo uploads</p></div>
+          </article>
+        </div>
+      </section>
+
+      <p id="dashboard-error" class="message error hidden" role="alert"></p>
+      <footer class="footer"><span>© Market Pro Cloud · Private workspace dashboard</span><span>Asia/Colombo · Cloud V1</span></footer>
+    </section>
+  </main>
+</body>
+</html>
