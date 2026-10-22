@@ -45,7 +45,7 @@ fun CloudOwnerLoginDialog(onDismiss: () -> Unit) {
         val restored = runCatching { client.currentAccount() }
         account = restored.getOrNull()
         status = when {
-            account != null -> "Signed in. Cloud uploads are disabled until this owner and phone are enrolled."
+            account != null -> "Signed in. Open Cloud Sync & Backup to check enrollment, pending records and opt-in status."
             restored.isFailure -> "Could not verify saved session. Connect to the internet and sign in."
             else -> "Create or sign in to your Market Pro DEV account."
         }
@@ -74,7 +74,7 @@ fun CloudOwnerLoginDialog(onDismiss: () -> Unit) {
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("DEV only. No Kitchen, Purchase, Cash or Invoice Photo uploads are enabled.")
+                Text("DEV only. Login alone does not upload any records. Cloud Sync requires explicit activation. Invoice photos always remain local.")
                 if (account == null) {
                     OutlinedTextField(
                         value = email,
@@ -101,7 +101,7 @@ fun CloudOwnerLoginDialog(onDismiss: () -> Unit) {
                             val enteredPassword = password
                             start {
                                 client.signIn(enteredEmail, enteredPassword).also { account = it }
-                                status = "Email authenticated. Owner workspace/device enrollment is still required."
+                                status = "Email authenticated. Check Cloud Sync & Backup for device enrollment and upload status."
                             }
                         },
                         enabled = !working && email.isNotBlank() && password.isNotBlank(),
@@ -135,7 +135,7 @@ fun CloudOwnerLoginDialog(onDismiss: () -> Unit) {
                         start {
                             client.signOut()
                             account = null
-                            status = "Signed out locally. Existing cloud upload was never enabled."
+                            status = "Signed out on this phone. Pending local changes are retained until you sign in again."
                         }
                     }, enabled = !working) { Text("Sign Out") }
                 }
