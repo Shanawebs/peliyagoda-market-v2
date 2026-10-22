@@ -60,7 +60,7 @@ fun CloudSyncDialog(onDismiss: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
-        title = { Text("Cloud Sync — DEV V2.31") },
+        title = { Text("Cloud Sync — DEV V2.34") },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth().heightIn(max = 500.dp)
@@ -80,14 +80,14 @@ fun CloudSyncDialog(onDismiss: () -> Unit) {
 
                 Text("Invoice Photos Are ALWAYS Local. Only Items, Kitchens, Purchases, Extra Lots And Cash Are Uploaded.")
                 if (!enabled) {
-                    Text("IMPORTANT: V2.31 Installs Separately From V2.28 And V2.30 Because GitHub DEV APK Signing Differs. Sign In Again Here. To Sync Existing V2.28 Records, Export Its JSON Backup And Restore Into THIS V2.31 App BEFORE Enabling. Original Invoice Images Are Not In JSON And Stay In V2.28.")
+                    Text("IMPORTANT: V2.34 Installs Separately From V2.31 To Protect Existing Records When DEV APK Signing Changes. Export Your V2.31 JSON Backup, Restore It Into V2.34 BEFORE Enabling Cloud Sync, And Sign In Again Here. Original Invoice Images Are Not Included In JSON And Stay In The Old App.")
                     androidx.compose.foundation.layout.Row {
                         Checkbox(
                             checked = reviewedBackup,
                             onCheckedChange = { reviewedBackup = it },
                             enabled = !busy
                         )
-                        Text("I Have Restored My V2.28 JSON Backup OR I Intentionally Want A Fresh Cloud Dataset.")
+                        Text("I Have Restored My Existing JSON Backup OR I Intentionally Want A Fresh Cloud Dataset.")
                     }
                     Button(
                         enabled = reviewedBackup && !busy,

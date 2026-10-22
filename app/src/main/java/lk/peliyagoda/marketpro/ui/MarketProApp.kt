@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.AlertDialog
@@ -79,6 +80,7 @@ import lk.peliyagoda.marketpro.util.MarketPdf
 import lk.peliyagoda.marketpro.util.ConsolidatedRow
 import lk.peliyagoda.marketpro.util.DevicePerformancePolicy
 import lk.peliyagoda.marketpro.data.CloudDeviceIdentity
+import lk.peliyagoda.marketpro.security.RestorePinGuard
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -187,6 +189,10 @@ fun MarketProApp(vm: MarketViewModel) {
         var menuOpen by remember { mutableStateOf(false) }
         var cloudStatusOpen by remember { mutableStateOf(false) }
         var ownerLoginOpen by remember { mutableStateOf(false) }
+        var helpOpen by remember { mutableStateOf(false) }
+        var restorePinOpen by remember { mutableStateOf(false) }
+        var restoreAuthorized by remember { mutableStateOf(false) }
+        val restorePinGuard = remember(context) { RestorePinGuard(context.applicationContext) }
         var calendarOpen by remember { mutableStateOf(false) }
         var pendingXlsx by remember { mutableStateOf<ByteArray?>(null) }
         var pdfDialogOpen by remember { mutableStateOf(false) }
@@ -279,28 +285,68 @@ fun MarketProApp(vm: MarketViewModel) {
         val backupPicker = rememberLauncherForActivityResult(
             ActivityResultContracts.OpenDocument()
         ) { uri ->
-            if (uri != null) {
+            if (uri == null) {
+                restoreAuthorized = false
+                restoreText = null
+            } else if (!restoreAuthorized) {
+                message("Restore Permission Expired. Enter The PIN Again.")
+            } else {
                 runCatching {
                     context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
                         ?: error("Cannot read file")
                 }.onSuccess { restoreText = it }
-                    .onFailure { message("Could Not Read Backup File") }
+                    .onFailure {
+                        restoreAuthorized = false
+                        message("Could Not Read Backup File")
+                    }
             }
         }
 
-        if (restoreText != null) {
+        if (restorePinOpen) {
+            RestorePinDialog(
+                guard = restorePinGuard,
+                onDismiss = { restorePinOpen = false },
+                onAuthorized = {
+                    restorePinOpen = false
+                    restoreAuthorized = true
+                    backupPicker.launch(arrayOf("application/json", "text/plain", "*/*"))
+                }
+            )
+        }
+
+        if (restoreText != null && restoreAuthorized) {
             AlertDialog(
-                onDismissRequest = { restoreText = null },
+                onDismissRequest = {
+                    restoreText = null
+                    restoreAuthorized = false
+                },
                 title = { Text("Restore Backup?") },
-                text = { Text("All Current Catalog, Kitchen And Purchase Records Will Be Replaced. Export A Backup Of Current Records Before Continuing.") },
-                dismissButton = { TextButton(onClick = { restoreText = null }) { Text("Cancel") } },
+                text = {
+                    Text(
+                        "⚠️ මෙය දැනට ඇති Catalog, Kitchen සහ Purchase Records " +
+                            "Backup File එකේ දත්ත මඟින් Replace කරනු ඇත. " +
+                            "Restore කිරීමට පෙර අලුත් JSON Backup එකක් Save කරගන්න. " +
+                            "Invoice ඡායාරූප JSON එකට ඇතුළත් නොවේ."
+                    )
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        restoreText = null
+                        restoreAuthorized = false
+                    }) { Text("Cancel") }
+                },
                 confirmButton = {
                     Button(onClick = {
-                        val text = restoreText ?: return@Button
+                        if (!restoreAuthorized) return@Button
+                        val json = restoreText ?: return@Button
+                        // One-time permission is consumed before any database mutation.
+                        restoreAuthorized = false
                         restoreText = null
-                        vm.restoreBackup(text) { result ->
+                        // Repository performs full schema checks before an atomic replace.
+                        // Cloud-enrolled restores remain blocked at repository level.
+                        vm.restoreBackup(json) { result ->
                             message(if (result.isSuccess) "Backup Restored Successfully" else
-                                "Restore Failed: ${result.exceptionOrNull()?.message ?: "Invalid file"}")
+                                "Restore Failed: ${result.exceptionOrNull()?.message ?: "Invalid File"}")
                         }
                     }) { Text("Replace & Restore") }
                 }
@@ -318,6 +364,8 @@ fun MarketProApp(vm: MarketViewModel) {
                 onDismiss = { calendarOpen = false }
             )
         }
+
+        if (helpOpen) MarketHelpDialog(onDismiss = { helpOpen = false })
 
         if (ownerLoginOpen) CloudOwnerLoginDialog(onDismiss = { ownerLoginOpen = false })
 
@@ -400,7 +448,9 @@ fun MarketProApp(vm: MarketViewModel) {
                                 })
                                 DropdownMenuItem(text = { Text("Restore Backup (JSON)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
                                     menuOpen = false
-                                    backupPicker.launch(arrayOf("application/json", "text/plain", "*/*"))
+                                    restoreAuthorized = false
+                                    restoreText = null
+                                    restorePinOpen = true
                                 })
                                 DropdownMenuItem(text = { Text("Cloud Owner Login / Sign Up", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
                                     menuOpen = false
@@ -410,6 +460,20 @@ fun MarketProApp(vm: MarketViewModel) {
                                     menuOpen = false
                                     cloudStatusOpen = true
                                 })
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            "Help & User Guide",
+                                            fontWeight = FontWeight.Bold,
+                                            style = MaterialTheme.typography.bodyLarge
+                                        )
+                                    },
+                                    leadingIcon = { Icon(Icons.Filled.HelpOutline, contentDescription = null) },
+                                    onClick = {
+                                        menuOpen = false
+                                        helpOpen = true
+                                    }
+                                )
 
                             }
                         }
