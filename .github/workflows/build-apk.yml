@@ -2,7 +2,7 @@ name: Build Peliyagoda Market V2 APK
 
 on:
   push:
-    branches: [main, feature/v228-stable-master-catalog, feature/cloud-v1-android-outbox-v229, feature/cloud-v1-owner-auth-v230, feature/cloud-v1-android-sync-v231, feature/ui-titlecase-rounded-menu-v234, feature/cloud-v234-help-and-restore-pin, feature/cloud-v235-help-typography-card]
+    branches: [main, feature/v228-stable-master-catalog, feature/cloud-v1-android-outbox-v229, feature/cloud-v1-owner-auth-v230, feature/cloud-v1-android-sync-v231, feature/ui-titlecase-rounded-menu-v234, feature/cloud-v234-help-and-restore-pin, feature/cloud-v235-help-typography-card, feature/cloud-v236-detailed-sinhala-help]
   workflow_dispatch:
 
 permissions:

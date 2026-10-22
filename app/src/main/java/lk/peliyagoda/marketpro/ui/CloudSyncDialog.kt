@@ -60,7 +60,7 @@ fun CloudSyncDialog(onDismiss: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
-        title = { Text("Cloud Sync — DEV V2.35") },
+        title = { Text("Cloud Sync — DEV V2.36") },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth().heightIn(max = 500.dp)
@@ -80,7 +80,7 @@ fun CloudSyncDialog(onDismiss: () -> Unit) {
 
                 Text("Invoice Photos Are ALWAYS Local. Only Items, Kitchens, Purchases, Extra Lots And Cash Are Uploaded.")
                 if (!enabled) {
-                    Text("IMPORTANT: V2.35 Installs Separately From V2.34 To Protect Existing Records When DEV APK Signing Changes. Export Your V2.34 JSON Backup, Restore It Into V2.35 BEFORE Enabling Cloud Sync, And Sign In Again Here. Original Invoice Images Are Not Included In JSON And Stay In The Old App.")
+                    Text("IMPORTANT: V2.36 Installs Separately From V2.35 To Protect Existing Records When DEV APK Signing Changes. Export Your V2.35 JSON Backup, Restore It Into V2.36 BEFORE Enabling Cloud Sync, And Sign In Again Here. Original Invoice Images Are Not Included In JSON And Stay In The Old App.")
                     androidx.compose.foundation.layout.Row {
                         Checkbox(
                             checked = reviewedBackup,
