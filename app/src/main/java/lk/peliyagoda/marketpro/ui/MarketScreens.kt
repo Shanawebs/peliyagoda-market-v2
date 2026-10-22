@@ -464,7 +464,7 @@ fun KitchensScreen(
                                         fontWeight = FontWeight.ExtraBold
                                     )
                                     Text(
-                                        "${group.itemCount} Item(S)",
+                                        "${group.itemCount} Item(s)",
                                         color = ProColors.muted,
                                         style = MaterialTheme.typography.labelMedium
                                     )
@@ -1656,7 +1656,7 @@ fun CatalogSheet(
                     item.category == category && item.name.contains(search, ignoreCase = true)
                 }
             }
-            Text("${filteredItems.size} ${category} Item(S)", color = ProColors.muted,
+            Text("${filteredItems.size} ${category} Item(s)", color = ProColors.muted,
                 style = MaterialTheme.typography.labelMedium)
             LazyColumn(
                 modifier = Modifier.weight(1f),
