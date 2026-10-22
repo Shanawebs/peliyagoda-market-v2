@@ -178,7 +178,7 @@ fun ItemPriceChartDialog(
                     }
                     else -> {
                         Text(
-                            "${trend.size} Recorded Day(S) • ${history.size} Purchase Lot(S)",
+                            "${trend.size} Recorded Day(s) • ${history.size} Purchase Lot(s)",
                             color = ProColors.teal,
                             fontWeight = FontWeight.Bold,
                             style = MaterialTheme.typography.bodyMedium
