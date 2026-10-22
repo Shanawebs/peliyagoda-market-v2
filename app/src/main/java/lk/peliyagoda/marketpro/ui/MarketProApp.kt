@@ -401,7 +401,8 @@ fun MarketProApp(vm: MarketViewModel) {
                                 DropdownMenuItem(text = { Text("Restore Backup (JSON)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
                                     menuOpen = false
                                     backupPicker.launch(arrayOf("application/json", "text/plain", "*/*"))
-                                })                                DropdownMenuItem(text = { Text("Cloud Owner Login / Sign Up", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
+                                })
+                                DropdownMenuItem(text = { Text("Cloud Owner Login / Sign Up", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
                                     menuOpen = false
                                     ownerLoginOpen = true
                                 })
