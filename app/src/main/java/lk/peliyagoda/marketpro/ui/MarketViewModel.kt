@@ -1,5 +1,7 @@
 package lk.peliyagoda.marketpro.ui
 
+import android.content.Context
+import lk.peliyagoda.marketpro.cloud.CloudSyncScheduler
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -21,7 +23,7 @@ import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class MarketViewModel(private val repository: MarketRepository) : ViewModel() {
+class MarketViewModel(private val repository: MarketRepository, private val appContext: Context?) : ViewModel() {
     // Serialize rapid edits and deletions so the newest quantity always wins.
     private val requirementWriteMutex = Mutex()
     private val purchaseWriteMutex = Mutex()
@@ -52,8 +54,21 @@ class MarketViewModel(private val repository: MarketRepository) : ViewModel() {
     val cloudPendingCount = repository.cloudPendingCount
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
+    private suspend fun enqueueIfEnabled() {
+        val ctx = appContext ?: return
+        if (repository.cloudSyncEnabled()) {
+            runCatching {
+                CloudSyncScheduler.schedulePeriodic(ctx)
+                CloudSyncScheduler.kick(ctx)
+            }
+        }
+    }
+
     init {
-        viewModelScope.launch(Dispatchers.IO) { repository.seedCatalogOnce() }
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.seedCatalogOnce()
+            enqueueIfEnabled()
+        }
     }
 
     fun setDate(day: LocalDate) { date.value = day }
@@ -61,7 +76,7 @@ class MarketViewModel(private val repository: MarketRepository) : ViewModel() {
 
     private fun doWork(work: suspend () -> Unit, result: (Result<Unit>) -> Unit = {}) {
         viewModelScope.launch {
-            val outcome = runCatching { withContext(Dispatchers.IO) { work() } }
+            val outcome = runCatching { withContext(Dispatchers.IO) { work(); enqueueIfEnabled() } }
             result(outcome)
         }
     }
@@ -69,7 +84,7 @@ class MarketViewModel(private val repository: MarketRepository) : ViewModel() {
     fun addCategory(name: String, done: (Boolean) -> Unit) {
         viewModelScope.launch {
             val ok = runCatching {
-                withContext(Dispatchers.IO) { repository.addCategory(name) }
+                withContext(Dispatchers.IO) { repository.addCategory(name).also { if (it) enqueueIfEnabled() } }
             }.getOrDefault(false)
             done(ok)
         }
@@ -78,7 +93,7 @@ class MarketViewModel(private val repository: MarketRepository) : ViewModel() {
     fun addItem(name: String, category: String, done: (Boolean) -> Unit) {
         viewModelScope.launch {
             val success = runCatching { withContext(Dispatchers.IO) {
-                repository.addItem(name, category)
+                repository.addItem(name, category).also { if (it) enqueueIfEnabled() }
             } }.getOrDefault(false)
             done(success)
         }
@@ -87,7 +102,7 @@ class MarketViewModel(private val repository: MarketRepository) : ViewModel() {
     fun renameItem(id: Long, name: String, done: (Boolean) -> Unit) {
         viewModelScope.launch {
             val success = runCatching {
-                withContext(Dispatchers.IO) { repository.renameItem(id, name) }
+                withContext(Dispatchers.IO) { repository.renameItem(id, name).also { if (it) enqueueIfEnabled() } }
             }.getOrDefault(false)
             done(success)
         }
@@ -154,11 +169,11 @@ class MarketViewModel(private val repository: MarketRepository) : ViewModel() {
         doWork({ repository.restoreBackup(json) }, done)
 
     companion object {
-        fun factory(repository: MarketRepository): ViewModelProvider.Factory =
+        fun factory(repository: MarketRepository, context: Context? = null): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                    MarketViewModel(repository) as T
+                    MarketViewModel(repository, context) as T
             }
     }
 }
