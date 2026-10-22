@@ -116,3 +116,14 @@ export function dailyPriceTrends(lots) {
       purchaseLots: day.purchaseLots
     }));
 }
+
+
+/** Newest business-date summaries for compact overview charts and tables.
+ * Sorting on YYYY-MM-DD keeps selection stable regardless of API order.
+ * A visible limit does not delete or change saved financial records.
+ */
+export function recentBusinessDays(rows, limit = 10) {
+  if (!Number.isInteger(limit) || limit < 1) throw Error("Invalid history display limit");
+  return [...rows].sort((a, b) =>
+    String(b.business_date).localeCompare(String(a.business_date))).slice(0, limit);
+}
