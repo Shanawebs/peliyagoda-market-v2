@@ -35,7 +35,7 @@
 .chart-panel:nth-child(2) h3{color:#7862bb}
 .chart-viewport{display:grid;grid-template-columns:56px minmax(0,1fr);align-items:stretch;min-height:245px}
 .chart-axis{position:relative;min-height:225px;font-variant-numeric:tabular-nums;color:#65776b;font-size:12px}
-.chart-axis-label{position:absolute;right:8px;transform:translateY(50%);white-space:nowrap}
+.chart-axis-label{position:absolute;right:8px;transform:translateY(-50%);white-space:nowrap}
 .chart-scroll{min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-color:#a2cbb5 #ecf3ee;scrollbar-width:thin;touch-action:pan-x;overscroll-behavior-x:contain}
 .chart-scroll svg{display:block;max-width:none}
 .chart-empty{min-height:190px;display:grid;place-items:center;font-size:14px;color:var(--muted)}
