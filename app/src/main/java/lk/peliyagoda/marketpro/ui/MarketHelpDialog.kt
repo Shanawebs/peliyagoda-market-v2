@@ -128,9 +128,9 @@ fun MarketHelpDialog(onDismiss: () -> Unit) {
                     onClick = {
                         // ACTION_DIAL opens the phone dialer without placing a call.
                         val dial = Intent(Intent.ACTION_DIAL, Uri.parse("tel:0705505250"))
-                        if (dial.resolveActivity(context.packageManager) != null) {
-                            context.startActivity(dial)
-                        }
+                        // Avoid package-visibility false negatives on Android 11+.
+                        // No CALL_PHONE permission is needed for ACTION_DIAL.
+                        runCatching { context.startActivity(dial) }
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
