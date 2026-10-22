@@ -60,9 +60,29 @@
           <p class="subtle" id="workspace-label">Loading workspace…</p>
         </div>
         <div class="heading-actions">
-          <label class="date-label" for="date-filter">Business date
-            <input id="date-filter" type="date">
-          </label>
+          <div class="date-picker-field">
+            <span class="date-caption" id="date-picker-caption">Business date</span>
+            <input id="date-filter" type="date" class="visually-hidden" tabindex="-1" aria-hidden="true">
+            <button id="date-trigger" type="button" class="date-trigger"
+              aria-haspopup="dialog" aria-expanded="false" aria-controls="date-calendar"
+              aria-labelledby="date-picker-caption date-trigger">Select a date <span aria-hidden="true">▦</span></button>
+            <div id="date-calendar" class="date-calendar hidden" role="dialog"
+              aria-label="Select business date with saved-data indicators">
+              <div class="calendar-header">
+                <button id="calendar-prev" class="calendar-nav" type="button" aria-label="Previous month">‹</button>
+                <strong id="calendar-month">Month</strong>
+                <button id="calendar-next" class="calendar-nav" type="button" aria-label="Next month">›</button>
+              </div>
+              <div class="calendar-weekdays" aria-hidden="true"><span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span></div>
+              <div id="calendar-grid" class="calendar-grid" role="group" aria-label="Business days"></div>
+              <div class="calendar-footer">
+                <span class="calendar-legend"><i aria-hidden="true"></i> Data recorded</span>
+                <button id="calendar-today" type="button">Today</button>
+                <button id="calendar-close" type="button">Close</button>
+              </div>
+              <p id="calendar-message" class="calendar-message" role="status" aria-live="polite"></p>
+            </div>
+          </div>
           <button id="refresh-button" class="button button-outline" type="button"><span aria-hidden="true">⟳</span> Refresh</button>
         </div>
       </div>
@@ -89,6 +109,7 @@
         <button class="tab" role="tab" aria-selected="false" id="tab-purchases" data-tab="purchases">Purchases</button>
         <button class="tab" role="tab" aria-selected="false" id="tab-cash" data-tab="cash">Cash & Expenses</button>
         <button class="tab" role="tab" aria-selected="false" id="tab-charts" data-tab="charts">Charts</button>
+        <button id="pdf-button" class="tab-pdf-button" type="button" title="Preview completed-purchases PDF for the selected business date">▤ PDF Report</button>
       </div>
 
       <section id="panel-overview" class="tab-panel" role="tabpanel" aria-labelledby="tab-overview">
@@ -179,5 +200,19 @@
       <footer class="footer"><span>© Market Pro Cloud · Private workspace dashboard</span><span>Asia/Colombo · Cloud V1</span></footer>
     </section>
   </main>
+  <section id="pdf-preview" class="pdf-overlay hidden" role="dialog" aria-modal="true"
+    aria-labelledby="pdf-preview-title" tabindex="-1">
+    <div class="pdf-preview-shell">
+      <div class="pdf-preview-actions">
+        <div><strong id="pdf-preview-title">Completed purchases by category</strong>
+          <p>Review the report, then use Print / Save as PDF to create a PDF file.</p></div>
+        <div class="pdf-preview-controls">
+          <button id="pdf-print-button" type="button" class="button button-primary">Print / Save as PDF</button>
+          <button id="pdf-close-button" type="button" class="button button-outline">Close</button>
+        </div>
+      </div>
+      <div id="pdf-document" class="pdf-document" aria-label="Completed purchases report"></div>
+    </div>
+  </section>
 </body>
 </html>
