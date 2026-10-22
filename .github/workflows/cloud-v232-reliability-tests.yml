@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: market-v232-audit-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   cloud-sync-reliability:
