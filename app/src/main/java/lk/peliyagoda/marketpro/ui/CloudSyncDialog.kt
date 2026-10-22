@@ -41,6 +41,7 @@ fun CloudSyncDialog(onDismiss: () -> Unit) {
     val cloudDao = remember(context) { MarketDatabase.get(context).cloudDao() }
     val deviceUuid = remember(context) { CloudDeviceIdentity.get(context) }
     val pending by cloudDao.observePendingCount().collectAsState(initial = 0)
+    val newestEdit by cloudDao.observeLatestMutation().collectAsState(initial = null)
     val enrolledState by cloudDao.observeState(CloudSyncConfig.ENABLED).collectAsState(initial = null)
     val lastSuccess by cloudDao.observeState(CloudSyncConfig.LAST_SUCCESS).collectAsState(initial = null)
     val lastError by cloudDao.observeState(CloudSyncConfig.LAST_ERROR).collectAsState(initial = null)
@@ -50,7 +51,7 @@ fun CloudSyncDialog(onDismiss: () -> Unit) {
     var busy by remember { mutableStateOf(false) }
     var information by remember { mutableStateOf("") }
 
-    LaunchedEffect(enabled, pending) {
+    LaunchedEffect(enabled, newestEdit, pending) {
         if (enabled) {
             CloudSyncScheduler.schedulePeriodic(context)
             if (pending > 0) CloudSyncScheduler.kick(context)
