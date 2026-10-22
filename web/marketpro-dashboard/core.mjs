@@ -200,3 +200,47 @@ export function calendarMonthDays(year, monthIndex, dates) {
     })
   };
 }
+
+
+/**
+ * Category sections for read-only Kitchens and Purchases reports.
+ * The master catalog (item.category_id -> categories.id) is the sole source of
+ * membership. Display common existing naming variants consistently and order:
+ * Vegetables, Chinese Vegetables, Fruits, then any other catalog categories.
+ * Preserves every original row, including zero-quantity requisitions and
+ * separate initial/additional purchase lots.
+ */
+export function groupRowsByCatalogCategory(rows, itemsById, categoriesById) {
+  function canonicalCategory(name) {
+    const normalized = String(name || "").trim().toLowerCase()
+      .replace(/[\s_-]+/g, "");
+    if (normalized === "vegetable" || normalized === "vegetables" ||
+        normalized === "veggie" || normalized === "veggies") {
+      return { name: "Vegetables", rank: 0 };
+    }
+    if (["chineseveg", "chinesevegs", "chinesevegetable",
+         "chinesevegetables"].includes(normalized)) {
+      return { name: "Chinese Vegetables", rank: 1 };
+    }
+    if (normalized === "fruit" || normalized === "fruits") {
+      return { name: "Fruits", rank: 2 };
+    }
+    return { name: String(name || "Uncategorized").trim() || "Uncategorized", rank: 3 };
+  }
+  const groups = new Map();
+  for (const row of rows) {
+    const item = itemsById.get(row.item_id);
+    const categoryId = item?.category_id || null;
+    const key = categoryId === null ? "unknown" : String(categoryId);
+    let group = groups.get(key);
+    if (!group) {
+      const category = canonicalCategory(categoriesById.get(categoryId)?.name);
+      group = { key, name: category.name, rank: category.rank, rows: [] };
+      groups.set(key, group);
+    }
+    group.rows.push(row);
+  }
+  return [...groups.values()].sort((a, b) =>
+    a.rank - b.rank || a.name.localeCompare(b.name, "en", { sensitivity: "base" }) ||
+    a.key.localeCompare(b.key));
+}
