@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { exactCents, lkr, kg, lotCostCents, dateIsValid, normalizeDailyRow, summarizeDays, groupKitchens, requirementsByItem, dailyPriceTrends, recentBusinessDays, completedPurchaseReport, calendarMonthDays, groupRowsByCatalogCategory } from "../marketpro-dashboard/core.mjs";
+import { exactCents, lkr, kg, lotCostCents, dateIsValid, normalizeDailyRow, summarizeDays, groupKitchens, requirementsByItem, dailyPriceTrends, recentBusinessDays, completedPurchaseReport, calendarMonthDays, groupRowsByCatalogCategory, csvDocument, csvCell, centsAsDecimal } from "../marketpro-dashboard/core.mjs";
 
 test("Android half-up on each 1.5kg lot 101 cents/kg", () => {
   const lot = lotCostCents(1500,101);
@@ -208,4 +208,27 @@ test("Multiple initial/additional lots survive category grouping without money d
   assert.deepEqual(subtotals,[200000n,324000n]);
   assert.equal(subtotals.reduce((a,b)=>a+b,0n),
     lots.reduce((sum,lot)=>sum+lotCostCents(lot.quantity_grams,lot.price_cents_per_kg),0n));
+});
+
+test("Excel CSV preserves Sinhala item names and authentic UTF-8 BOM", () => {
+  const output = csvDocument(["Item","Quantity kg","Amount Rs"],[
+    ["කොත්තමල්ලි කොළ","2.500","1500.25"],
+    ["කැරට්","12.000","-15.50"]
+  ]);
+  assert.equal(output.charCodeAt(0),0xFEFF);
+  assert.match(output, /කොත්තමල්ලි කොළ/);
+  assert.match(output, /"කැරට්",12.000,-15.50/);
+  assert.equal(output.split("\r\n").length,3);
+});
+test("CSV export protects against spreadsheet formula injection", () => {
+  assert.equal(csvCell("=HYPERLINK(\"https://example.test\")"),
+    "\"'=HYPERLINK(\"\"https://example.test\"\")\"");
+  assert.equal(csvCell("@SUM(A1)"), "\"'@SUM(A1)\"");
+  assert.equal(csvCell("-31.25"), "-31.25");
+  assert.equal(csvCell("3.00"), "3.00");
+  assert.throws(()=>csvDocument(["A","B"],[["one"]]),/row/);
+});
+test("CSV financial currency conversion remains precise above Number.MAX_SAFE_INTEGER", () => {
+  assert.equal(centsAsDecimal("900719925474099199"),"9007199254740991.99");
+  assert.equal(centsAsDecimal("-200"),"-2.00");
 });
