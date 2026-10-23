@@ -173,6 +173,21 @@ class CloudChangeJournal(private val dao: CloudSyncDao) {
         require(key.isNotBlank())
         val wireType = type.wireName
         dao.insertIdentity(CloudIdentityEntity(wireType, key, UUID.randomUUID().toString()))
+        // Each new financial record is tagged in the SAME Room transaction as
+        // its change and pending operation. Historical restored rows cannot
+        // be trusted merely because their UUID format looks valid.
+        if (wireType in setOf(
+                "purchase", "requisition", "purchase_addition", "daily_cash_received"
+            ) && dao.state(lk.peliyagoda.marketpro.cloud.FreshAttachState.PROTOCOL) ==
+                lk.peliyagoda.marketpro.cloud.FreshAttachState.VERSION
+        ) {
+            val id = dao.cloudId(wireType, key)
+                ?: error("New financial row has no durable Cloud UUID")
+            dao.setState(CloudSyncStateEntity(
+                lk.peliyagoda.marketpro.cloud.FreshAttachState.originKey(wireType, key),
+                id
+            ))
+        }
         dao.putPending(
             CloudOutboxEntity(
                 entityType = wireType,
