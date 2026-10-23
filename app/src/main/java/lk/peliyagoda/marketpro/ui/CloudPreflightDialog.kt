@@ -16,6 +16,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,6 +28,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import lk.peliyagoda.marketpro.cloud.CloudPreflightReport
 import lk.peliyagoda.marketpro.cloud.CloudReadinessInspector
+import lk.peliyagoda.marketpro.cloud.CloudLocalIdentityStager
+import lk.peliyagoda.marketpro.cloud.LocalIdentityStageResult
+import lk.peliyagoda.marketpro.cloud.LocalIdentityRollbackResult
 import lk.peliyagoda.marketpro.cloud.LocalMigrationRecovery
 import lk.peliyagoda.marketpro.cloud.LocalRecoveryReceipt
 import lk.peliyagoda.marketpro.cloud.CloudReadinessRules
@@ -38,6 +42,7 @@ fun CloudPreflightDialog(onDismiss: () -> Unit, onOpenOwnerLogin: () -> Unit) {
     val context = LocalContext.current
     val inspector = remember(context) { CloudReadinessInspector(context.applicationContext) }
     val recovery = remember(context) { LocalMigrationRecovery(context.applicationContext) }
+    val stager = remember(context) { CloudLocalIdentityStager(context.applicationContext) }
     val scope = rememberCoroutineScope()
     var checking by remember { mutableStateOf(false) }
     var preparingRecovery by remember { mutableStateOf(false) }
@@ -45,9 +50,18 @@ fun CloudPreflightDialog(onDismiss: () -> Unit, onOpenOwnerLogin: () -> Unit) {
     var error by remember { mutableStateOf("") }
     var report by remember { mutableStateOf<CloudPreflightReport?>(null) }
     var showMigrationBlockers by remember { mutableStateOf(false) }
+    var stageBusy by remember { mutableStateOf(false) }
+    var staged by remember { mutableStateOf(false) }
+    var stageConfirm by remember { mutableStateOf(false) }
+    var rollbackConfirm by remember { mutableStateOf(false) }
+    var stageResult by remember { mutableStateOf<LocalIdentityStageResult?>(null) }
+    var rollbackResult by remember { mutableStateOf<LocalIdentityRollbackResult?>(null) }
+    LaunchedEffect(Unit) {
+        staged = runCatching { stager.isStaged() }.getOrDefault(false)
+    }
 
     AlertDialog(
-        onDismissRequest = { if (!checking && !preparingRecovery) onDismiss() },
+        onDismissRequest = { if (!checking && !preparingRecovery && !stageBusy) onDismiss() },
         title = {
             Text("Cloud Connection & Safety Check", fontWeight = FontWeight.Bold)
         },
@@ -58,8 +72,9 @@ fun CloudPreflightDialog(onDismiss: () -> Unit, onOpenOwnerLogin: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(13.dp)
             ) {
                 Text(
-                    "Phase 1 — Read-only connection to existing Market Pro Cloud. " +
-                        "Local records are not uploaded, merged or deleted. " +
+                    "Cloud access is strictly read-only. An optional LOCAL UUID " +
+                        "staging action can change only this new test app, " +
+                        "after an encrypted backup and explicit confirmation. " +
                         "Original V2.31 cloud writer stays unchanged.",
                     style = MaterialTheme.typography.bodyMedium
                 )
@@ -80,7 +95,7 @@ fun CloudPreflightDialog(onDismiss: () -> Unit, onOpenOwnerLogin: () -> Unit) {
                             }
                         }
                     },
-                    enabled = !checking && !preparingRecovery,
+                    enabled = !checking && !preparingRecovery && !stageBusy,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(if (checking) "Checking Cloud…" else "Check My Cloud Connection")
@@ -225,8 +240,8 @@ fun CloudPreflightDialog(onDismiss: () -> Unit, onOpenOwnerLogin: () -> Unit) {
                             style = MaterialTheme.typography.bodySmall)
                     }
                     Text(
-                        "NO WRITER APPROVAL. This report does not save UUID mappings, " +
-                            "clear pending changes, enroll a device, or upload records.",
+                        "NO WRITER APPROVAL. Auditing never changes Cloud data. " +
+                            "Local staging below requires a separate confirmed action.",
                         color = ProColors.red,
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.bodySmall
@@ -253,8 +268,8 @@ fun CloudPreflightDialog(onDismiss: () -> Unit, onOpenOwnerLogin: () -> Unit) {
                             ProColors.red else ProColors.muted
                     )
                     Text(
-                        "CUTOVER BLOCKED — read-only planning only. No UUID rebind, " +
-                            "outbox reset, cloud upload or writer enrollment.",
+                        "CLOUD CUTOVER BLOCKED. Only a separate local UUID staging " +
+                            "action is available. Cloud upload and writer enrollment remain locked.",
                         fontWeight = FontWeight.Bold,
                         color = ProColors.red,
                         style = MaterialTheme.typography.bodyMedium
@@ -301,7 +316,7 @@ fun CloudPreflightDialog(onDismiss: () -> Unit, onOpenOwnerLogin: () -> Unit) {
                                 }
                             }
                         },
-                        enabled = !checking && !preparingRecovery &&
+                        enabled = !checking && !preparingRecovery && !stageBusy &&
                             dryRun.contentMatches &&
                             dryRun.oneToOneCandidateCoverage &&
                             !result.deviceRegisteredAsWriter,
@@ -328,10 +343,71 @@ fun CloudPreflightDialog(onDismiss: () -> Unit, onOpenOwnerLogin: () -> Unit) {
                     Text(
                         "Private local snapshots are removed if this preview app is " +
                             "uninstalled. Keep your separate JSON backup and original " +
-                            "Cloud app. This is a recovery preparation, NOT migration.",
+                            "Cloud app. A verified snapshot is required before local migration.",
                         style = MaterialTheme.typography.bodySmall,
                         color = ProColors.muted
                     )
+                    HorizontalDivider()
+                    Text("Stage Local UUID Mappings (No Cloud Upload)", fontWeight = FontWeight.Bold)
+                    Text(
+                        "This action backs up the original 330 local UUIDs and " +
+                            "unsent operations, then links matching Cloud UUIDs " +
+                            "inside this preview's Room database only. The " +
+                            "old Cloud writer and V6 Web Dashboard stay untouched.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    if (!staged && !stageConfirm) {
+                        Button(
+                            onClick = { stageConfirm = true },
+                            enabled = !stageBusy && !checking && !preparingRecovery &&
+                                result.migrationCandidates.size ==
+                                    result.migrationDryRun.phoneRecords &&
+                                result.migrationDryRun.contentMatches &&
+                                result.migrationDryRun.oneToOneCandidateCoverage &&
+                                !result.deviceRegisteredAsWriter,
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Prepare Local UUID Stage") }
+                    }
+                    if (!staged && stageConfirm) {
+                        Text(
+                            "CONFIRM: This changes UUID mappings and empties ONLY this " +
+                                "preview's restored pending queue. The original values " +
+                                "are retained inside an encrypted local snapshot. " +
+                                "NO Cloud upload or writer transfer will occur.",
+                            fontWeight = FontWeight.Bold, color = ProColors.red,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Button(onClick = {
+                            stageConfirm = false
+                            stageBusy = true
+                            error = ""
+                            scope.launch {
+                                try {
+                                    stageResult = stager.stage()
+                                    staged = true
+                                    report = runCatching { inspector.inspect() }.getOrNull()
+                                } catch (e: Exception) {
+                                    error = e.message?.take(230) ?: "Local staging refused"
+                                    staged = stager.isStaged()
+                                } finally {
+                                    stageBusy = false
+                                }
+                            }
+                        }, enabled = !stageBusy && !checking && !preparingRecovery,
+                            modifier = Modifier.fillMaxWidth()) {
+                            Text(if (stageBusy) "Staging…" else "Confirm Local Stage — No Upload")
+                        }
+                        TextButton(onClick = { stageConfirm = false },
+                            enabled = !stageBusy) { Text("Cancel") }
+                    }
+                    stageResult?.let { saved ->
+                        Text(
+                            "LOCAL STAGE VERIFIED: ${saved.mappedRecords} UUIDs linked; " +
+                                "${saved.quarantinedPending} restore operations protected.",
+                            color = ProColors.green,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                     HorizontalDivider()
                     Text("Record Comparison (counts)", fontWeight = FontWeight.Bold)
                     Row(modifier = Modifier.fillMaxWidth()) {
@@ -360,6 +436,59 @@ fun CloudPreflightDialog(onDismiss: () -> Unit, onOpenOwnerLogin: () -> Unit) {
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
+                if (staged) {
+                    HorizontalDivider()
+                    Text("Local UUID Migration: STAGED", color = ProColors.green,
+                        fontWeight = FontWeight.Bold)
+                    Text(
+                        "All changes remain on this preview phone. Cloud writes " +
+                            "are still disabled; the old Cloud writer remains active.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    if (!rollbackConfirm) {
+                        TextButton(onClick = { rollbackConfirm = true },
+                            enabled = !stageBusy && !checking && !preparingRecovery,
+                            modifier = Modifier.fillMaxWidth()) {
+                            Text("Restore Original Local UUIDs / Pending Queue")
+                        }
+                    } else {
+                        Text(
+                            "Rollback restores the original local UUIDs and pending " +
+                                "queue from the encrypted snapshot. It is blocked " +
+                                "if you've edited any business records since staging.",
+                            color = ProColors.red,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Button(onClick = {
+                            rollbackConfirm = false
+                            stageBusy = true
+                            error = ""
+                            scope.launch {
+                                try {
+                                    rollbackResult = stager.rollback()
+                                    staged = false
+                                    report = null
+                                } catch (e: Exception) {
+                                    error = e.message?.take(230) ?: "Local rollback refused"
+                                } finally {
+                                    stageBusy = false
+                                }
+                            }
+                        }, enabled = !stageBusy && !checking,
+                            modifier = Modifier.fillMaxWidth()) {
+                            Text("Confirm Local Rollback — No Cloud Changes")
+                        }
+                        TextButton(onClick = { rollbackConfirm = false },
+                            enabled = !stageBusy) { Text("Cancel") }
+                    }
+                }
+                rollbackResult?.let { restored ->
+                    Text(
+                        "ROLLBACK VERIFIED: ${restored.restoredMappings} old UUIDs and " +
+                            "${restored.restoredPending} local operations restored.",
+                        fontWeight = FontWeight.Bold, color = ProColors.green
+                    )
+                }
                 if (error.isNotBlank()) {
                     Text(error, color = ProColors.red, style = MaterialTheme.typography.bodySmall)
                 }
@@ -383,7 +512,7 @@ fun CloudPreflightDialog(onDismiss: () -> Unit, onOpenOwnerLogin: () -> Unit) {
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss, enabled = !checking && !preparingRecovery) {
+            TextButton(onClick = onDismiss, enabled = !checking && !preparingRecovery && !stageBusy) {
                 Text("Close")
             }
         }
