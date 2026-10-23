@@ -32,6 +32,7 @@ data class CloudPreflightReport(
     val financialAudit: FinancialAudit,
     val uuidAudit: UuidAuditResult,
     val migrationDryRun: MigrationDryRunResult,
+    val localRecoveryFingerprint: String,
     val writeBlockedReason: String
 )
 
@@ -115,10 +116,13 @@ class CloudReadinessInspector(private val context: Context) {
         val cloudDao = database.cloudDao()
         // Both are READ operations. JSON restore generates local UUIDs in this
         // table; none may be assumed identical to the existing cloud UUIDs.
-        val localIdentities = cloudDao.allIdentities().associate {
+        val allIdentityRows = cloudDao.allIdentities()
+        val localIdentities = allIdentityRows.associate {
             (it.entityType to it.entityKey) to it.cloudId
         }
-        val localPendingCount = cloudDao.pendingCountNow()
+        val allPendingRows = cloudDao.pending(Int.MAX_VALUE)
+        val allSyncStates = cloudDao.allStates()
+        val localPendingCount = allPendingRows.size
         fun localIdentity(type: String, key: String): String? =
             localIdentities[type to key]
         val phoneCategories = localDao.allCategories()
@@ -128,6 +132,10 @@ class CloudReadinessInspector(private val context: Context) {
         val phonePurchases = localDao.allPurchases()
         val phoneAdditions = localDao.allAdditions()
         val phoneCash = localDao.allCashReceived()
+        val localRecoveryFingerprint = LocalStateFingerprint.calculate(
+            phoneCategories, phoneItems, phoneRequirements, phonePurchases,
+            phoneAdditions, phoneCash, allIdentityRows, allPendingRows, allSyncStates
+        )
         val localCounts = linkedMapOf(
             "categories" to phoneCategories.size,
             "items" to phoneItems.size,
@@ -389,6 +397,7 @@ class CloudReadinessInspector(private val context: Context) {
             financialAudit = financeAudit,
             uuidAudit = uuidAudit,
             migrationDryRun = migrationDryRun,
+            localRecoveryFingerprint = localRecoveryFingerprint,
             writeBlockedReason = "Existing Cloud data and device-specific UUID mappings " +
                 "must be reconciled before enabling another writer. No upload or " +
                 "overwrite is allowed in this preview."
