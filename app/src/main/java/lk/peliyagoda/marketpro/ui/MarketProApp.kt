@@ -431,7 +431,7 @@ fun MarketProApp(vm: MarketViewModel) {
                                 color = ProColors.teal, fontWeight = FontWeight.Bold)
                             Text("Market Pro", style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.ExtraBold, color = ProVisual.itemInk)
-                            Text("Independent UI concept  •  v3.1",
+                            Text("Independent UI concept  •  v3.2",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = ProColors.muted)
                         }
@@ -448,16 +448,16 @@ fun MarketProApp(vm: MarketViewModel) {
                                 shape = RoundedCornerShape(20.dp),
                                 containerColor = Color(0xFFF9F7FD)
                             ) {
-                                DropdownMenuItem(text = { Text("Items Price Chart", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
+                                DropdownMenuItem(text = { Text("Items Price Chart", color = Color(0xFF605B88), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
                                     menuOpen = false
                                     vm.selectChartItem(null)
                                     chartOpen = true
                                 })
-                                DropdownMenuItem(text = { Text("Export Excel (.xlsx)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
+                                DropdownMenuItem(text = { Text("Export Excel (.xlsx)", color = Color(0xFF605B88), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
                                     menuOpen = false
                                     exportExcel()
                                 })
-                                DropdownMenuItem(text = { Text("Backup All Records (JSON)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
+                                DropdownMenuItem(text = { Text("Backup All Records (JSON)", color = Color(0xFF605B88), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
                                     menuOpen = false
                                     vm.prepareBackup { result ->
                                         result.onSuccess {
@@ -466,17 +466,17 @@ fun MarketProApp(vm: MarketViewModel) {
                                         }.onFailure { message("Could Not Prepare Backup") }
                                     }
                                 })
-                                DropdownMenuItem(text = { Text("Restore Backup (JSON)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
+                                DropdownMenuItem(text = { Text("Restore Backup (JSON)", color = Color(0xFF605B88), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
                                     menuOpen = false
                                     restoreAuthorized = false
                                     restoreText = null
                                     restorePinOpen = true
                                 })
-                                DropdownMenuItem(text = { Text("Cloud Owner Login / Sign Up", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
+                                DropdownMenuItem(text = { Text("Cloud Owner Login / Sign Up", color = Color(0xFF605B88), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
                                     menuOpen = false
                                     ownerLoginOpen = true
                                 })
-                                DropdownMenuItem(text = { Text("Cloud Sync & Backup (DEV)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
+                                DropdownMenuItem(text = { Text("Cloud Sync & Backup (DEV)", color = Color(0xFF605B88), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
                                     menuOpen = false
                                     cloudStatusOpen = true
                                 })
@@ -484,11 +484,15 @@ fun MarketProApp(vm: MarketViewModel) {
                                     text = {
                                         Text(
                                             "Help & User Guide",
+                                            color = Color.White,
                                             fontWeight = FontWeight.Bold,
                                             style = MaterialTheme.typography.bodyLarge
                                         )
                                     },
-                                    leadingIcon = { Icon(Icons.Filled.HelpOutline, contentDescription = null) },
+                                    leadingIcon = { Icon(Icons.Filled.HelpOutline, contentDescription = null, tint = Color.White) },
+                                    modifier = Modifier
+                                        .padding(horizontal = 6.dp, vertical = 3.dp)
+                                        .background(Color(0xFF605B88), RoundedCornerShape(14.dp)),
                                     onClick = {
                                         menuOpen = false
                                         helpOpen = true
