@@ -370,10 +370,9 @@ fun MarketProApp(vm: MarketViewModel) {
 
         if (helpOpen) MarketHelpDialog(onDismiss = { helpOpen = false })
 
-        // Phase 1: owner authentication + private READ-ONLY connection checks.
-        // DO NOT expose CloudSyncDialog or enableAfterOwnerConfirmation:
-        // this preview's distinct Room UUID mappings cannot safely upload
-        // into the already-populated V2.31 workspace.
+        // Separate V3.37 FRESH-ONLY sandbox. Existing-workspace catalog attach
+        // requires authenticated owner + server-enrolled unique writer.
+        // Never import the old 330 demo records or silently activate uploads.
         if (ownerLoginOpen) {
             CloudOwnerLoginDialog(
                 onDismiss = { ownerLoginOpen = false },
@@ -381,7 +380,7 @@ fun MarketProApp(vm: MarketViewModel) {
             )
         }
         if (cloudStatusOpen) {
-            CloudPreflightDialog(
+            FreshCloudSyncDialog(
                 onDismiss = { cloudStatusOpen = false },
                 onOpenOwnerLogin = { ownerLoginOpen = true }
             )
@@ -482,7 +481,7 @@ fun MarketProApp(vm: MarketViewModel) {
                                     menuOpen = false
                                     ownerLoginOpen = true
                                 })
-                                DropdownMenuItem(text = { Text("Cloud Connection & Local Migration", color = Color(0xFF605B88), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
+                                DropdownMenuItem(text = { Text("Cloud Connection & Fresh Sync", color = Color(0xFF605B88), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
                                     menuOpen = false
                                     cloudStatusOpen = true
                                 })
