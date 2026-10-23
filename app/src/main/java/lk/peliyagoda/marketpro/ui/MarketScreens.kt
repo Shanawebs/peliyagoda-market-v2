@@ -190,7 +190,7 @@ fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, categories: Li
     fun chooseCategory(category: String) {
         if (filter != category) {
             filter = category
-            scope.launch { listState.scrollToItem(1) }
+            scope.launch { listState.scrollToItem(2) }
         }
     }
     val shown = remember(rows, filter) { rows.filter { filter == "All" || it.item.category == filter } }
