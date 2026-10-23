@@ -370,29 +370,20 @@ fun MarketProApp(vm: MarketViewModel) {
 
         if (helpOpen) MarketHelpDialog(onDismiss = { helpOpen = false })
 
-        // Protect existing cloud/production data in this side-by-side UI prototype.
-        // All backend/cloud code remains in source, but preview sign-in is blocked.
-        if (ownerLoginOpen || cloudStatusOpen) {
-            AlertDialog(
-                onDismissRequest = {
-                    ownerLoginOpen = false
-                    cloudStatusOpen = false
-                },
-                title = { Text("Expressive Preview — Cloud Isolated") },
-                text = {
-                    Text(
-                        "මෙය අලුත් UI එක පරීක්ෂා කරන ස්වාධීන App එකකි. " +
-                            "පැරණි Market Pro Cloud data ආරක්ෂා කිරීම සඳහා මෙම " +
-                            "preview build එකේ cloud login සහ sync තාවකාලිකව අක්‍රීයයි. " +
-                            "Offline purchasing, reports සහ backup පරීක්ෂා කරන්න."
-                    )
-                },
-                confirmButton = {
-                    TextButton(onClick = {
-                        ownerLoginOpen = false
-                        cloudStatusOpen = false
-                    }) { Text("Understood") }
-                }
+        // Phase 1: owner authentication + private READ-ONLY connection checks.
+        // DO NOT expose CloudSyncDialog or enableAfterOwnerConfirmation:
+        // this preview's distinct Room UUID mappings cannot safely upload
+        // into the already-populated V2.31 workspace.
+        if (ownerLoginOpen) {
+            CloudOwnerLoginDialog(
+                onDismiss = { ownerLoginOpen = false },
+                existingOwnerOnly = true
+            )
+        }
+        if (cloudStatusOpen) {
+            CloudPreflightDialog(
+                onDismiss = { cloudStatusOpen = false },
+                onOpenOwnerLogin = { ownerLoginOpen = true }
             )
         }
 
@@ -487,11 +478,11 @@ fun MarketProApp(vm: MarketViewModel) {
                                     restoreText = null
                                     restorePinOpen = true
                                 })
-                                DropdownMenuItem(text = { Text("Cloud Owner Login / Sign Up", color = Color(0xFF605B88), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
+                                DropdownMenuItem(text = { Text("Cloud Owner Login", color = Color(0xFF605B88), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
                                     menuOpen = false
                                     ownerLoginOpen = true
                                 })
-                                DropdownMenuItem(text = { Text("Cloud Sync & Backup (DEV)", color = Color(0xFF605B88), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
+                                DropdownMenuItem(text = { Text("Cloud Connection (Read-Only)", color = Color(0xFF605B88), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
                                     menuOpen = false
                                     cloudStatusOpen = true
                                 })
