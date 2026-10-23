@@ -300,7 +300,7 @@ private fun CompactCategoryChip(
     ) {
         Box(
             modifier = Modifier.fillMaxWidth()
-                .heightIn(min = 46.dp)
+                .heightIn(min = 48.dp)
                 .padding(horizontal = horizontalTextPadding),
             contentAlignment = Alignment.Center
         ) {
