@@ -5,6 +5,10 @@ plugins {
     id("org.jetbrains.kotlin.kapt")
 }
 
+// Single source of truth for user-visible version labels.
+// Next release: update this number only; both header and launcher follow it.
+val marketProDisplayVersion = "3.2.7"
+
 android {
     namespace = "lk.peliyagoda.marketpro"
     compileSdk = 35
@@ -13,11 +17,15 @@ android {
         // Only PUBLIC Supabase identifiers; never put service-role credentials in an APK.
         buildConfigField("String", "MARKETPRO_SUPABASE_URL", "\"https://lkoptqhodgjeuwwfihfr.supabase.co\"")
         buildConfigField("String", "MARKETPRO_SUPABASE_PUBLISHABLE_KEY", "\"sb_publishable__7F9sfydgBtHiZNPV9kNzg_hGfazjxg\"")
-        applicationId = "lk.peliyagoda.marketpro.expressivepreview.v326"
+        applicationId = "lk.peliyagoda.marketpro.expressivepreview.v327"
         minSdk = 26
         targetSdk = 35
-        versionCode = 326
-        versionName = "3.2.6-bellagio-header-preview"
+        versionCode = 327
+        versionName = marketProDisplayVersion
+        // Generated from the SAME version as the APK metadata. Never hardcode
+        // versions separately in AndroidManifest or a Compose text component.
+        resValue("string", "marketpro_version_caption", "• v$marketProDisplayVersion")
+        resValue("string", "marketpro_launcher_name", "Market Pro ✦ v$marketProDisplayVersion")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
