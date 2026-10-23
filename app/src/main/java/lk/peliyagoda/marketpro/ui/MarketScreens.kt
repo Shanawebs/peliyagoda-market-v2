@@ -182,11 +182,12 @@ private fun CategoryChip(category: String, active: Boolean, onClick: () -> Unit)
 }
 
 /**
- * Dashboard and Market share the same responsive category strip.
- * Four default categories fit without clipping in a typical phone viewport.
- * For narrow screens, large font scale, or custom categories we keep every
- * label fully visible via a two-row layout or a scrollable overflow row.
- * This lives inside the existing stickyHeader: original v3.1 alignment stays.
+ * Market Pro Expressive v3.2.3: one small fixed All button, and the other
+ * THREE category buttons split the remaining width equally. Text length
+ * NEVER determines category button width in the standard four-category layout.
+ *
+ * Both Dashboard and Market call this same composable inside their existing
+ * stickyHeaders. More/custom categories keep their scrollable overflow.
  */
 @Composable
 private fun VisibleCategoryStrip(
@@ -194,21 +195,40 @@ private fun VisibleCategoryStrip(
     selected: String,
     onSelect: (String) -> Unit
 ) {
-    val labels = remember(categories) { listOf("All") + categories.filter { it != "All" } }
+    val labels = remember(categories) {
+        listOf("All") + categories.filter { it != "All" }
+    }
     val fontScale = LocalDensity.current.fontScale
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-        val twoRows = labels.size in 2..4 &&
-            (maxWidth < 325.dp || fontScale > 1.20f || labels.sumOf { it.length } > 41)
-        if (labels.size <= 4 && !twoRows) {
+        // Extremely narrow phones/accessibility text use two rows rather than
+        // hiding labels. Normal phones always show the four equalized buttons.
+        val twoRows = labels.size == 4 &&
+            (maxWidth < 292.dp || fontScale > 1.35f)
+        val labelSize = if (maxWidth < 355.dp) 12.sp else 13.sp
+
+        if (labels.size == 4 && !twoRows && labels.drop(1).all { it.length <= 15 }) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                labels.forEach { label ->
+                CompactCategoryChip(
+                    category = labels.first(),
+                    active = selected == labels.first(),
+                    modifier = Modifier.width(52.dp),
+                    textSize = labelSize,
+                    horizontalTextPadding = 2.dp,
+                    onClick = { onSelect(labels.first()) }
+                )
+                // Three equal weights, so Chinese Veg / Fruits / Vegetables
+                // receive IDENTICAL WIDTHS, independent of word length.
+                labels.drop(1).forEach { label ->
                     CompactCategoryChip(
                         category = label,
                         active = selected == label,
+                        modifier = Modifier.weight(1f),
+                        textSize = labelSize,
+                        horizontalTextPadding = 2.dp,
                         onClick = { onSelect(label) }
                     )
                 }
@@ -221,12 +241,14 @@ private fun VisibleCategoryStrip(
                 labels.chunked(2).forEach { pair ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         pair.forEach { label ->
                             CompactCategoryChip(
                                 category = label,
                                 active = selected == label,
+                                modifier = Modifier.weight(1f),
+                                textSize = 13.sp,
                                 onClick = { onSelect(label) }
                             )
                         }
@@ -234,10 +256,10 @@ private fun VisibleCategoryStrip(
                 }
             }
         } else {
-            // User-defined extra categories: do not shrink/truncate their names.
+            // Preserve usability if the owner adds more categories or long names.
             LazyRow(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
             ) {
                 lazyItems(labels, key = { it }) { label ->
                     CompactCategoryChip(
@@ -255,7 +277,10 @@ private fun VisibleCategoryStrip(
 private fun CompactCategoryChip(
     category: String,
     active: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    textSize: androidx.compose.ui.unit.TextUnit = 14.sp,
+    horizontalTextPadding: androidx.compose.ui.unit.Dp = 8.dp
 ) {
     val selectedBg = when (category) {
         MarketConstants.VEGETABLES -> Color(0xFF166534)
@@ -264,6 +289,7 @@ private fun CompactCategoryChip(
         else -> ProColors.teal
     }
     Surface(
+        modifier = modifier,
         onClick = onClick,
         shape = RoundedCornerShape(22.dp),
         color = if (active) selectedBg else ProVisual.page,
@@ -273,16 +299,19 @@ private fun CompactCategoryChip(
         )
     ) {
         Box(
-            modifier = Modifier.heightIn(min = 46.dp).padding(horizontal = 8.dp),
+            modifier = Modifier.fillMaxWidth()
+                .heightIn(min = 46.dp)
+                .padding(horizontal = horizontalTextPadding),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 category,
-                fontSize = 14.sp,
+                fontSize = textSize,
                 fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
                 color = if (active) Color.White else ProColors.navy,
                 maxLines = 1,
-                softWrap = false
+                softWrap = false,
+                textAlign = TextAlign.Center
             )
         }
     }
