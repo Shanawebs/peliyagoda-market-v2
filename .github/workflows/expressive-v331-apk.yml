@@ -28,7 +28,7 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REF_NAME" = "prototype/marketpro-expressive-v331-uuid-audit"
           grep -Fq 'applicationId = "lk.peliyagoda.marketpro.expressivepreview.v331"' app/build.gradle.kts
-          grep -Fq 'val marketProDisplayVersion = "3.3.0"' app/build.gradle.kts
+          grep -Fq 'val marketProDisplayVersion = "3.3.1"' app/build.gradle.kts
           grep -Fq 'versionName = marketProDisplayVersion' app/build.gradle.kts
           grep -Fq 'resValue("string", "marketpro_version_caption", "• v$marketProDisplayVersion")' app/build.gradle.kts
           grep -Fq 'resValue("string", "marketpro_launcher_name", "Market Pro ✦ v$marketProDisplayVersion")' app/build.gradle.kts
