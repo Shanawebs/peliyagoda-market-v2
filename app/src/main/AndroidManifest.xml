@@ -3,7 +3,7 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <application
-        android:label="Market Pro ✦ Preview"
+        android:label="Market Pro ✦ v3.1"
         android:icon="@drawable/ic_market"
         android:roundIcon="@drawable/ic_market"
         android:allowBackup="false"
