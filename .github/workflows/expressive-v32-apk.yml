@@ -28,7 +28,7 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REF_NAME" = "prototype/marketpro-expressive-v320"
           grep -Fq 'applicationId = "lk.peliyagoda.marketpro.expressivepreview.v32"' app/build.gradle.kts
-          grep -Fq 'versionName = "3.1.0-expressive-refinement-preview"' app/build.gradle.kts
+          grep -Fq 'versionName = "3.2.0-expressive-refinement-preview"' app/build.gradle.kts
           grep -Fq 'Market Pro ✦ v3.2' app/src/main/AndroidManifest.xml
           grep -Fq 'UPDATE items SET isActive = 0 WHERE id = :id AND isActive = 1' app/src/main/java/lk/peliyagoda/marketpro/data/MarketDatabase.kt
           grep -Fq 'items = catalogItems' app/src/main/java/lk/peliyagoda/marketpro/ui/MarketProApp.kt
