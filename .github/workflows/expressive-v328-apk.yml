@@ -3,7 +3,7 @@ name: Market Pro v3.2.8 - Read-Only Cloud Preflight APK
 on:
   push:
     branches:
-      - prototype/marketpro-expressive-v328
+      - prototype/marketpro-expressive-v328-cloud-preflight
   workflow_dispatch:
 
 permissions:
@@ -26,7 +26,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$GITHUB_REF_NAME" = "prototype/marketpro-expressive-v328"
+          test "$GITHUB_REF_NAME" = "prototype/marketpro-expressive-v328-cloud-preflight"
           grep -Fq 'applicationId = "lk.peliyagoda.marketpro.expressivepreview.v328"' app/build.gradle.kts
           grep -Fq 'val marketProDisplayVersion = "3.2.7"' app/build.gradle.kts
           grep -Fq 'versionName = marketProDisplayVersion' app/build.gradle.kts
