@@ -500,8 +500,6 @@ fun KitchensScreen(
         kitchen = kitchen,
         allItems = catalogItems,
         categories = categories,
-        addCategory = { name, done -> vm.addCategory(name, done) },
-        addMasterItem = { name, cat, done -> vm.addItem(name, cat, done) },
         existingIds = current.map { it.itemId }.toSet(),
         onDismiss = { pickerOpen = false },
         onConfirm = { ids ->
@@ -589,7 +587,7 @@ private fun CategoryStrip(
     categories: List<String>,
     selected: String,
     onSelect: (String) -> Unit,
-    onCreate: (String, (Boolean) -> Unit) -> Unit
+    onCreate: ((String, (Boolean) -> Unit) -> Unit)? = null
 ) {
     var adding by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf("") }
@@ -618,7 +616,7 @@ private fun CategoryStrip(
                     onClick = {
                         busy = true
                         val proposed = name.trim()
-                        onCreate(proposed) { created ->
+                        onCreate?.invoke(proposed) { created ->
                             busy = false
                             if (created) {
                                 onSelect(proposed)
@@ -634,11 +632,13 @@ private fun CategoryStrip(
         lazyItems(categories, key = { it }) { c ->
             CategoryChip(category = c, active = selected == c, onClick = { onSelect(c) })
         }
-        item {
-            OutlinedButton(onClick = { name = ""; error = false; adding = true }) {
-                Icon(Icons.Default.Add, contentDescription = null)
-                Spacer(Modifier.width(4.dp))
-                Text("Category")
+        if (onCreate != null) {
+            item {
+                OutlinedButton(onClick = { name = ""; error = false; adding = true }) {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(Modifier.width(4.dp))
+                    Text("Category")
+                }
             }
         }
     }
@@ -649,79 +649,16 @@ private fun CategoryStrip(
 private fun ItemPickerSheet(
     kitchen: String, allItems: List<ItemEntity>, existingIds: Set<Long>,
     categories: List<String>,
-    addCategory: (String, (Boolean) -> Unit) -> Unit,
-    addMasterItem: (String, String, (Boolean) -> Unit) -> Unit,
     onDismiss: () -> Unit, onConfirm: (Set<Long>) -> Unit
 ) {
     var search by remember { mutableStateOf("") }
     var category by remember { mutableStateOf(MarketConstants.VEGETABLES) }
     var selected by remember { mutableStateOf(setOf<Long>()) }
-    var newItemDialog by remember { mutableStateOf(false) }
-    var newItemName by remember { mutableStateOf("") }
-    var newItemError by remember { mutableStateOf(false) }
-    var newItemBusy by remember { mutableStateOf(false) }
-    var pendingAutoSelect by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(allItems, pendingAutoSelect) {
-        val target = pendingAutoSelect
-        if (target != null) {
-            val created = allItems.firstOrNull {
-                it.category == category && it.name.equals(target, ignoreCase = true)
-            }
-            if (created != null) {
-                selected = selected + created.id
-                pendingAutoSelect = null
-            }
-        }
-    }
-    if (newItemDialog) {
-        AlertDialog(
-            onDismissRequest = { if (!newItemBusy) newItemDialog = false },
-            title = { Text("Add New Master Item") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Category: $category", color = ProColors.teal,
-                        fontWeight = FontWeight.Bold)
-                    OutlinedTextField(
-                        value = newItemName,
-                        onValueChange = { newItemName = it; newItemError = false },
-                        label = { Text("New Item Name") },
-                        isError = newItemError,
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    if (newItemError) {
-                        Text("Item Already Exists Or Name Is Invalid", color = ProColors.red)
-                    }
-                }
-            },
-            confirmButton = {
-                Button(
-                    enabled = !newItemBusy && newItemName.trim().isNotBlank() &&
-                        newItemName.trim().length <= 80,
-                    onClick = {
-                        val newName = newItemName.trim()
-                        newItemBusy = true
-                        addMasterItem(newName, category) { saved ->
-                            newItemBusy = false
-                            if (saved) {
-                                pendingAutoSelect = newName
-                                search = ""
-                                newItemDialog = false
-                                newItemName = ""
-                            } else newItemError = true
-                        }
-                    }
-                ) { Text(if (newItemBusy) "Adding…" else "Add Item") }
-            },
-            dismissButton = {
-                TextButton(enabled = !newItemBusy,
-                    onClick = { newItemDialog = false }) { Text("Cancel") }
-            }
-        )
-    }
+    // Selection is limited to active Master Item Catalog records.
     val filtered = remember(allItems, category, search) {
         allItems.filter {
-            it.category == category && it.name.contains(search, ignoreCase = true)
+            it.isActive && it.category == category &&
+                it.name.contains(search, ignoreCase = true)
         }
     }
     // Keep the item's list scroll independent from the outer bottom sheet.
@@ -753,27 +690,13 @@ private fun ItemPickerSheet(
             CategoryStrip(
                 categories = categories,
                 selected = category,
-                onSelect = { category = it },
-                onCreate = addCategory
+                onSelect = { category = it }
             )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("New Selections: ${selected.size}", color = ProColors.teal,
-                    style = MaterialTheme.typography.labelLarge)
-                Spacer(Modifier.weight(1f))
-                Button(
-                    onClick = {
-                        newItemName = ""
-                        newItemError = false
-                        newItemDialog = true
-                    }
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = null)
-                    Text(" Add Item")
-                }
-            }
+            Text(
+                "New Selections: ${selected.size}  •  Master Catalog only",
+                color = ProColors.teal,
+                style = MaterialTheme.typography.labelLarge
+            )
             LazyColumn(
                 modifier = Modifier.weight(1f),
                 state = pickerListState
