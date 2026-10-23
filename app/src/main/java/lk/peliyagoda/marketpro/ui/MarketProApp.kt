@@ -436,11 +436,15 @@ fun MarketProApp(vm: MarketViewModel) {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Text("MARKET PRO  •  EXPRESSIVE PREVIEW", style = MaterialTheme.typography.labelSmall,
+                            // Use the exact labelSmall + teal + bold branding
+                            // formerly used by "PELIYAGODA" in Market Pro 2.36.
+                            Text("BELLAGIO", style = MaterialTheme.typography.labelSmall,
                                 color = ProColors.teal, fontWeight = FontWeight.Bold)
-                            Text("Market Pro", style = MaterialTheme.typography.titleLarge,
+                            Text("MARKET PRO", style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.ExtraBold, color = ProVisual.itemInk)
-                            Text("Independent UI concept  •  v3.2.5",
+                            // Preserve the user-requested header caption verbatim;
+                            // internal APK/package version is independent (v3.2.6).
+                            Text("• v3.2.5",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = ProColors.muted)
                         }
