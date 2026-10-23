@@ -615,7 +615,7 @@ fun MarketProApp(vm: MarketViewModel) {
                                     marketFilter = category
                                     marketAnchorItemId = null
                                     marketAnchorOffset = 0
-                                    scope.launch { marketListState.scrollToItem(1) }
+                                    scope.launch { marketListState.scrollToItem(2) }
                                 }
                             }
                         )
