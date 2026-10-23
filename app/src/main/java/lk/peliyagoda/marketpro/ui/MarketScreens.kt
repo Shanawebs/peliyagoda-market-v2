@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -180,6 +181,113 @@ private fun CategoryChip(category: String, active: Boolean, onClick: () -> Unit)
     )
 }
 
+/**
+ * Dashboard and Market share the same responsive category strip.
+ * Four default categories fit without clipping in a typical phone viewport.
+ * For narrow screens, large font scale, or custom categories we keep every
+ * label fully visible via a two-row layout or a scrollable overflow row.
+ * This lives inside the existing stickyHeader: original v3.1 alignment stays.
+ */
+@Composable
+private fun VisibleCategoryStrip(
+    categories: List<String>,
+    selected: String,
+    onSelect: (String) -> Unit
+) {
+    val labels = remember(categories) { listOf("All") + categories.filter { it != "All" } }
+    val fontScale = LocalDensity.current.fontScale
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val twoRows = labels.size in 2..4 &&
+            (maxWidth < 325.dp || fontScale > 1.20f || labels.sumOf { it.length } > 41)
+        if (labels.size <= 4 && !twoRows) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                labels.forEach { label ->
+                    CompactCategoryChip(
+                        category = label,
+                        active = selected == label,
+                        onClick = { onSelect(label) }
+                    )
+                }
+            }
+        } else if (twoRows) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                labels.chunked(2).forEach { pair ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        pair.forEach { label ->
+                            CompactCategoryChip(
+                                category = label,
+                                active = selected == label,
+                                onClick = { onSelect(label) }
+                            )
+                        }
+                    }
+                }
+            }
+        } else {
+            // User-defined extra categories: do not shrink/truncate their names.
+            LazyRow(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                lazyItems(labels, key = { it }) { label ->
+                    CompactCategoryChip(
+                        category = label,
+                        active = selected == label,
+                        onClick = { onSelect(label) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CompactCategoryChip(
+    category: String,
+    active: Boolean,
+    onClick: () -> Unit
+) {
+    val selectedBg = when (category) {
+        MarketConstants.VEGETABLES -> Color(0xFF166534)
+        MarketConstants.FRUITS -> Color(0xFF5B21B6)
+        "All" -> ProColors.navy
+        else -> ProColors.teal
+    }
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(22.dp),
+        color = if (active) selectedBg else ProVisual.page,
+        border = BorderStroke(
+            1.dp,
+            if (active) selectedBg else Color(0xFFC1CBD1)
+        )
+    ) {
+        Box(
+            modifier = Modifier.heightIn(min = 46.dp).padding(horizontal = 8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                category,
+                fontSize = 14.sp,
+                fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
+                color = if (active) Color.White else ProColors.navy,
+                maxLines = 1,
+                softWrap = false
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, categories: List<String>, onExport: () -> Unit) {
@@ -237,17 +345,11 @@ fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, categories: Li
                 modifier = Modifier.fillMaxWidth(),
                 color = ProVisual.page
             ) {
-                LazyRow(
-                    modifier = Modifier.padding(vertical = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    item(key = "All") {
-                        CategoryChip("All", active = filter == "All") { chooseCategory("All") }
-                    }
-                    lazyItems(categories, key = { it }) { c ->
-                        CategoryChip(c, active = filter == c) { chooseCategory(c) }
-                    }
-                }
+                VisibleCategoryStrip(
+                    categories = categories,
+                    selected = filter,
+                    onSelect = ::chooseCategory
+                )
             }
         }
         if (shown.isEmpty()) {
@@ -767,19 +869,35 @@ fun MarketScreen(
         }
         val parsed = MarketMath.parseBlankPriceCents(cashDraft)
         val valid = parsed != null && parsed in 0L..9_999_999_999L
+        val spentCents = rows.sumOf { it.lineCents }
+        val effectiveCash = parsed?.takeIf { valid } ?: cashReceivedCents
+        val remainingCents = effectiveCash - spentCents
         AlertDialog(
             onDismissRequest = { cashDialogOpen = false },
-            title = { Text("Cash Received", fontWeight = FontWeight.ExtraBold) },
+            shape = RoundedCornerShape(28.dp),
+            title = {
+                Text(
+                    "Cash Received",
+                    modifier = Modifier.fillMaxWidth(),
+                    fontWeight = FontWeight.ExtraBold,
+                    color = ProColors.navy,
+                    textAlign = TextAlign.Start
+                )
+            },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Cash Amount Received For " + businessDate,
-                        color = ProColors.muted)
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        "Cash Amount Received For $businessDate",
+                        color = ProColors.muted,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
                     OutlinedTextField(
                         value = cashDraft,
                         onValueChange = { displayed ->
-                            // A pasted "1,000.50" is normalized to a comma-free
-                            // editing value; the visual transform adds separators
-                            // without altering what is saved to Room.
+                            // Exactly the original v3.2.1 autosave and validation logic.
                             val value = CashAmountFormatter.cleanInput(displayed)
                             if (value.length <= 14) {
                                 cashDraft = value
@@ -793,28 +911,75 @@ fun MarketScreen(
                         prefix = { Text("Rs. ") },
                         visualTransformation = CashThousandsVisualTransformation,
                         isError = !valid,
-                        supportingText = {
-                            Text(if (valid) "Saves Automatically. Clear To Reset To Zero."
-                            else "Enter A Valid Amount With Up To 2 Decimals.")
-                        },
                         singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
+                        colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = ProColors.teal,
+                            unfocusedBorderColor = Color(0xFF8299A7),
+                            focusedContainerColor = Color(0xFFF5F7FA),
+                            unfocusedContainerColor = Color(0xFFF5F7FA),
+                            focusedLabelColor = ProColors.teal,
+                            unfocusedLabelColor = ProColors.muted
+                        ),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
                     )
-                    Text("Total Spent: Rs. " + MarketMath.lkr(rows.sumOf { it.lineCents }),
-                        color = ProColors.muted)
                     Text(
-                        "Cash Balance: Rs. " +
-                            MarketMath.lkr((parsed?.takeIf { valid } ?: cashReceivedCents) -
-                                rows.sumOf { it.lineCents }),
-                        color = if ((parsed?.takeIf { valid } ?: cashReceivedCents) >=
-                            rows.sumOf { it.lineCents }) ProColors.green else ProColors.red,
-                        fontWeight = FontWeight.Bold
+                        if (valid) "Saves Automatically. Clear To Reset To Zero."
+                        else "Enter A Valid Amount With Up To 2 Decimals.",
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
+                        color = if (valid) ProColors.muted else ProColors.red,
+                        style = MaterialTheme.typography.bodySmall
                     )
+                    HorizontalDivider(color = Color(0xFFD5DFE5))
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "Total Spent",
+                                modifier = Modifier.weight(1f),
+                                color = ProColors.muted,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                "Rs. " + MarketMath.lkr(spentCents),
+                                textAlign = TextAlign.End,
+                                color = ProColors.navy,
+                                fontWeight = FontWeight.SemiBold,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "Cash Balance",
+                                modifier = Modifier.weight(1f),
+                                color = ProColors.navy,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                "Rs. " + MarketMath.lkr(remainingCents),
+                                textAlign = TextAlign.End,
+                                color = if (remainingCents >= 0L) ProColors.green else ProColors.red,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
                 }
             },
             confirmButton = {
                 TextButton(onClick = { cashDialogOpen = false }) {
-                    Text("Close")
+                    Text("Close", fontWeight = FontWeight.SemiBold)
                 }
             }
         )
@@ -993,22 +1158,11 @@ fun MarketScreen(
         // Initial top breathing room is INSIDE summary, not LazyColumn contentPadding.
         stickyHeader(key = "market-category-header") {
             Surface(modifier = Modifier.fillMaxWidth(), color = ProVisual.page) {
-                LazyRow(
-                    modifier = Modifier.padding(vertical = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(horizontal = 2.dp)
-                ) {
-                    item(key = "All") {
-                        CategoryChip("All", active = filter == "All") {
-                            onFilterChange("All")
-                        }
-                    }
-                    lazyItems(categories, key = { it }) { category ->
-                        CategoryChip(category, active = filter == category) {
-                            onFilterChange(category)
-                        }
-                    }
-                }
+                VisibleCategoryStrip(
+                    categories = categories,
+                    selected = filter,
+                    onSelect = onFilterChange
+                )
             }
         }
         if (shown.isEmpty()) item {
