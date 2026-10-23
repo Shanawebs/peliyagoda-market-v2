@@ -117,6 +117,24 @@ class MarketRepository(private val db: MarketDatabase) {
         }
     }
 
+    /**
+     * Non-destructive master item removal for future selections.
+     * Existing requisitions, purchase lots, invoice photos and item ID are retained.
+     * Reject incorrect approval codes before opening the write transaction.
+     */
+    suspend fun archiveItem(id: Long, approvalCode: String): Boolean {
+        if (!lk.peliyagoda.marketpro.security.CatalogArchiveAuthorization.valid(approvalCode)) {
+            return false
+        }
+        return db.withTransaction {
+            val archived = dao.archiveItem(id) == 1
+            if (archived) {
+                journal.record(CloudRecordType.ITEM, CloudRecordKey.item(id))
+            }
+            archived
+        }
+    }
+
     suspend fun addRequirements(date: String, kitchen: String, ids: Set<Long>) {
         require(kitchen in MarketConstants.kitchens)
         require(LocalDate.parse(date) <= LocalDate.now().plusYears(10))
