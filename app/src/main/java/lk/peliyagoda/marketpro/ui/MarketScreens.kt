@@ -319,18 +319,22 @@ private fun CompactCategoryChip(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, categories: List<String>, onExport: () -> Unit) {
-    var filter by rememberSaveable(date.toString()) { mutableStateOf("All") }
-    // Dashboard uses a separate list position for each chosen business date.
-    val listState = rememberSaveable(date.toString(), saver = LazyListState.Saver) { LazyListState() }
-    val scope = rememberCoroutineScope()
-    fun chooseCategory(category: String) {
-        if (filter != category) {
-            filter = category
-            scope.launch { listState.scrollToItem(1) }
-        }
+fun DashboardScreen(
+    date: LocalDate,
+    rows: List<ConsolidatedRow>,
+    categories: List<String>,
+    filter: String,
+    listState: LazyListState,
+    onFilterChange: (String) -> Unit,
+    onExport: () -> Unit
+) {
+    // Keep the selected category in MarketProApp, OUTSIDE AnimatedContent and
+    // SaveableStateProvider. On first launch an in-screen rememberSaveable state
+    // could leave the pinned header using stale selection/click callbacks.
+    // Shared parent state always drives BOTH the active chip and visible rows.
+    val shown = remember(rows, filter) {
+        rows.filter { DashboardCategoryRules.matches(filter, it.item.category) }
     }
-    val shown = remember(rows, filter) { rows.filter { filter == "All" || it.item.category == filter } }
     val totalReq = rows.sumOf { it.requiredGrams }
     val totalPurch = rows.sumOf { it.purchasedGrams }
     val totalCents = rows.sumOf { it.lineCents }
@@ -377,7 +381,7 @@ fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, categories: Li
                 VisibleCategoryStrip(
                     categories = categories,
                     selected = filter,
-                    onSelect = ::chooseCategory
+                    onSelect = onFilterChange
                 )
             }
         }
