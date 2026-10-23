@@ -553,7 +553,7 @@ function openPdfPreview() {
     const balance = cashReceived - report.totalSpentCents;
     const root = $("pdf-document"); root.replaceChildren();
     const heading = elem("header","","pdf-report-header");
-    heading.append(elem("p","PELIYAGODA MARKET PRO","pdf-brand"),
+    heading.append(elem("p","BELLAGIO MARKET PRO","pdf-brand"),
       elem("h1","Completed purchases by category"),
       elem("p","Date: "+state.date));
     root.append(heading);
