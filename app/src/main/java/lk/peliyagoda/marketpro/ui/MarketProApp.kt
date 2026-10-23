@@ -397,13 +397,16 @@ fun MarketProApp(vm: MarketViewModel) {
         )
 
         if (catalogOpen) CatalogSheet(
-            items = items,
+            // Catalog shows active records only. Full items flow remains for
+            // historical reports, requisitions, charts and invoice references.
+            items = catalogItems,
             categories = categories,
             onClose = { catalogOpen = false },
             add = { name, category -> vm.addItem(name, category) {
                 message(if (it) "Item Added" else "Item Already Exists Or Name Is Invalid")
             } },
             rename = { id, newName, done -> vm.renameItem(id, newName, done) },
+            archive = { id, secret, done -> vm.archiveItem(id, secret, done) },
             addCategory = { name, done -> vm.addCategory(name, done) }
         )
 
@@ -428,7 +431,7 @@ fun MarketProApp(vm: MarketViewModel) {
                                 color = ProColors.teal, fontWeight = FontWeight.Bold)
                             Text("Market Pro", style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.ExtraBold, color = ProVisual.itemInk)
-                            Text("Independent UI concept  •  v3.0",
+                            Text("Independent UI concept  •  v3.1",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = ProColors.muted)
                         }
@@ -546,9 +549,10 @@ fun MarketProApp(vm: MarketViewModel) {
                             label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                 fontWeight = if (tab == index) FontWeight.ExtraBold else FontWeight.Medium) },
                             colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
-                                selectedIconColor = ProColors.teal,
-                                selectedTextColor = ProColors.teal,
-                                indicatorColor = ExpressivePalette.paleTeal,
+                                // High-contrast active tab: dark capsule and white icon.
+                                selectedIconColor = Color.White,
+                                selectedTextColor = ProColors.navy,
+                                indicatorColor = ProColors.navy,
                                 unselectedIconColor = ProColors.muted,
                                 unselectedTextColor = ProColors.muted
                             ),
