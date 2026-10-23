@@ -34,6 +34,8 @@ import lk.peliyagoda.marketpro.cloud.LocalIdentityRollbackResult
 import lk.peliyagoda.marketpro.cloud.LocalMigrationRecovery
 import lk.peliyagoda.marketpro.cloud.LocalRecoveryReceipt
 import lk.peliyagoda.marketpro.cloud.CloudReadinessRules
+import lk.peliyagoda.marketpro.cloud.LocalCutoverReadinessPolicy
+import lk.peliyagoda.marketpro.cloud.LocalCutoverSignals
 import kotlinx.coroutines.launch
 
 /** Preview's cloud dialog is read-only by design: never expose an upload button. */
@@ -109,6 +111,23 @@ fun CloudPreflightDialog(onDismiss: () -> Unit, onOpenOwnerLogin: () -> Unit) {
                 }
 
                 report?.let { result ->
+                    // Read-only precheck. Never grants a writer token or initiates a cutover.
+                    val cutover = LocalCutoverReadinessPolicy.evaluate(
+                        LocalCutoverSignals(
+                            staged = staged,
+                            phoneCounts = result.local,
+                            cloudCounts = result.remote,
+                            matchingUuids = result.uuidAudit.equalIds,
+                            differentUuids = result.uuidAudit.differentIds,
+                            ambiguousUuids = result.uuidAudit.ambiguousKeys,
+                            phoneUuidCount = result.migrationDryRun.phoneRecords,
+                            cloudUuidCount = result.migrationDryRun.cloudRecords,
+                            unsentOperations = result.uuidAudit.pendingUploadOperations,
+                            catalogMatches = result.catalogAudit.fullyMatched,
+                            financialMatches = result.financialAudit.fullyMatched,
+                            previewAlreadyWriter = result.deviceRegisteredAsWriter
+                        )
+                    )
                     Text("Owner authentication: Verified", color = ProColors.green)
                     Text(
                         "This preview device writer permission: " +
@@ -425,6 +444,32 @@ fun CloudPreflightDialog(onDismiss: () -> Unit, onOpenOwnerLogin: () -> Unit) {
                                 style = MaterialTheme.typography.bodySmall)
                         }
                     }
+                    HorizontalDivider()
+                    Text("Automatic Cloud Sync — Handover Readiness",
+                        fontWeight = FontWeight.Bold)
+                    Text(
+                        if (cutover.localDataReady)
+                            "LOCAL DATA READY. Record and UUID parity have been checked, " +
+                                "but CLOUD UPLOAD IS STILL LOCKED."
+                        else
+                            "LOCAL PRECHECK BLOCKED. Keep Cloud uploads disabled.",
+                        color = if (cutover.localDataReady) ProColors.green else ProColors.red,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    cutover.blockers.forEach { blocker ->
+                        Text("• $blocker", style = MaterialTheme.typography.bodySmall,
+                            color = ProColors.red)
+                    }
+                    Text(
+                        "NEXT SAFETY GATES: Verify the original V2.31 writer has " +
+                            "zero unsent operations; protect a fresh Cloud backup; " +
+                            "freeze the old writer and enroll this device in ONE " +
+                            "server-side transaction. This preview cannot verify " +
+                            "the old phone's local outbox, so it cannot approve the transfer.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = ProColors.muted
+                    )
                     HorizontalDivider()
                     Text("Cloud upload: LOCKED — safe preview mode.",
                         color = ProColors.red, fontWeight = FontWeight.Bold)
