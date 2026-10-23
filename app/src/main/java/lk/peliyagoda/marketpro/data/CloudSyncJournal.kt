@@ -102,6 +102,10 @@ interface CloudSyncDao {
     @Query("SELECT MAX(changedAtMs) FROM cloud_sync_outbox")
     fun observeLatestMutation(): Flow<Long?>
 
+    /** Read-only snapshot for migration PREVIEW; never return raw UUIDs to the UI. */
+    @Query("SELECT * FROM cloud_entity_ids ORDER BY entityType, entityKey")
+    suspend fun allIdentities(): List<CloudIdentityEntity>
+
     @Query("SELECT COUNT(*) FROM cloud_sync_outbox")
     suspend fun pendingCountNow(): Int
 
