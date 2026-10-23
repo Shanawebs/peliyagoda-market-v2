@@ -7,7 +7,7 @@ plugins {
 
 // Single source of truth for user-visible version labels.
 // Next release: update this number only; both header and launcher follow it.
-val marketProDisplayVersion = "3.3.1"
+val marketProDisplayVersion = "3.3.2"
 
 android {
     namespace = "lk.peliyagoda.marketpro"
@@ -17,10 +17,10 @@ android {
         // Only PUBLIC Supabase identifiers; never put service-role credentials in an APK.
         buildConfigField("String", "MARKETPRO_SUPABASE_URL", "\"https://lkoptqhodgjeuwwfihfr.supabase.co\"")
         buildConfigField("String", "MARKETPRO_SUPABASE_PUBLISHABLE_KEY", "\"sb_publishable__7F9sfydgBtHiZNPV9kNzg_hGfazjxg\"")
-        applicationId = "lk.peliyagoda.marketpro.expressivepreview.v331"
+        applicationId = "lk.peliyagoda.marketpro.expressivepreview.v332"
         minSdk = 26
         targetSdk = 35
-        versionCode = 331
+        versionCode = 332
         versionName = marketProDisplayVersion
         // Generated from the SAME version as the APK metadata. Never hardcode
         // versions separately in AndroidManifest or a Compose text component.
