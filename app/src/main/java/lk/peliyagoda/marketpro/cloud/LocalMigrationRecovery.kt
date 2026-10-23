@@ -49,6 +49,7 @@ internal object LocalRecoveryGate {
         actualCounts: Map<String, Int>,
         actualIdentities: Int,
         actualPending: Int,
+        actualFingerprint: String,
         enabled: Boolean,
         enrolled: Boolean
     ) {
@@ -68,6 +69,9 @@ internal object LocalRecoveryGate {
         }
         require(report.local == actualCounts) {
             "Phone records changed since audit: rerun the cloud check"
+        }
+        require(report.localRecoveryFingerprint == actualFingerprint) {
+            "Local record values or pending operation IDs changed; rerun Cloud Check"
         }
         require(report.uuidAudit.pendingUploadOperations == actualPending) {
             "Pending operations changed since audit: rerun the cloud check"
@@ -121,8 +125,13 @@ class LocalMigrationRecovery(private val context: Context) {
                 "purchase_additions" to additions.size,
                 "daily_cash_received" to cash.size
             )
+            val actualFingerprint = LocalStateFingerprint.calculate(
+                categories, items, requisitions, purchases, additions,
+                cash, identities, outbox, states
+            )
             LocalRecoveryGate.check(
                 report, counts, identities.size, outbox.size,
+                actualFingerprint = actualFingerprint,
                 enabled = states.any { it.name == CloudSyncConfig.ENABLED && it.value == "true" },
                 enrolled = states.any { it.name == "enrolled" && it.value == "true" }
             )
