@@ -32,14 +32,21 @@ internal data class LocalCutoverAssessment(
 }
 
 internal object LocalCutoverReadinessPolicy {
+    private val requiredTables = setOf(
+        "categories", "items", "requisitions", "purchases",
+        "purchase_additions", "daily_cash_received"
+    )
+
     fun evaluate(input: LocalCutoverSignals): LocalCutoverAssessment {
         val blockers = buildList {
             if (!input.staged) add("Encrypted, rollback-capable local UUID stage not confirmed.")
-            if (input.phoneCounts.isEmpty() ||
-                input.phoneCounts.keys != input.cloudCounts.keys ||
+            if (input.phoneCounts.keys != requiredTables ||
+                input.cloudCounts.keys != requiredTables ||
                 input.phoneCounts != input.cloudCounts ||
-                input.phoneCounts.values.any { it < 0 }
-            ) add("Phone and Cloud record counts are not identical.")
+                input.phoneCounts.values.any { it < 0 } ||
+                input.phoneCounts.values.sum() != input.phoneUuidCount ||
+                input.cloudCounts.values.sum() != input.cloudUuidCount
+            ) add("Phone/Cloud totals or required record types are not identical.")
             if (!input.catalogMatches || !input.financialMatches) {
                 add("Catalog or financial fingerprints do not match.")
             }
