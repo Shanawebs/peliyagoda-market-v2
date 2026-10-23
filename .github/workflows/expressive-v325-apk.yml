@@ -50,7 +50,7 @@ jobs:
           assert 'start = 14.dp, end = 14.dp, top = 0.dp' in source
           assert 'Column(Modifier.padding(top = 16.dp)' in source
           assert 'Surface(modifier = Modifier.padding(top = 14.dp), color = ProVisual.marketBanner' in source
-          assert 'scope.launch { listState.scrollToItem(1) }' in source
+          assert 'scope.launch { dashboardListState.scrollToItem(1) }' in app, 'Dashboard now scrolls from parent state'
           assert 'scope.launch { marketListState.scrollToItem(1) }' in app
           assert source.count('VisibleCategoryStrip(') >= 3, "Both Dashboard and Market must use responsive strip"
           assert 'CompactCategoryChip(' in source, "Compact chip renderer missing"
