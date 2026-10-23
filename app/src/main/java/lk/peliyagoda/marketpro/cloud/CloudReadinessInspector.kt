@@ -28,6 +28,7 @@ data class CloudPreflightReport(
     val remote: Map<String, Int>,
     val local: Map<String, Int>,
     val deviceRegisteredAsWriter: Boolean,
+    val catalogAudit: CatalogAudit,
     val writeBlockedReason: String
 )
 
@@ -57,7 +58,8 @@ class CloudReadinessInspector(private val context: Context) {
     private fun fetch(
         token: String,
         endpoint: String,
-        countOnly: Boolean = false
+        countOnly: Boolean = false,
+        maxBodyChars: Int = 4096
     ): Pair<String, String?> {
         val url = URL(origin + "/rest/v1/" + endpoint)
         require(url.protocol == "https" &&
@@ -85,7 +87,17 @@ class CloudReadinessInspector(private val context: Context) {
             }
             val range = connection.getHeaderField("Content-Range")
             val payload = connection.inputStream.bufferedReader(Charsets.UTF_8)
-                .use { it.readText().take(4096) }
+                .use { reader ->
+                    val chars = CharArray(maxBodyChars + 1)
+                    val builder = StringBuilder()
+                    while (builder.length <= maxBodyChars) {
+                        val n = reader.read(chars, 0, minOf(chars.size, maxBodyChars + 1 - builder.length))
+                        if (n < 0) break
+                        builder.append(chars, 0, n)
+                    }
+                    if (builder.length > maxBodyChars) throw IOException("Cloud response too large")
+                    builder.toString()
+                }
             return payload to range
         } finally {
             connection.disconnect()
@@ -96,9 +108,10 @@ class CloudReadinessInspector(private val context: Context) {
         // Supabase checks the encrypted, refreshed session and owner ID first.
         val jwt = CloudOwnerAuth(app).accessTokenForOwner(CloudSyncConfig.OWNER_USER_ID)
         val localDao = MarketDatabase.get(app).dao()
+        val phoneItems = localDao.allItems()
         val localCounts = linkedMapOf(
             "categories" to localDao.allCategories().size,
-            "items" to localDao.allItems().size,
+            "items" to phoneItems.size,
             "requisitions" to localDao.allRequisitions().size,
             "purchases" to localDao.allPurchases().size,
             "purchase_additions" to localDao.allAdditions().size,
@@ -114,6 +127,50 @@ class CloudReadinessInspector(private val context: Context) {
             )
             cloudCounts[table] = CloudReadinessRules.countFromContentRange(range)
         }
+
+        // Verify actual ITEM NAMES and category assignments, not merely counts.
+        // Both reads use the same owner JWT and RLS workspace filter.
+        val (catPayload, catRange) = fetch(
+            jwt,
+            "categories?select=id,name&workspace_id=eq.${CloudSyncConfig.WORKSPACE_ID}&limit=500",
+            countOnly = true, maxBodyChars = 100000
+        )
+        val categoryRows = JSONArray(catPayload)
+        check(categoryRows.length() == CloudReadinessRules.countFromContentRange(catRange) &&
+            categoryRows.length() == cloudCounts["categories"]) {
+            "Cloud categories changed during audit; retry"
+        }
+        val categoryNames = mutableMapOf<String, String>()
+        for (i in 0 until categoryRows.length()) {
+            val c = categoryRows.getJSONObject(i)
+            categoryNames[c.getString("id")] = c.getString("name")
+        }
+        val (itemPayload, itemRange) = fetch(
+            jwt,
+            "items?select=id,name,category_id,is_active,deleted_at" +
+                "&workspace_id=eq.${CloudSyncConfig.WORKSPACE_ID}&limit=500",
+            countOnly = true, maxBodyChars = 150000
+        )
+        val itemRows = JSONArray(itemPayload)
+        check(itemRows.length() == CloudReadinessRules.countFromContentRange(itemRange) &&
+            itemRows.length() == cloudCounts["items"]) {
+            "Cloud items changed during audit; retry"
+        }
+        val remoteCatalog = buildList {
+            for (i in 0 until itemRows.length()) {
+                val row = itemRows.getJSONObject(i)
+                val category = categoryNames[row.getString("category_id")]
+                    ?: throw IOException("Cloud item has an unknown category")
+                add(CatalogRecord(
+                    row.getString("name"), category,
+                    row.getBoolean("is_active") && row.isNull("deleted_at")
+                ))
+            }
+        }
+        val audit = CatalogReconciliation.compare(
+            phoneItems.map { CatalogRecord(it.name, it.category, it.isActive) },
+            remoteCatalog
+        )
 
         // The original synced V2.31 phone is protected by a single-writer rule.
         val deviceId = CloudDeviceIdentity.get(app)
@@ -132,6 +189,7 @@ class CloudReadinessInspector(private val context: Context) {
             remote = cloudCounts,
             local = localCounts,
             deviceRegisteredAsWriter = enrolled,
+            catalogAudit = audit,
             writeBlockedReason = "Existing Cloud data and device-specific UUID mappings " +
                 "must be reconciled before enabling another writer. No upload or " +
                 "overwrite is allowed in this preview."
