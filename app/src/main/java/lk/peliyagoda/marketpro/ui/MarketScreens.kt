@@ -200,31 +200,11 @@ fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, categories: Li
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         state = listState,
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 24.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Filter is the first sticky list item: no partial summary cards can
-        // peek through between the global date header and category controls.
-        stickyHeader(key = "dashboard-category-header") {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = ProVisual.page
-            ) {
-                LazyRow(
-                    modifier = Modifier.padding(vertical = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    item(key = "All") {
-                        CategoryChip("All", active = filter == "All") { chooseCategory("All") }
-                    }
-                    lazyItems(categories, key = { it }) { c ->
-                        CategoryChip(c, active = filter == c) { chooseCategory(c) }
-                    }
-                }
-            }
-        }
         item(key = "dashboard-summary") {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(Modifier.padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween) {
                     Column(Modifier.weight(1f)) {
@@ -246,6 +226,27 @@ fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, categories: Li
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Metric("Estimated Bill", "Rs. ${MarketMath.lkr(totalCents)}", Modifier.weight(1f), ProColors.purple)
                     Metric("Item Count", "${rows.size}", Modifier.weight(1f), ProColors.navy)
+                }
+            }
+        }
+        // Preserve the original v3.1 order: summary first, category selector next.
+        // Pin the opaque category bar flush against the top of the scrolling viewport.
+        // Initial top breathing room is INSIDE summary, not LazyColumn contentPadding.
+        stickyHeader(key = "dashboard-category-header") {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = ProVisual.page
+            ) {
+                LazyRow(
+                    modifier = Modifier.padding(vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    item(key = "All") {
+                        CategoryChip("All", active = filter == "All") { chooseCategory("All") }
+                    }
+                    lazyItems(categories, key = { it }) { c ->
+                        CategoryChip(c, active = filter == c) { chooseCategory(c) }
+                    }
                 }
             }
         }
@@ -912,37 +913,15 @@ fun MarketScreen(
         modifier = Modifier.fillMaxSize().imePadding(),
         state = listState,
         contentPadding = PaddingValues(
-            start = 14.dp, end = 14.dp, top = 14.dp,
+            start = 14.dp, end = 14.dp, top = 0.dp,
             // Keep a small margin above the keyboard; no giant spacer.
             // The focused item + field visibility logic stays intact.
             bottom = if (keyboardVisible) 32.dp else 24.dp
         ),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // Filter is the first sticky list item: no partial summary cards can
-        // peek through between the global date header and category controls.
-        stickyHeader(key = "market-category-header") {
-            Surface(modifier = Modifier.fillMaxWidth(), color = ProVisual.page) {
-                LazyRow(
-                    modifier = Modifier.padding(vertical = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(horizontal = 2.dp)
-                ) {
-                    item(key = "All") {
-                        CategoryChip("All", active = filter == "All") {
-                            onFilterChange("All")
-                        }
-                    }
-                    lazyItems(categories, key = { it }) { category ->
-                        CategoryChip(category, active = filter == category) {
-                            onFilterChange(category)
-                        }
-                    }
-                }
-            }
-        }
         item(key = "market-summary") {
-            Surface(color = ProVisual.marketBanner, shape = RoundedCornerShape(19.dp)) {
+            Surface(modifier = Modifier.padding(top = 14.dp), color = ProVisual.marketBanner, shape = RoundedCornerShape(19.dp)) {
                 Column(
                     Modifier.fillMaxWidth().padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -1004,6 +983,29 @@ fun MarketScreen(
                                 color = ProVisual.amountInk,
                                 fontWeight = FontWeight.ExtraBold,
                                 style = MaterialTheme.typography.titleSmall)
+                        }
+                    }
+                }
+            }
+        }
+        // Preserve the original v3.1 order: summary first, category selector next.
+        // Pin the opaque category bar flush against the top of the scrolling viewport.
+        // Initial top breathing room is INSIDE summary, not LazyColumn contentPadding.
+        stickyHeader(key = "market-category-header") {
+            Surface(modifier = Modifier.fillMaxWidth(), color = ProVisual.page) {
+                LazyRow(
+                    modifier = Modifier.padding(vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(horizontal = 2.dp)
+                ) {
+                    item(key = "All") {
+                        CategoryChip("All", active = filter == "All") {
+                            onFilterChange("All")
+                        }
+                    }
+                    lazyItems(categories, key = { it }) { category ->
+                        CategoryChip(category, active = filter == category) {
+                            onFilterChange(category)
                         }
                     }
                 }
