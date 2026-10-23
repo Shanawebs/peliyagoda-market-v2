@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import lk.peliyagoda.marketpro.BuildConfig
 import lk.peliyagoda.marketpro.data.CloudDeviceIdentity
+import lk.peliyagoda.marketpro.data.CloudIdentityEntity
 import lk.peliyagoda.marketpro.data.MarketDatabase
 import org.json.JSONArray
 import java.io.IOException
@@ -33,7 +34,9 @@ data class CloudPreflightReport(
     val uuidAudit: UuidAuditResult,
     val migrationDryRun: MigrationDryRunResult,
     val localRecoveryFingerprint: String,
-    val writeBlockedReason: String
+    val writeBlockedReason: String,
+    /** Sensitive in-memory plan, never print/log or upload to external services. */
+    val migrationCandidates: List<CloudIdentityEntity> = emptyList()
 )
 
 internal object CloudReadinessRules {
@@ -376,6 +379,37 @@ class CloudReadinessInspector(private val context: Context) {
             finance = financeAudit
         )
 
+        // Candidate mapping is constructed ONLY for a complete, one-to-one,
+        // content-verified audit. It is a local proposal, not a Cloud write.
+        // Never join by record order: duplicate semantic keys fail CLOSED.
+        val migrationCandidates = if (
+            migrationDryRun.oneToOneCandidateCoverage &&
+            migrationDryRun.contentMatches &&
+            migrationDryRun.unsafeOrUnmapped == 0 &&
+            uuidAudit.ambiguousKeys == 0 &&
+            localIdentities.size == phoneUuidRecords.size
+        ) {
+            val remoteBySemantic = remoteUuidRecords.groupBy { it.type to it.semanticKey }
+            val localByCloudId = allIdentityRows.associateBy { it.cloudId.lowercase(java.util.Locale.ROOT) }
+            val proposed = phoneUuidRecords.map { row ->
+                val original = row.cloudId ?: error("Missing local UUID")
+                val previous = localByCloudId[original.lowercase(java.util.Locale.ROOT)]
+                    ?: error("Local UUID is not linked to a Room record")
+                check(previous.entityType == row.type) { "UUID record type mismatch" }
+                val matches = remoteBySemantic[row.type to row.semanticKey].orEmpty()
+                check(matches.size == 1) { "Ambiguous Cloud UUID target" }
+                val target = matches.single().cloudId ?: error("Cloud UUID absent")
+                java.util.UUID.fromString(target)
+                CloudIdentityEntity(previous.entityType, previous.entityKey, target)
+            }
+            check(proposed.size == phoneUuidRecords.size &&
+                proposed.map { it.cloudId.lowercase(java.util.Locale.ROOT) }.toSet().size == proposed.size &&
+                proposed.map { it.entityType to it.entityKey }.toSet().size == proposed.size) {
+                "Cannot construct a bijective migration plan"
+            }
+            proposed
+        } else emptyList()
+
         // The original synced V2.31 phone is protected by a single-writer rule.
         val deviceId = CloudDeviceIdentity.get(app)
         val (devicePayload, _) = fetch(
@@ -400,7 +434,8 @@ class CloudReadinessInspector(private val context: Context) {
             localRecoveryFingerprint = localRecoveryFingerprint,
             writeBlockedReason = "Existing Cloud data and device-specific UUID mappings " +
                 "must be reconciled before enabling another writer. No upload or " +
-                "overwrite is allowed in this preview."
+                "overwrite is allowed in this preview.",
+            migrationCandidates = migrationCandidates
         )
     }
 
