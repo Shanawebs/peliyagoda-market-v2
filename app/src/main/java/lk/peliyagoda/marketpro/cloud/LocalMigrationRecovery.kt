@@ -39,7 +39,9 @@ data class LocalRecoveryReceipt(
     val preservedPending: Int,
     val bytesOnDisk: Long,
     val integrityVerified: Boolean,
-    val totalSavedCopies: Int
+    val totalSavedCopies: Int,
+    /** Internal storage name; never display or share as a URL. */
+    val snapshotFileName: String = ""
 )
 
 /** Pure gate: changed, incomplete or enrolled datasets cannot be backed up as "ready". */
@@ -143,6 +145,10 @@ class LocalMigrationRecovery(private val context: Context) {
                 .put("created_at_ms", System.currentTimeMillis())
                 .put("package_name", app.packageName)
                 .put("cloud_upload_locked", true)
+                .put("business_fingerprint", LocalStateFingerprint.calculate(
+                    categories, items, requisitions, purchases, additions,
+                    cash, emptyList(), emptyList(), emptyList()
+                ))
                 .put("categories", array(categories) {
                     JSONObject().put("name", it.name)
                 })
@@ -192,7 +198,7 @@ class LocalMigrationRecovery(private val context: Context) {
     }
 
     private fun encryptionKey(): SecretKey {
-        val alias = "marketpro_expressive_v333_recovery_aes"
+        val alias = "marketpro_expressive_v334_recovery_aes"
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         val existing = store.getKey(alias, null) as? SecretKey
         if (existing != null) return existing
@@ -234,6 +240,27 @@ class LocalMigrationRecovery(private val context: Context) {
         return cipher.doFinal(blob.copyOfRange(16, blob.size))
     }
 
+    /** Decrypt an integrity-checked local snapshot in memory only. */
+    internal suspend fun readVerifiedSnapshot(fileName: String): JSONObject =
+        withContext(Dispatchers.IO) {
+            require(Regex("^local-v334-[0-9]+-[a-f0-9-]{36}\\.mpr$").matches(fileName)) {
+                "Invalid recovery snapshot filename"
+            }
+            val folder = File(app.noBackupFilesDir, "marketpro-migration-recovery")
+            val target = File(folder, fileName)
+            check(target.isFile && target.length() in 100..2_000_000) {
+                "Recovery snapshot missing or invalid"
+            }
+            val plaintext = decrypt(target.readBytes(), encryptionKey())
+            val document = JSONObject(plaintext.toString(Charsets.UTF_8))
+            check(document.getString("format") == "marketpro-local-recovery-v1" &&
+                document.getString("package_name") == app.packageName &&
+                document.optBoolean("cloud_upload_locked")) {
+                "Recovery belongs to another app or has a wrong format"
+            }
+            document
+        }
+
     suspend fun prepare(report: CloudPreflightReport): LocalRecoveryReceipt =
         withContext(Dispatchers.IO) {
             val prepared = buildSnapshot(report)
@@ -248,7 +275,7 @@ class LocalMigrationRecovery(private val context: Context) {
             }
             val key = encryptionKey()
             val encrypted = encrypt(prepared.plaintext, key)
-            val name = "local-v333-" + System.currentTimeMillis() +
+            val name = "local-v334-" + System.currentTimeMillis() +
                 "-" + UUID.randomUUID().toString() + ".mpr"
             val target = File(folder, name)
             val temporary = File(folder, ".$name.tmp")
@@ -270,7 +297,8 @@ class LocalMigrationRecovery(private val context: Context) {
                     preservedPending = prepared.outbox,
                     bytesOnDisk = target.length(),
                     integrityVerified = true,
-                    totalSavedCopies = saved + 1
+                    totalSavedCopies = saved + 1,
+                    snapshotFileName = name
                 )
             } catch (e: Exception) {
                 target.delete()
