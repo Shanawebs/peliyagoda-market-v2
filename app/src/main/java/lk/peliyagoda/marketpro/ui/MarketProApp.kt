@@ -431,7 +431,7 @@ fun MarketProApp(vm: MarketViewModel) {
                                 color = ProColors.teal, fontWeight = FontWeight.Bold)
                             Text("Market Pro", style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.ExtraBold, color = ProVisual.itemInk)
-                            Text("Independent UI concept  •  v3.2",
+                            Text("Independent UI concept  •  v3.2.1",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = ProColors.muted)
                         }
@@ -615,7 +615,7 @@ fun MarketProApp(vm: MarketViewModel) {
                                     marketFilter = category
                                     marketAnchorItemId = null
                                     marketAnchorOffset = 0
-                                    scope.launch { marketListState.scrollToItem(2) }
+                                    scope.launch { marketListState.scrollToItem(1) }
                                 }
                             }
                         )
