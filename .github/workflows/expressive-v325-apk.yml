@@ -1,0 +1,139 @@
+name: Market Pro Expressive v3.2.5 - Dashboard Filter Fix APK
+
+on:
+  push:
+    branches:
+      - prototype/marketpro-expressive-v325
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: expressive-v325-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-apk:
+    name: Validate, unit test, and publish standalone v3.2.5 APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout isolated v3.2.5 branch
+        uses: actions/checkout@v4
+
+      - name: Guard all older app identities and non-destructive removal
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "prototype/marketpro-expressive-v325"
+          grep -Fq 'applicationId = "lk.peliyagoda.marketpro.expressivepreview.v325"' app/build.gradle.kts
+          grep -Fq 'versionName = "3.2.5-dashboard-filter-state-fix-preview"' app/build.gradle.kts
+          grep -Fq 'Market Pro ✦ v3.2.5' app/src/main/AndroidManifest.xml
+          grep -Fq 'UPDATE items SET isActive = 0 WHERE id = :id AND isActive = 1' app/src/main/java/lk/peliyagoda/marketpro/data/MarketDatabase.kt
+          grep -Fq 'items = catalogItems' app/src/main/java/lk/peliyagoda/marketpro/ui/MarketProApp.kt
+          grep -Fq 'selectedIconColor = Color.White' app/src/main/java/lk/peliyagoda/marketpro/ui/MarketProApp.kt
+          grep -Fq 'indicatorColor = ProColors.navy' app/src/main/java/lk/peliyagoda/marketpro/ui/MarketProApp.kt
+          grep -Fq 'Color(0xFF605B88)' app/src/main/java/lk/peliyagoda/marketpro/ui/MarketProApp.kt
+          grep -Fq 'OutlinedTextFieldDefaults.colors(' app/src/main/java/lk/peliyagoda/marketpro/ui/MarketScreens.kt
+          grep -Fq 'fontSize = 19.sp' app/src/main/java/lk/peliyagoda/marketpro/ui/MarketHelpDialog.kt
+          python3 - <<'PY'
+          from pathlib import Path
+          source = Path("app/src/main/java/lk/peliyagoda/marketpro/ui/MarketScreens.kt").read_text()
+          app = Path("app/src/main/java/lk/peliyagoda/marketpro/ui/MarketProApp.kt").read_text()
+          for title, summary, sticky in [
+              ("Dashboard", 'item(key = "dashboard-summary")', 'stickyHeader(key = "dashboard-category-header")'),
+              ("Market", 'item(key = "market-summary")', 'stickyHeader(key = "market-category-header")')
+          ]:
+              assert source.index(summary) < source.index(sticky), f"{title} category must stay below summary"
+          assert 'end = 16.dp, top = 0.dp, bottom = 24.dp' in source
+          assert 'start = 14.dp, end = 14.dp, top = 0.dp' in source
+          assert 'Column(Modifier.padding(top = 16.dp)' in source
+          assert 'Surface(modifier = Modifier.padding(top = 14.dp), color = ProVisual.marketBanner' in source
+          assert 'scope.launch { listState.scrollToItem(1) }' in source
+          assert 'scope.launch { marketListState.scrollToItem(1) }' in app
+          assert source.count('VisibleCategoryStrip(') >= 3, "Both Dashboard and Market must use responsive strip"
+          assert 'CompactCategoryChip(' in source, "Compact chip renderer missing"
+          assert 'labels.size == 4 && !twoRows' in source, "Four-item row condition missing"
+          assert 'modifier = Modifier.width(52.dp)' in source, "All must keep small fixed width"
+          assert 'labels.drop(1).forEach' in source, "Three main categories must share row"
+          assert 'modifier = Modifier.weight(1f)' in source, "Three main categories need equal width"
+          assert 'Arrangement.spacedBy(6.dp)' in source, "Even spacing missing"
+          assert 'heightIn(min = 48.dp)' in source, "48dp touch target required"
+          assert 'textAlign = TextAlign.Center' in source, "Centered category labels required"
+          assert source.count('fontWeight = FontWeight.Bold') >= 2, "Category text must be bold"
+          assert 'fontWeight = if (active) FontWeight.Bold else FontWeight.Medium' not in source, "Unselected category labels must also be bold"
+          assert 'var filter by rememberSaveable(date.toString())' not in source.split('fun DashboardScreen(',1)[1].split('fun KitchensScreen(',1)[0], "Dashboard must not own separate mutable category state"
+          assert 'filter: String,' in source.split('fun DashboardScreen(',1)[1].split(') {',1)[0], "Dashboard must receive selected category"
+          assert 'onFilterChange: (String) -> Unit' in source, "Dashboard must receive click callback"
+          assert 'var dashboardFilter by rememberSaveable(date.toString())' in app, "Dashboard filter must exist above tab animation"
+          assert 'filter = dashboardFilter' in app, "Dashboard must use parent filter"
+          assert 'dashboardFilter = category' in app, "Click must update parent's state immediately"
+          assert 'DashboardCategoryRules.matches(filter, it.item.category)' in source, "Rows must filter by parent selection"
+          assert 'unfocusedBorderColor = Color(0xFF8299A7)' in source, "Darker Cash border missing"
+          assert '"Total Spent"' in source and '"Cash Balance"' in source
+          print("PASS: original v3.1 summary → category order and zero top list padding")
+          PY
+          echo "Confirmed: v3.2.5 sticky category layout regression guards passed."
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android SDK 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${ANDROID_HOME:-}"
+          sdkmanager_path="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          test -n "$sdkmanager_path"
+          yes | "$sdkmanager_path" --licenses >/dev/null 2>&1 || true
+          "$sdkmanager_path" --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+
+      - name: Setup Gradle 8.11.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Prepare verified Sinhala font assets
+        run: bash scripts/prepare_sinhala_font.sh
+
+      - name: Test and compile debug APK
+        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug
+
+      - name: Verify and name APK for direct download
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk MarketPro-Expressive-v3.2.5.apk
+          sha256sum MarketPro-Expressive-v3.2.5.apk
+
+      - name: Upload installable APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MarketPro-Expressive-v3.2.5-APK
+          path: MarketPro-Expressive-v3.2.5.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish separate preview release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="marketpro-expressive-v325-preview1"
+          NOTES="Market Pro Expressive v3.2.5 isolated test preview. Dashboard category filter now hoisted to parent above animated tab so first tap works immediately without visiting Market. Added DashboardCategoryRules unit tests for All, Vegetables, Chinese Veg, Fruits, and tab return. Existing button widths, bold labels, visual design, original 2.36 and all prior previews untouched. Separate Android package, cloud isolated, debug APK."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" MarketPro-Expressive-v3.2.5.apk --clobber
+          else
+            gh release create "$TAG" MarketPro-Expressive-v3.2.5.apk \
+              --target "$GITHUB_SHA" \
+              --prerelease \
+              --title "Market Pro Expressive v3.2.5 - Isolated UI Preview" \
+              --notes "$NOTES"
+          fi
+          gh release view "$TAG" --json url,assets
