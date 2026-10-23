@@ -27,6 +27,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import lk.peliyagoda.marketpro.cloud.CloudPreflightReport
 import lk.peliyagoda.marketpro.cloud.CloudReadinessInspector
+import lk.peliyagoda.marketpro.cloud.LocalMigrationRecovery
+import lk.peliyagoda.marketpro.cloud.LocalRecoveryReceipt
 import lk.peliyagoda.marketpro.cloud.CloudReadinessRules
 import kotlinx.coroutines.launch
 
@@ -35,14 +37,17 @@ import kotlinx.coroutines.launch
 fun CloudPreflightDialog(onDismiss: () -> Unit, onOpenOwnerLogin: () -> Unit) {
     val context = LocalContext.current
     val inspector = remember(context) { CloudReadinessInspector(context.applicationContext) }
+    val recovery = remember(context) { LocalMigrationRecovery(context.applicationContext) }
     val scope = rememberCoroutineScope()
     var checking by remember { mutableStateOf(false) }
+    var preparingRecovery by remember { mutableStateOf(false) }
+    var recoveryReceipt by remember { mutableStateOf<LocalRecoveryReceipt?>(null) }
     var error by remember { mutableStateOf("") }
     var report by remember { mutableStateOf<CloudPreflightReport?>(null) }
     var showMigrationBlockers by remember { mutableStateOf(false) }
 
     AlertDialog(
-        onDismissRequest = { if (!checking) onDismiss() },
+        onDismissRequest = { if (!checking && !preparingRecovery) onDismiss() },
         title = {
             Text("Cloud Connection & Safety Check", fontWeight = FontWeight.Bold)
         },
@@ -75,7 +80,7 @@ fun CloudPreflightDialog(onDismiss: () -> Unit, onOpenOwnerLogin: () -> Unit) {
                             }
                         }
                     },
-                    enabled = !checking,
+                    enabled = !checking && !preparingRecovery,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(if (checking) "Checking Cloud…" else "Check My Cloud Connection")
@@ -83,7 +88,8 @@ fun CloudPreflightDialog(onDismiss: () -> Unit, onOpenOwnerLogin: () -> Unit) {
                 TextButton(onClick = {
                     onDismiss()
                     onOpenOwnerLogin()
-                }, modifier = Modifier.fillMaxWidth()) {
+                }, enabled = !checking && !preparingRecovery,
+                    modifier = Modifier.fillMaxWidth()) {
                     Text("Owner Login / Reconnect")
                 }
 
@@ -268,6 +274,65 @@ fun CloudPreflightDialog(onDismiss: () -> Unit, onOpenOwnerLogin: () -> Unit) {
                         }
                     }
                     HorizontalDivider()
+                    Text("Encrypted Local Recovery Snapshot", fontWeight = FontWeight.Bold)
+                    Text(
+                        "Prepare an AES-GCM encrypted, integrity-verified copy of all " +
+                            "Phone Room records, UUID mappings and unsent operations. " +
+                            "No Cloud upload, local UUID rewrite, or outbox deletion.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Button(
+                        onClick = {
+                            preparingRecovery = true
+                            recoveryReceipt = null
+                            error = ""
+                            scope.launch {
+                                try {
+                                    // Re-check Cloud right before snapshot, and verify
+                                    // the exact Room SHA-256 content within transaction.
+                                    val freshReport = inspector.inspect()
+                                    recoveryReceipt = recovery.prepare(freshReport)
+                                    report = freshReport
+                                } catch (e: Exception) {
+                                    error = e.message?.take(200)
+                                        ?: "Could not prepare encrypted recovery snapshot"
+                                } finally {
+                                    preparingRecovery = false
+                                }
+                            }
+                        },
+                        enabled = !checking && !preparingRecovery &&
+                            dryRun.contentMatches &&
+                            dryRun.oneToOneCandidateCoverage &&
+                            !result.deviceRegisteredAsWriter,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (preparingRecovery) "Protecting Local Records…"
+                            else "Prepare Encrypted Recovery Snapshot")
+                    }
+                    recoveryReceipt?.let { copy ->
+                        Text(
+                            if (copy.integrityVerified)
+                                "SNAPSHOT VERIFIED — private encrypted copy created"
+                            else "Snapshot verification incomplete",
+                            fontWeight = FontWeight.Bold,
+                            color = if (copy.integrityVerified) ProColors.green else ProColors.red
+                        )
+                        Text(
+                            "Records: ${copy.businessRecords} | UUID entries: ${copy.identities}" +
+                                " | Pending preserved: ${copy.preservedPending}" +
+                                " | Saved copies: ${copy.totalSavedCopies}",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Text(
+                        "Private local snapshots are removed if this preview app is " +
+                            "uninstalled. Keep your separate JSON backup and original " +
+                            "Cloud app. This is a recovery preparation, NOT migration.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = ProColors.muted
+                    )
+                    HorizontalDivider()
                     Text("Record Comparison (counts)", fontWeight = FontWeight.Bold)
                     Row(modifier = Modifier.fillMaxWidth()) {
                         Text("Record Type", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold)
@@ -318,7 +383,9 @@ fun CloudPreflightDialog(onDismiss: () -> Unit, onOpenOwnerLogin: () -> Unit) {
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss, enabled = !checking) { Text("Close") }
+            TextButton(onClick = onDismiss, enabled = !checking && !preparingRecovery) {
+                Text("Close")
+            }
         }
     )
 }
