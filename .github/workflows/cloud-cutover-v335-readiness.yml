@@ -19,6 +19,16 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Protect existing live Cloud Dashboard source and UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The existing dashboard URL, login, visuals and backend routing stay intact.
+          # Reject ANY accidental change to its web source compared to v3.3.4.
+          git diff --exit-code c30ec897e4135fb49dea616c965fb3889ace5510 HEAD -- web/marketpro-dashboard/
+          test -f docs/V3_EXISTING_DASHBOARD_UI_FREEZE.md
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
