@@ -153,6 +153,15 @@ fun MarketProApp(vm: MarketViewModel) {
                 additions.filter { it.businessDate == date.toString() }
             )
         }
+        // Dashboard filter and list state live above AnimatedContent from the
+        // FIRST app frame. This prevents a fresh stickyHeader composition from
+        // capturing the wrong internal state until another tab is visited.
+        var dashboardFilter by rememberSaveable(date.toString()) {
+            mutableStateOf("All")
+        }
+        val dashboardListState = rememberSaveable(
+            date.toString(), saver = LazyListState.Saver
+        ) { LazyListState() }
         var tab by rememberSaveable { mutableIntStateOf(0) }
         // The old when(tab) disposed Dashboard/Kitchen state on every switch.
         // Retain saveable per-tab state (including each list's scroll position).
@@ -431,7 +440,7 @@ fun MarketProApp(vm: MarketViewModel) {
                                 color = ProColors.teal, fontWeight = FontWeight.Bold)
                             Text("Market Pro", style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.ExtraBold, color = ProVisual.itemInk)
-                            Text("Independent UI concept  •  v3.2.4",
+                            Text("Independent UI concept  •  v3.2.5",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = ProColors.muted)
                         }
@@ -593,7 +602,22 @@ fun MarketProApp(vm: MarketViewModel) {
             ) { activeTab ->
                 tabStateHolder.SaveableStateProvider("market-pro-tab-$activeTab") {
                     when (activeTab) {
-                        0 -> DashboardScreen(date, rows, categories, onExport = { pdfDialogOpen = true })
+                        0 -> DashboardScreen(
+                            date = date,
+                            rows = rows,
+                            categories = categories,
+                            filter = dashboardFilter,
+                            listState = dashboardListState,
+                            onFilterChange = { category ->
+                                if (dashboardFilter != category) {
+                                    // Publish filter immediately; list responds on first tap,
+                                    // without a Market tab visit or app restart.
+                                    dashboardFilter = category
+                                    scope.launch { dashboardListState.scrollToItem(1) }
+                                }
+                            },
+                            onExport = { pdfDialogOpen = true }
+                        )
                         1 -> KitchensScreen(items, catalogItems, categories, reqs, vm, ::message)
                         else -> MarketScreen(
                             rows = rows,
