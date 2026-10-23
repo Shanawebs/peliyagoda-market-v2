@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - prototype/marketpro-cloud-cutover-readiness-v335
+      - prototype/marketpro-v3-fresh-record-safety-v336
   workflow_dispatch:
 
 permissions:
@@ -29,6 +30,8 @@ jobs:
           # Reject ANY accidental change to its web source compared to v3.3.4.
           git diff --exit-code c30ec897e4135fb49dea616c965fb3889ace5510 HEAD -- web/marketpro-dashboard/
           test -f docs/V3_EXISTING_DASHBOARD_UI_FREEZE.md
+          test -f app/src/main/java/lk/peliyagoda/marketpro/cloud/FreshOnlyUploadPolicy.kt
+          ! grep -Eiq 'delete from|truncate |drop table|drop schema' app/src/main/java/lk/peliyagoda/marketpro/cloud/FreshOnlyUploadPolicy.kt
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -53,6 +56,8 @@ jobs:
           grep -Fq 'val serverHandoverRequired: Boolean get() = true' app/src/main/java/lk/peliyagoda/marketpro/cloud/LocalCutoverReadiness.kt
           ! grep -Eq 'CloudSyncScheduler|CloudRestClient|HttpURLConnection|enableAfterOwnerConfirmation|marketpro_apply_change' app/src/main/java/lk/peliyagoda/marketpro/cloud/LocalCutoverReadiness.kt
           grep -Fq 'Cloud upload: LOCKED — safe preview mode.' app/src/main/java/lk/peliyagoda/marketpro/ui/CloudPreflightDialog.kt
+      - name: Prepare verified Sinhala font assets
+        run: bash scripts/prepare_sinhala_font.sh
       - name: Compile Android sources and run JVM unit tests
         run: gradle --no-daemon --stacktrace :app:testDebugUnitTest
       - name: No APK and no server deployment
