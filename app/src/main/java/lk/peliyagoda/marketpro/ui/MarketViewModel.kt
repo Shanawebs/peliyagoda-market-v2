@@ -108,6 +108,19 @@ class MarketViewModel(private val repository: MarketRepository, private val appC
         }
     }
 
+    fun archiveItem(id: Long, approvalCode: String, done: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val success = runCatching {
+                withContext(Dispatchers.IO) {
+                    repository.archiveItem(id, approvalCode).also {
+                        if (it) enqueueIfEnabled()
+                    }
+                }
+            }.getOrDefault(false)
+            done(success)
+        }
+    }
+
     fun addRequirements(kitchen: String, itemIds: Set<Long>, done: (Result<Unit>) -> Unit = {}) {
         val dateSnapshot = date.value.toString()
         doWork({ repository.addRequirements(dateSnapshot, kitchen, itemIds) }, done)
