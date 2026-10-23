@@ -56,6 +56,8 @@ jobs:
           grep -Fq 'val serverHandoverRequired: Boolean get() = true' app/src/main/java/lk/peliyagoda/marketpro/cloud/LocalCutoverReadiness.kt
           ! grep -Eq 'CloudSyncScheduler|CloudRestClient|HttpURLConnection|enableAfterOwnerConfirmation|marketpro_apply_change' app/src/main/java/lk/peliyagoda/marketpro/cloud/LocalCutoverReadiness.kt
           grep -Fq 'Cloud upload: LOCKED — safe preview mode.' app/src/main/java/lk/peliyagoda/marketpro/ui/CloudPreflightDialog.kt
+      - name: Prepare verified Sinhala font assets
+        run: bash scripts/prepare_sinhala_font.sh
       - name: Compile Android sources and run JVM unit tests
         run: gradle --no-daemon --stacktrace :app:testDebugUnitTest
       - name: No APK and no server deployment
