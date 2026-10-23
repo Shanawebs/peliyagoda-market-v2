@@ -449,7 +449,7 @@ fun CloudPreflightDialog(onDismiss: () -> Unit, onOpenOwnerLogin: () -> Unit) {
                         fontWeight = FontWeight.Bold)
                     Text(
                         if (cutover.localDataReady)
-                            "LOCAL DATA READY. 330-record parity is checked dynamically, " +
+                            "LOCAL DATA READY. Record and UUID parity have been checked, " +
                                 "but CLOUD UPLOAD IS STILL LOCKED."
                         else
                             "LOCAL PRECHECK BLOCKED. Keep Cloud uploads disabled.",
