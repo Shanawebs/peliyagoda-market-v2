@@ -5,6 +5,7 @@ on:
     branches:
       - prototype/marketpro-cloud-cutover-readiness-v335
       - prototype/marketpro-v3-fresh-record-safety-v336
+      - prototype/marketpro-v3-cloud-attach-v337
   workflow_dispatch:
 
 permissions:

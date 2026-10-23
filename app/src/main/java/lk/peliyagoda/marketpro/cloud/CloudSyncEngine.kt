@@ -107,6 +107,45 @@ internal class CloudRestClient {
         }
     }
 
+    /**
+     * Authenticated preflight against existing unique Cloud business keys.
+     * Never upload an older demo row when a fresh V3 UUID conflicts.
+     * The Postgres unique constraints remain the authority during races.
+     */
+    fun existingBusinessIds(token: String, change: CloudPreparedChange): List<String> {
+        val type = change.row.entityType
+        val payload = change.payload
+        val workspace = CloudSyncConfig.WORKSPACE_ID
+        val query = when (type) {
+            "requisition" -> {
+                val kitchen = java.net.URLEncoder.encode(
+                    payload.getString("kitchen"), "UTF-8"
+                ).replace("+", "%20")
+                "requisitions?select=id&workspace_id=eq.$workspace" +
+                    "&business_date=eq.${payload.getString("business_date")}" +
+                    "&item_id=eq.${payload.getString("item_id")}" +
+                    "&kitchen=eq.$kitchen&limit=2"
+            }
+            "purchase" -> "purchases?select=id&workspace_id=eq.$workspace" +
+                "&business_date=eq.${payload.getString("business_date")}" +
+                "&item_id=eq.${payload.getString("item_id")}&limit=2"
+            "daily_cash_received" ->
+                "daily_cash_received?select=id&workspace_id=eq.$workspace" +
+                "&business_date=eq.${payload.getString("business_date")}&limit=2"
+            "purchase_addition" ->
+                "purchase_additions?select=id&workspace_id=eq.$workspace" +
+                "&id=eq.${change.cloudId}&limit=2"
+            else -> throw CloudUploadRejected("Fresh-only mode blocks catalog write or delete")
+        }
+        val found = JSONArray(send("/rest/v1/$query", token))
+        if (found.length() > 1) {
+            throw CloudUploadRejected("Cloud has ambiguous transaction identities")
+        }
+        return (0 until found.length()).map { i ->
+            found.getJSONObject(i).getString("id").also { UUID.fromString(it) }
+        }
+    }
+
     fun upload(token: String, deviceId: String, change: CloudPreparedChange) {
         val envelope = JSONObject()
             .put("p_workspace_id", CloudSyncConfig.WORKSPACE_ID)
@@ -155,53 +194,9 @@ class CloudSyncEngine(private val context: Context) {
 
     suspend fun isEnabled(): Boolean = cloud.state(CloudSyncConfig.ENABLED) == "true"
 
+    /** The old empty-workspace import is permanently disabled in V3 fresh mode. */
     suspend fun enableAfterOwnerConfirmation(): Int {
-        // Calling "Enable" is an explicit owner decision. Neither app install nor login
-        // automatically uploads, imports or enables the account.
-        val token = auth.accessTokenForOwner(CloudSyncConfig.OWNER_USER_ID)
-        val deviceId = CloudDeviceIdentity.get(app)
-        client.verifyPrimaryOwner(token, deviceId)
-
-        if (!isEnabled()) {
-            client.requireEmptyInitialWorkspace(token)
-            // Mark enabled and enqueue EVERY historical row in one atomic local
-            // transaction; a crash can never leave a half-prepared snapshot.
-            db.withTransaction {
-                if (cloud.state(CloudSyncConfig.ENABLED) != "true") {
-                    val journal = CloudChangeJournal(cloud)
-                    dao.allCategories().forEach {
-                        journal.record(CloudRecordType.CATEGORY, CloudRecordKey.category(it.name))
-                    }
-                    dao.allItems().forEach {
-                        journal.record(CloudRecordType.ITEM, CloudRecordKey.item(it.id))
-                    }
-                    dao.allRequisitions().forEach {
-                        journal.record(
-                            CloudRecordType.REQUISITION,
-                            CloudRecordKey.requisition(it.businessDate, it.kitchen, it.itemId)
-                        )
-                    }
-                    dao.allPurchases().forEach {
-                        journal.record(
-                            CloudRecordType.PURCHASE,
-                            CloudRecordKey.purchase(it.businessDate, it.itemId)
-                        )
-                    }
-                    dao.allAdditions().forEach {
-                        journal.record(CloudRecordType.PURCHASE_ADDITION, CloudRecordKey.addition(it.id))
-                    }
-                    dao.allCashReceived().forEach {
-                        journal.record(
-                            CloudRecordType.DAILY_CASH_RECEIVED, CloudRecordKey.cash(it.businessDate)
-                        )
-                    }
-                    cloud.setState(CloudSyncStateEntity(CloudSyncConfig.ENABLED, "true"))
-                }
-            }
-        }
-        CloudSyncScheduler.schedulePeriodic(app)
-        CloudSyncScheduler.kick(app)
-        return cloud.pendingCountNow()
+        throw CloudUploadRejected("Bulk historical import is disabled for V3; use fresh catalog attach")
     }
 
     private fun keys(row: CloudOutboxEntity, expected: Int): List<String> {
@@ -288,8 +283,66 @@ class CloudSyncEngine(private val context: Context) {
         var completed = 0
         while (completed < maxChanges) {
             val next = db.withTransaction {
-                cloud.pending(1).firstOrNull()?.let { prepare(it) }
+                val row = cloud.pending(1).firstOrNull() ?: return@withTransaction null
+                check(cloud.state(FreshAttachState.PROTOCOL) == FreshAttachState.VERSION) {
+                    "V3 fresh-only enrollment is not verified"
+                }
+                require(row.entityType in setOf(
+                    "purchase", "requisition", "purchase_addition", "daily_cash_received"
+                ) && row.action == "upsert") {
+                    "Fresh-only V3 upload never modifies historic catalog or deletes records"
+                }
+                prepare(row)
             } ?: break
+            val origin = cloud.state(
+                FreshAttachState.originKey(next.row.entityType, next.row.entityKey)
+            )
+            // This is a server-authenticated, read-only, pre-upload collision check.
+            // Old demo financial identities are NEVER rebound to a new V3 UUID.
+            val existing = client.existingBusinessIds(bearer, next)
+            val key = when (next.row.entityType) {
+                "requisition" -> "requisition|${next.payload.getString("business_date")}|" +
+                    "${next.payload.getString("item_id")}|${next.payload.getString("kitchen")}"
+                "purchase" -> "purchase|${next.payload.getString("business_date")}|" +
+                    next.payload.getString("item_id")
+                "daily_cash_received" -> "daily_cash_received|" +
+                    next.payload.getString("business_date")
+                "purchase_addition" -> "purchase_addition|" + next.cloudId
+                else -> error("Unexpected V3 type")
+            }
+            val occupant = existing.firstOrNull()
+            val linkedItem = if (next.row.entityType == "daily_cash_received") null
+                else next.payload.getString("item_id")
+            val decision = FreshOnlyUploadPolicy.evaluate(
+                FreshSyncCandidate(
+                    entityType = next.row.entityType,
+                    cloudEntityId = next.cloudId,
+                    action = next.row.action,
+                    businessKey = key,
+                    catalogItemCloudId = linkedItem,
+                    createdAfterFreshEnrollment = origin == next.cloudId
+                ),
+                FreshSyncServerSnapshot(
+                    ownerAuthenticated = true,
+                    singleWriterHandoverVerified = true,
+                    serverSnapshotVerified = true,
+                    protectedLegacyEntityIds =
+                        if (occupant != null && occupant != next.cloudId) setOf(occupant)
+                        else emptySet(),
+                    protectedLegacyBusinessKeys =
+                        if (occupant != null && occupant != next.cloudId) setOf(key)
+                        else emptySet(),
+                    serverExistingIdByBusinessKey =
+                        if (occupant == null) emptyMap() else mapOf(key to occupant),
+                    verifiedCatalogItemIds =
+                        if (linkedItem == null) emptySet() else setOf(linkedItem),
+                    freshOwnedEntityIds =
+                        if (origin == next.cloudId) setOf(next.cloudId) else emptySet()
+                )
+            )
+            if (!decision.permitted) {
+                throw CloudUploadRejected(decision.reason)
+            }
             // Server commits first. Only then conditionally ACK this exact operation UUID.
             client.upload(bearer, device, next)
             db.withTransaction {
