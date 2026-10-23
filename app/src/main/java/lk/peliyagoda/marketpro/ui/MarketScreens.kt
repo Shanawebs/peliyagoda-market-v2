@@ -172,7 +172,7 @@ private fun CategoryChip(category: String, active: Boolean, onClick: () -> Unit)
         onClick = onClick,
         label = {
             Text(category, color = if (active) Color.White else ProColors.navy,
-                fontWeight = if (active) FontWeight.Bold else FontWeight.Medium)
+                fontWeight = FontWeight.Bold)
         },
         colors = FilterChipDefaults.filterChipColors(
             selectedContainerColor = selectedBg,
@@ -307,7 +307,7 @@ private fun CompactCategoryChip(
             Text(
                 category,
                 fontSize = textSize,
-                fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
+                fontWeight = FontWeight.Bold,
                 color = if (active) Color.White else ProColors.navy,
                 maxLines = 1,
                 softWrap = false,
