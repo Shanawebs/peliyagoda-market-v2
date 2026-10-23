@@ -1,0 +1,230 @@
+name: Market Pro v3.3.1 - Read-Only UUID Mapping Audit APK
+
+on:
+  push:
+    branches:
+      - prototype/marketpro-expressive-v331-uuid-audit
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: expressive-v331-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-apk:
+    name: Validate, unit test, and publish standalone v3.3.1 APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout isolated v3.3.1 branch
+        uses: actions/checkout@v4
+
+      - name: Guard all older app identities and non-destructive removal
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "prototype/marketpro-expressive-v331-uuid-audit"
+          grep -Fq 'applicationId = "lk.peliyagoda.marketpro.expressivepreview.v331"' app/build.gradle.kts
+          grep -Fq 'val marketProDisplayVersion = "3.3.0"' app/build.gradle.kts
+          grep -Fq 'versionName = marketProDisplayVersion' app/build.gradle.kts
+          grep -Fq 'resValue("string", "marketpro_version_caption", "• v$marketProDisplayVersion")' app/build.gradle.kts
+          grep -Fq 'resValue("string", "marketpro_launcher_name", "Market Pro ✦ v$marketProDisplayVersion")' app/build.gradle.kts
+          grep -Fq 'android:label="@string/marketpro_launcher_name"' app/src/main/AndroidManifest.xml
+          grep -Fq 'UPDATE items SET isActive = 0 WHERE id = :id AND isActive = 1' app/src/main/java/lk/peliyagoda/marketpro/data/MarketDatabase.kt
+          grep -Fq 'items = catalogItems' app/src/main/java/lk/peliyagoda/marketpro/ui/MarketProApp.kt
+          grep -Fq 'selectedIconColor = Color.White' app/src/main/java/lk/peliyagoda/marketpro/ui/MarketProApp.kt
+          grep -Fq 'indicatorColor = ProColors.navy' app/src/main/java/lk/peliyagoda/marketpro/ui/MarketProApp.kt
+          grep -Fq 'Color(0xFF605B88)' app/src/main/java/lk/peliyagoda/marketpro/ui/MarketProApp.kt
+          grep -Fq 'OutlinedTextFieldDefaults.colors(' app/src/main/java/lk/peliyagoda/marketpro/ui/MarketScreens.kt
+          grep -Fq 'fontSize = 19.sp' app/src/main/java/lk/peliyagoda/marketpro/ui/MarketHelpDialog.kt
+          python3 - <<'PY'
+          from pathlib import Path
+          source = Path("app/src/main/java/lk/peliyagoda/marketpro/ui/MarketScreens.kt").read_text()
+          app = Path("app/src/main/java/lk/peliyagoda/marketpro/ui/MarketProApp.kt").read_text()
+          for title, summary, sticky in [
+              ("Dashboard", 'item(key = "dashboard-summary")', 'stickyHeader(key = "dashboard-category-header")'),
+              ("Market", 'item(key = "market-summary")', 'stickyHeader(key = "market-category-header")')
+          ]:
+              assert source.index(summary) < source.index(sticky), f"{title} category must stay below summary"
+          assert 'end = 16.dp, top = 0.dp, bottom = 24.dp' in source
+          assert 'start = 14.dp, end = 14.dp, top = 0.dp' in source
+          assert 'Column(Modifier.padding(top = 16.dp)' in source
+          assert 'Surface(modifier = Modifier.padding(top = 14.dp), color = ProVisual.marketBanner' in source
+          assert 'scope.launch { dashboardListState.scrollToItem(1) }' in app, 'Dashboard now scrolls from parent state'
+          assert 'scope.launch { marketListState.scrollToItem(1) }' in app
+          assert source.count('VisibleCategoryStrip(') >= 3, "Both Dashboard and Market must use responsive strip"
+          assert 'CompactCategoryChip(' in source, "Compact chip renderer missing"
+          assert 'labels.size == 4 && !twoRows' in source, "Four-item row condition missing"
+          assert 'modifier = Modifier.width(52.dp)' in source, "All must keep small fixed width"
+          assert 'labels.drop(1).forEach' in source, "Three main categories must share row"
+          assert 'modifier = Modifier.weight(1f)' in source, "Three main categories need equal width"
+          assert 'Arrangement.spacedBy(6.dp)' in source, "Even spacing missing"
+          assert 'heightIn(min = 48.dp)' in source, "48dp touch target required"
+          assert 'textAlign = TextAlign.Center' in source, "Centered category labels required"
+          assert source.count('fontWeight = FontWeight.Bold') >= 2, "Category text must be bold"
+          assert 'fontWeight = if (active) FontWeight.Bold else FontWeight.Medium' not in source, "Unselected category labels must also be bold"
+          assert 'var filter by rememberSaveable(date.toString())' not in source.split('fun DashboardScreen(',1)[1].split('fun KitchensScreen(',1)[0], "Dashboard must not own separate mutable category state"
+          assert 'filter: String,' in source.split('fun DashboardScreen(',1)[1].split(') {',1)[0], "Dashboard must receive selected category"
+          assert 'onFilterChange: (String) -> Unit' in source, "Dashboard must receive click callback"
+          assert 'var dashboardFilter by rememberSaveable(date.toString())' in app, "Dashboard filter must exist above tab animation"
+          assert 'filter = dashboardFilter' in app, "Dashboard must use parent filter"
+          assert 'dashboardFilter = category' in app, "Click must update parent's state immediately"
+          assert 'DashboardCategoryRules.matches(filter, it.item.category)' in source, "Rows must filter by parent selection"
+          assert 'unfocusedBorderColor = Color(0xFF8299A7)' in source, "Darker Cash border missing"
+          assert '"Total Spent"' in source and '"Cash Balance"' in source
+          assert 'Text("BELLAGIO", style = MaterialTheme.typography.labelSmall' in app
+          assert 'color = ProColors.teal, fontWeight = FontWeight.Bold' in app
+          assert 'Text("Market Pro", style = MaterialTheme.typography.titleLarge' in app
+          assert 'Text(stringResource(R.string.marketpro_version_caption)' in app, "The header must use the generated app version"
+          assert 'MARKET PRO", style' not in app
+          assert 'Text("• v' not in app, "On-screen version must never be hard-coded"
+          assert 'MARKET PRO  •  EXPRESSIVE PREVIEW' not in app
+          assert 'Independent UI concept' not in app
+          print("PASS: original v3.1 summary → category order and zero top list padding")
+          PY
+          python3 - <<'PY'
+          from pathlib import Path
+          app = Path("app/src/main/java/lk/peliyagoda/marketpro/ui/MarketProApp.kt").read_text()
+          screen = Path("app/src/main/java/lk/peliyagoda/marketpro/ui/CloudPreflightDialog.kt").read_text()
+          inspect = Path("app/src/main/java/lk/peliyagoda/marketpro/cloud/CloudReadinessInspector.kt").read_text()
+          auth = Path("app/src/main/java/lk/peliyagoda/marketpro/ui/CloudOwnerLoginDialog.kt").read_text()
+          assert 'CloudPreflightDialog(' in app
+          assert 'CloudOwnerLoginDialog(' in app
+          assert 'existingOwnerOnly = true' in app
+          assert 'CloudSyncDialog(' not in app, "Preview must not expose existing Cloud writer activation"
+          assert 'CloudSyncScheduler.kick(' not in app
+          assert 'Cloud Connection (Read-Only)' in app
+          assert 'CloudReadinessRules.previewWriteIsBlocked' not in app
+          assert 'requestMethod = "GET"' in inspect
+          assert 'CloudOwnerAuth(app).accessTokenForOwner' in inspect
+          assert 'marketpro_apply_change' not in inspect, "Preflight must never call writer RPC"
+          assert 'CloudSyncScheduler' not in inspect
+          assert 'enableAfterOwnerConfirmation' not in inspect
+          assert 'setState(' not in inspect
+          assert 'putPending(' not in inspect
+          assert 'CloudReadinessRules.countFromContentRange' in inspect
+          assert 'onOpenOwnerLogin: () -> Unit' in screen
+          assert 'existingOwnerOnly: Boolean = false' in auth
+          assert 'CloudPreflightReport' in inspect
+          assert 'catalogAudit: CatalogAudit' in inspect
+          assert 'CatalogReconciliation.compare(' in inspect
+          assert 'maxBodyChars = 150000' in inspect
+          assert 'Cloud items changed during audit; retry' in inspect
+          assert 'Master Item Reconciliation' in screen
+          assert 'catalog.fullyMatched' in screen
+          assert 'Archived in Cloud:' in screen
+          assert 'onlyInCloud' in screen and 'onlyOnPhone' in screen
+          audit = Path("app/src/main/java/lk/peliyagoda/marketpro/cloud/CatalogReconciliation.kt").read_text()
+          assert 'fun compare(phone:' in audit
+          assert 'remoteArchived = cloud.count { !it.active }' in audit
+          assert 'fun previewWriteIsBlocked(): Boolean = true' in inspect
+          financial = Path("app/src/main/java/lk/peliyagoda/marketpro/cloud/FinancialReconciliation.kt").read_text()
+          assert 'financialAudit: FinancialAudit' in inspect
+          assert 'FinancialReconciliation.compare(' in inspect
+          assert 'Financial Record Reconciliation' in screen
+          assert 'financial.fullyMatched' in screen
+          assert 'purchase_additions' in financial and 'daily_cash_received' in financial
+          assert 'cashCents' in financial and 'priceCentsPerKg' in financial
+          assert 'Cloud $table changed during finance audit; retry' in inspect
+          assert 'requestMethod = "GET"' in inspect
+          assert 'CloudSyncScheduler.kick(' not in app
+          assert 'CloudSyncDialog(' not in app
+          uuid_code = Path("app/src/main/java/lk/peliyagoda/marketpro/cloud/UuidMappingAudit.kt").read_text()
+          journal = Path("app/src/main/java/lk/peliyagoda/marketpro/data/CloudSyncJournal.kt").read_text()
+          assert 'uuidAudit: UuidAuditResult' in inspect
+          assert 'UuidMappingAudit.compare(' in inspect
+          assert 'localIdentities = cloudDao.allIdentities()' in inspect
+          assert 'localPendingCount = cloudDao.pendingCountNow()' in inspect
+          assert 'requestMethod = "GET"' in inspect
+          assert 'setState(' not in inspect
+          assert 'putPending(' not in inspect
+          assert 'insertIdentity(' not in inspect
+          assert 'Cloud UUID Mapping Verification' in screen
+          assert 'NO WRITER APPROVAL' in screen
+          assert 'suspend fun allIdentities()' in journal
+          assert 'val isReadOnly: Boolean get() = true' in uuid_code
+          assert 'ambiguous += maxOf(l.size, r.size)' in uuid_code
+          assert 'matchingUuid' in uuid_code and 'differentUuid' in uuid_code
+          print("PASS: Strict read-only, no identity mutation, duplicate-lot rejection")
+          print("PASS: secure read-only connection, NO upload/enroll/delete from preview")
+          PY
+          echo "Confirmed: single-source version, independent package and locked Cloud preflight passed."
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android SDK 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${ANDROID_HOME:-}"
+          sdkmanager_path="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          test -n "$sdkmanager_path"
+          yes | "$sdkmanager_path" --licenses >/dev/null 2>&1 || true
+          "$sdkmanager_path" --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+
+      - name: Setup Gradle 8.11.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Prepare verified Sinhala font assets
+        run: bash scripts/prepare_sinhala_font.sh
+
+      - name: Test and compile debug APK
+        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug
+
+      - name: Verify and name APK for direct download
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk MarketPro-Expressive-v3.3.1.apk
+          sha256sum MarketPro-Expressive-v3.3.1.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging MarketPro-Expressive-v3.3.1.apk > /tmp/market-pro-badging.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          gradle = Path("app/build.gradle.kts").read_text()
+          metadata = Path("/tmp/market-pro-badging.txt").read_text()
+          version = re.search(r'val marketProDisplayVersion = "([^"]+)"', gradle)
+          assert version, "Missing single version source"
+          expected = version.group(1)
+          assert f"versionName='{expected}'" in metadata, "APK versionName differs from single version source"
+          assert "package: name='lk.peliyagoda.marketpro.expressivepreview.v331'" in metadata
+          assert f"application-label:'Market Pro ✦ v{expected}'" in metadata, "Launcher app name differs from version"
+          print("PASS: APK package, versionName and launcher app label agree:", expected)
+          PY
+
+      - name: Upload installable APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MarketPro-Expressive-v3.3.1-APK
+          path: MarketPro-Expressive-v3.3.1.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish separate preview release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="marketpro-expressive-v331-preview1"
+          NOTES="Market Pro Expressive v3.3.1 isolated UUID Mapping AUDIT only. Compare local Room cloud_entity_ids UUIDs to existing Supabase record UUIDs by catalog and financial semantic identity. Show same/different/missing IDs, unmatched records, ambiguous duplicate lots and unsent local outbox count. A JSON restore generated NEW UUIDs and pending operations; DO NOT upload them. Reads only, no device enrollment, no identity rewriting, no clearing pending records, no cloud schema/data changes, original V2.31 writer untouched. Do not treat this report as writer approval."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" MarketPro-Expressive-v3.3.1.apk --clobber
+          else
+            gh release create "$TAG" MarketPro-Expressive-v3.3.1.apk \
+              --target "$GITHUB_SHA" \
+              --prerelease \
+              --title "Market Pro Expressive v3.3.1 - Isolated UI Preview" \
+              --notes "$NOTES"
+          fi
+          gh release view "$TAG" --json url,assets
