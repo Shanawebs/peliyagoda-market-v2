@@ -431,7 +431,7 @@ fun MarketProApp(vm: MarketViewModel) {
                                 color = ProColors.teal, fontWeight = FontWeight.Bold)
                             Text("Market Pro", style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.ExtraBold, color = ProVisual.itemInk)
-                            Text("Independent UI concept  •  v3.2.3",
+                            Text("Independent UI concept  •  v3.2.4",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = ProColors.muted)
                         }
