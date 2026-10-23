@@ -244,3 +244,32 @@ export function groupRowsByCatalogCategory(rows, itemsById, categoriesById) {
     a.rank - b.rank || a.name.localeCompare(b.name, "en", { sensitivity: "base" }) ||
     a.key.localeCompare(b.key));
 }
+
+/**
+ * Safe UTF-8 CSV export for Excel (including Sinhala item names).
+ * Spreadsheet formula prefixes are neutralized. Exact financial amounts
+ * stay as decimal strings, not floating-point conversions.
+ */
+export function centsAsDecimal(value) {
+  const amount = exactCents(value);
+  const absolute = amount < 0n ? -amount : amount;
+  return (amount < 0n ? "-" : "") + (absolute / 100n).toString() +
+    "." + (absolute % 100n).toString().padStart(2, "0");
+}
+
+export function csvCell(value) {
+  const raw = String(value ?? "");
+  // Negative and positive numeric values are safe and must stay numeric
+  // for sum/pivot operations after importing into Excel.
+  if (/^-?\d+(?:\.\d+)?$/.test(raw)) return raw;
+  const safe = /^[\s]*[=+@\-\t\r]/.test(raw) ? "'" + raw : raw;
+  return '"' + safe.replace(/"/g, '""') + '"';
+}
+
+export function csvDocument(columns, rows) {
+  if (!Array.isArray(columns) || !columns.length || !Array.isArray(rows))
+    throw Error("Invalid CSV columns or rows");
+  if (rows.some(row => !Array.isArray(row) || row.length !== columns.length))
+    throw Error("CSV row does not match headers");
+  return "\uFEFF" + [columns, ...rows].map(row => row.map(csvCell).join(",")).join("\r\n");
+}
