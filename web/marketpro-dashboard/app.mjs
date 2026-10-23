@@ -1,6 +1,6 @@
 import { DashboardApi } from "./auth-client.mjs";
 import { REFRESH_INTERVAL_MS } from "./config.mjs";
-import { exactCents, lkr, kg, lotCostCents, dateIsValid, normalizeDailyRow, groupKitchens, requirementsByItem, dailyPriceTrends, recentBusinessDays, completedPurchaseReport, calendarMonthDays, groupRowsByCatalogCategory } from "./core.mjs";
+import { exactCents, lkr, kg, lotCostCents, dateIsValid, normalizeDailyRow, groupKitchens, requirementsByItem, dailyPriceTrends, recentBusinessDays, completedPurchaseReport, calendarMonthDays, groupRowsByCatalogCategory, centsAsDecimal, csvDocument } from "./core.mjs";
 
 const $ = id => document.getElementById(id);
 const api = new DashboardApi();
@@ -588,6 +588,108 @@ function closePdfPreview() {
   $("pdf-button").focus();
 }
 
+
+/**
+ * Complete read-only Excel/CSV reports. All exported data has already passed
+ * authenticated workspace RLS, and no new write-capable endpoint is used.
+ * Includes UTF-8 BOM to preserve Sinhala item names in Excel.
+ */
+function downloadCsvReport() {
+  if (!state.ready || state.busy) {
+    message("Finish refreshing before downloading the report.");
+    return;
+  }
+  try {
+    const headings = [];
+    let rows = [];
+    const findCategory = itemId => {
+      const item = state.itemById.get(itemId);
+      if (!item) throw Error("Unresolved item in financial report; refresh Cloud data.");
+      return state.categoryById.get(item.category_id)?.name || "Uncategorized";
+    };
+    switch (state.tab) {
+      case "overview":
+        headings.push("Date","Required kg","Initial expense Rs","Additional expense Rs",
+          "Total expense Rs","Cash received Rs","Cash balance Rs");
+        rows = recentBusinessDays(state.summary, 10).map(row => [
+          row.business_date, (row.required_grams / 1000).toFixed(3),
+          centsAsDecimal(row.initial_purchase_expenses_cents),
+          centsAsDecimal(row.additional_purchase_expenses_cents),
+          centsAsDecimal(row.total_expenses_cents),
+          centsAsDecimal(row.cash_received_cents),
+          centsAsDecimal(row.cash_balance_cents)
+        ]);
+        break;
+      case "kitchens":
+        headings.push("Date","Kitchen","Item","Category","Required kg");
+        rows = [...state.data.requisitions].sort((a,b) =>
+          a.kitchen.localeCompare(b.kitchen) || itemName(a.item_id).localeCompare(itemName(b.item_id))
+        ).map(row => [
+          state.date, row.kitchen, itemName(row.item_id), findCategory(row.item_id),
+          (Number(row.quantity_grams) / 1000).toFixed(3)
+        ]);
+        break;
+      case "purchases": {
+        headings.push("Date","Item","Category","Purchase type","Required kg",
+          "Purchased kg","Unit price Rs/kg","Lot cost Rs");
+        const required = requirementsByItem(state.data.requisitions);
+        const lots = [
+          ...state.data.purchases.map(x => ({ ...x, lotType: "Initial" })),
+          ...state.data.additions.map(x => ({ ...x, lotType: "Additional" }))
+        ];
+        rows = lots.sort((a,b) =>
+          findCategory(a.item_id).localeCompare(findCategory(b.item_id)) ||
+          itemName(a.item_id).localeCompare(itemName(b.item_id))
+        ).map(row => [
+          state.date, itemName(row.item_id), findCategory(row.item_id), row.lotType,
+          ((required.get(row.item_id)?.grams || 0) / 1000).toFixed(3),
+          (Number(row.quantity_grams) / 1000).toFixed(3),
+          centsAsDecimal(row.price_cents_per_kg),
+          centsAsDecimal(lotCostCents(row.quantity_grams,row.price_cents_per_kg))
+        ]);
+        break;
+      }
+      case "cash":
+        headings.push("Date","Required kg","Initial expense Rs","Additional expense Rs",
+          "Total expense Rs","Cash received Rs","Cash balance Rs");
+        rows = [...state.summary].sort((a,b) => a.business_date.localeCompare(b.business_date))
+          .map(row => [
+            row.business_date, (row.required_grams / 1000).toFixed(3),
+            centsAsDecimal(row.initial_purchase_expenses_cents),
+            centsAsDecimal(row.additional_purchase_expenses_cents),
+            centsAsDecimal(row.total_expenses_cents),
+            centsAsDecimal(row.cash_received_cents),
+            centsAsDecimal(row.cash_balance_cents)
+          ]);
+        break;
+      case "charts": {
+        if (!state.chartItemId || state.chartLoadedFor !== state.chartItemId)
+          throw Error("Select an item and load the complete price history before exporting.");
+        headings.push("Date","Item","Weighted unit price Rs/kg","Purchased kg","Lots");
+        rows = dailyPriceTrends(state.chartHistory).map(day => [
+          day.date, itemName(state.chartItemId),
+          centsAsDecimal(day.weightedPriceCentsPerKg),
+          (day.quantityGrams / 1000).toFixed(3), String(day.purchaseLots)
+        ]);
+        break;
+      }
+      default:
+        throw Error("No report available for this tab.");
+    }
+    const name = "MarketPro-" + state.tab + "-" + state.date + ".csv";
+    const data = csvDocument(headings, rows);
+    const href = URL.createObjectURL(new Blob([data], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = name;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(href), 1200);
+    clearMessage();
+  } catch (error) { message(error); }
+}
+
 function renderAll() {
   renderMetrics();
   renderHistory();
@@ -766,6 +868,7 @@ async function init() {
     if (state.pdfOpen) { closePdfPreview(); event.preventDefault(); }
     else if (state.calendarOpen) { closeCalendar(true); event.preventDefault(); }
   });
+  $("csv-button").addEventListener("click", downloadCsvReport);
   $("pdf-button").addEventListener("click", openPdfPreview);
   $("pdf-close-button").addEventListener("click", closePdfPreview);
   $("pdf-print-button").addEventListener("click", () => window.print());
