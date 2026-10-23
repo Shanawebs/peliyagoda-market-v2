@@ -106,6 +106,10 @@ interface CloudSyncDao {
     @Query("SELECT * FROM cloud_entity_ids ORDER BY entityType, entityKey")
     suspend fun allIdentities(): List<CloudIdentityEntity>
 
+    /** Read-only snapshot of the local sync flags. Recovery never changes them. */
+    @Query("SELECT * FROM cloud_sync_state ORDER BY name")
+    suspend fun allStates(): List<CloudSyncStateEntity>
+
     @Query("SELECT COUNT(*) FROM cloud_sync_outbox")
     suspend fun pendingCountNow(): Int
 
