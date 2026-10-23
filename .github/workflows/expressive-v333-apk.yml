@@ -254,7 +254,7 @@ jobs:
         run: |
           set -euo pipefail
           TAG="marketpro-expressive-v333-preview1"
-          NOTES="Market Pro Expressive v3.3.3 SAFE LOCAL RECOVERY preview. User-initiated AES-256-GCM AndroidKeyStore encrypted copy of ALL local Room data, UUID identities, outbox pending operations and sync flags saved atomically in private noBackupFilesDir and verified by decrypt/byte comparison. Fresh Cloud audit and SHA-256 local-state fingerprint prevent stale/different data. Supports preparation only: NO cloud write, UUID rebind, outbox clearing, rollback execution, device writer enrollment or cutover. Private snapshot is lost on app uninstall; preserve separate external JSON backup and original v2.31 writer. Earlier builds untouched.
+          NOTES="Market Pro Expressive v3.3.3 SAFE LOCAL RECOVERY preview. User-initiated AES-256-GCM AndroidKeyStore encrypted copy of ALL local Room data, UUID identities, outbox pending operations and sync flags saved atomically in private noBackupFilesDir and verified by decrypt/byte comparison. Fresh Cloud audit and SHA-256 local-state fingerprint prevent stale/different data. Supports preparation only: NO cloud write, UUID rebind, outbox clearing, rollback execution, device writer enrollment or cutover. Private snapshot is lost on app uninstall; preserve separate external JSON backup and original v2.31 writer. Earlier builds untouched."
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" MarketPro-Expressive-v3.3.3.apk --clobber
           else
