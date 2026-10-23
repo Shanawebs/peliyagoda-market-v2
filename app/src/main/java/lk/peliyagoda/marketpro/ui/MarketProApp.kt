@@ -104,15 +104,7 @@ object ProColors {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MarketProApp(vm: MarketViewModel) {
-    val palette = androidx.compose.material3.lightColorScheme(
-        primary = ProColors.teal,
-        onPrimary = Color.White,
-        secondary = ProColors.purple,
-        background = ProColors.page,
-        surface = Color.White,
-        onSurface = ProColors.navy
-    )
-    MaterialTheme(colorScheme = palette) {
+    MarketExpressiveTheme {
         val context = LocalContext.current
         // With adjustResize, the IME occupies the bottom of the screen.
         // Scaffold's bottom NavigationBar still reserves its height even when
@@ -367,9 +359,31 @@ fun MarketProApp(vm: MarketViewModel) {
 
         if (helpOpen) MarketHelpDialog(onDismiss = { helpOpen = false })
 
-        if (ownerLoginOpen) CloudOwnerLoginDialog(onDismiss = { ownerLoginOpen = false })
-
-        if (cloudStatusOpen) CloudSyncDialog(onDismiss = { cloudStatusOpen = false })
+        // Protect existing cloud/production data in this side-by-side UI prototype.
+        // All backend/cloud code remains in source, but preview sign-in is blocked.
+        if (ownerLoginOpen || cloudStatusOpen) {
+            AlertDialog(
+                onDismissRequest = {
+                    ownerLoginOpen = false
+                    cloudStatusOpen = false
+                },
+                title = { Text("Expressive Preview — Cloud Isolated") },
+                text = {
+                    Text(
+                        "මෙය අලුත් UI එක පරීක්ෂා කරන ස්වාධීන App එකකි. " +
+                            "පැරණි Market Pro Cloud data ආරක්ෂා කිරීම සඳහා මෙම " +
+                            "preview build එකේ cloud login සහ sync තාවකාලිකව අක්‍රීයයි. " +
+                            "Offline purchasing, reports සහ backup පරීක්ෂා කරන්න."
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        ownerLoginOpen = false
+                        cloudStatusOpen = false
+                    }) { Text("Understood") }
+                }
+            )
+        }
 
         if (chartOpen) ItemPriceChartDialog(
             categories = categories,
@@ -410,10 +424,13 @@ fun MarketProApp(vm: MarketViewModel) {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Text("PELIYAGODA", style = MaterialTheme.typography.labelSmall,
+                            Text("MARKET PRO  •  EXPRESSIVE PREVIEW", style = MaterialTheme.typography.labelSmall,
                                 color = ProColors.teal, fontWeight = FontWeight.Bold)
                             Text("Market Pro", style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.ExtraBold, color = ProVisual.itemInk)
+                            Text("Independent UI concept  •  v3.0",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = ProColors.muted)
                         }
                         IconButton(onClick = { catalogOpen = true }) {
                             Icon(Icons.Filled.Inventory2, contentDescription = "Item Catalog", tint = ProColors.teal)
@@ -503,7 +520,7 @@ fun MarketProApp(vm: MarketViewModel) {
                 }
             },
             bottomBar = {
-                if (!keyboardVisible) NavigationBar(containerColor = Color.White) {
+                if (!keyboardVisible) NavigationBar(containerColor = Color.White, tonalElevation = 2.dp) {
                     val labels = listOf("Dashboard", "Kitchens", "Market")
                     val icons = listOf(Icons.Filled.Dashboard, Icons.Filled.Restaurant, Icons.Filled.ShoppingCart)
                     labels.forEachIndexed { index, label ->
@@ -526,7 +543,15 @@ fun MarketProApp(vm: MarketViewModel) {
                                 tab = index
                             },
                             icon = { Icon(icons[index], contentDescription = null) },
-                            label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                fontWeight = if (tab == index) FontWeight.ExtraBold else FontWeight.Medium) },
+                            colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
+                                selectedIconColor = ProColors.teal,
+                                selectedTextColor = ProColors.teal,
+                                indicatorColor = ExpressivePalette.paleTeal,
+                                unselectedIconColor = ProColors.muted,
+                                unselectedTextColor = ProColors.muted
+                            ),
                             alwaysShowLabel = true
                         )
                     }
