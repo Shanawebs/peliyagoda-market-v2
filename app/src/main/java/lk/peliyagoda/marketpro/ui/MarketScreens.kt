@@ -203,6 +203,26 @@ fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, categories: Li
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // Filter is the first sticky list item: no partial summary cards can
+        // peek through between the global date header and category controls.
+        stickyHeader(key = "dashboard-category-header") {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = ProVisual.page
+            ) {
+                LazyRow(
+                    modifier = Modifier.padding(vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    item(key = "All") {
+                        CategoryChip("All", active = filter == "All") { chooseCategory("All") }
+                    }
+                    lazyItems(categories, key = { it }) { c ->
+                        CategoryChip(c, active = filter == c) { chooseCategory(c) }
+                    }
+                }
+            }
+        }
         item(key = "dashboard-summary") {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
@@ -226,26 +246,6 @@ fun DashboardScreen(date: LocalDate, rows: List<ConsolidatedRow>, categories: Li
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Metric("Estimated Bill", "Rs. ${MarketMath.lkr(totalCents)}", Modifier.weight(1f), ProColors.purple)
                     Metric("Item Count", "${rows.size}", Modifier.weight(1f), ProColors.navy)
-                }
-            }
-        }
-        // Summary scrolls away; this filter strip sticks directly below the
-        // global date header as cards continue scrolling underneath it.
-        stickyHeader(key = "dashboard-category-header") {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = ProVisual.page
-            ) {
-                LazyRow(
-                    modifier = Modifier.padding(vertical = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    item(key = "All") {
-                        CategoryChip("All", active = filter == "All") { chooseCategory("All") }
-                    }
-                    lazyItems(categories, key = { it }) { c ->
-                        CategoryChip(c, active = filter == c) { chooseCategory(c) }
-                    }
                 }
             }
         }
@@ -919,6 +919,28 @@ fun MarketScreen(
         ),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        // Filter is the first sticky list item: no partial summary cards can
+        // peek through between the global date header and category controls.
+        stickyHeader(key = "market-category-header") {
+            Surface(modifier = Modifier.fillMaxWidth(), color = ProVisual.page) {
+                LazyRow(
+                    modifier = Modifier.padding(vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(horizontal = 2.dp)
+                ) {
+                    item(key = "All") {
+                        CategoryChip("All", active = filter == "All") {
+                            onFilterChange("All")
+                        }
+                    }
+                    lazyItems(categories, key = { it }) { category ->
+                        CategoryChip(category, active = filter == category) {
+                            onFilterChange(category)
+                        }
+                    }
+                }
+            }
+        }
         item(key = "market-summary") {
             Surface(color = ProVisual.marketBanner, shape = RoundedCornerShape(19.dp)) {
                 Column(
@@ -982,26 +1004,6 @@ fun MarketScreen(
                                 color = ProVisual.amountInk,
                                 fontWeight = FontWeight.ExtraBold,
                                 style = MaterialTheme.typography.titleSmall)
-                        }
-                    }
-                }
-            }
-        }
-        stickyHeader(key = "market-category-header") {
-            Surface(modifier = Modifier.fillMaxWidth(), color = ProVisual.page) {
-                LazyRow(
-                    modifier = Modifier.padding(vertical = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(horizontal = 2.dp)
-                ) {
-                    item(key = "All") {
-                        CategoryChip("All", active = filter == "All") {
-                            onFilterChange("All")
-                        }
-                    }
-                    lazyItems(categories, key = { it }) { category ->
-                        CategoryChip(category, active = filter == category) {
-                            onFilterChange(category)
                         }
                     }
                 }
@@ -1548,6 +1550,14 @@ fun CatalogSheet(
                         shape = RoundedCornerShape(12.dp),
                         singleLine = true,
                         isError = renameError,
+                        colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = ProColors.teal,
+                            unfocusedBorderColor = Color(0xFF879DA9),
+                            focusedContainerColor = Color(0xFFF1F4F8),
+                            unfocusedContainerColor = Color(0xFFF1F4F8),
+                            focusedLabelColor = ProColors.teal,
+                            unfocusedLabelColor = Color(0xFF526B79)
+                        ),
                         supportingText = {
                             if (renameError) Text("This Name Exists Already Or Could Not Be Saved.")
                         }
