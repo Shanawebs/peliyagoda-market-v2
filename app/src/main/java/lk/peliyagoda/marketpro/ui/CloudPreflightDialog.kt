@@ -124,6 +124,52 @@ fun CloudPreflightDialog(onDismiss: () -> Unit, onOpenOwnerLogin: () -> Unit) {
                         }
                     }
                     HorizontalDivider()
+                    Text("Financial Record Reconciliation",
+                        fontWeight = FontWeight.Bold)
+                    val financial = result.financialAudit
+                    Text(
+                        if (financial.fullyMatched)
+                            "MATCHED: Every transaction fingerprint matches."
+                        else "REVIEW REQUIRED: Differences detected in financial records.",
+                        color = if (financial.fullyMatched) ProColors.green else ProColors.red,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text("Checks business date, kitchen, item identity, purchased/required " +
+                        "quantity, price per kg and cash amount — not just row counts.",
+                        style = MaterialTheme.typography.bodySmall)
+                    for (part in financial.sections) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(part.type.replace('_', ' '), modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodySmall)
+                            Text("${part.matchedRows}/${part.phoneCount}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (part.matched) ProColors.green else ProColors.red,
+                                fontWeight = FontWeight.Bold)
+                        }
+                        if (!part.matched) {
+                            Text("Phone-only: ${part.phoneOnly} | Cloud-only: ${part.cloudOnly}",
+                                color = ProColors.red,
+                                style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    if (financial.unmappedPhoneItems > 0 ||
+                        financial.unmappedCloudItems > 0) {
+                        Text("Unmapped item links: Phone ${financial.unmappedPhoneItems}, " +
+                            "Cloud ${financial.unmappedCloudItems}",
+                            color = ProColors.red,
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (financial.fullyMatched) {
+                        Text("This confirms content parity, NOT cloud UUID identity. " +
+                            "Cloud upload stays locked until the migration and " +
+                            "single-writer cutover are separately approved.",
+                            color = ProColors.muted,
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                    HorizontalDivider()
                     Text("Record Comparison (counts)", fontWeight = FontWeight.Bold)
                     Row(modifier = Modifier.fillMaxWidth()) {
                         Text("Record Type", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold)
