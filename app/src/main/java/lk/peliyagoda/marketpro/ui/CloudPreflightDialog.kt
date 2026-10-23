@@ -95,7 +95,36 @@ fun CloudPreflightDialog(onDismiss: () -> Unit, onOpenOwnerLogin: () -> Unit) {
                         fontWeight = FontWeight.SemiBold
                     )
                     HorizontalDivider()
-                    Text("Record Comparison (counts only)", fontWeight = FontWeight.Bold)
+                    val catalog = result.catalogAudit
+                    Text("Master Item Reconciliation", fontWeight = FontWeight.Bold)
+                    Text(
+                        if (catalog.fullyMatched)
+                            "MATCHED: ${catalog.matchedActive} active names and categories."
+                        else "REVIEW: ${catalog.matchedActive} active items matched.",
+                        color = if (catalog.fullyMatched) ProColors.green else ProColors.red,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "Phone active: ${catalog.localActive}  |  Cloud active: ${catalog.remoteActive}" +
+                            "  |  Archived in Cloud: ${catalog.remoteArchived}",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    if (!catalog.fullyMatched) {
+                        if (catalog.onlyOnPhone.isNotEmpty()) {
+                            Text("Only on phone: " + catalog.onlyOnPhone.joinToString(", "),
+                                style = MaterialTheme.typography.bodySmall)
+                        }
+                        if (catalog.onlyInCloud.isNotEmpty()) {
+                            Text("Only in cloud: " + catalog.onlyInCloud.joinToString(", "),
+                                style = MaterialTheme.typography.bodySmall)
+                        }
+                        if (catalog.differentCategory.isNotEmpty()) {
+                            Text("Category mismatch: " + catalog.differentCategory.joinToString(", "),
+                                color = ProColors.red, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    HorizontalDivider()
+                    Text("Record Comparison (counts)", fontWeight = FontWeight.Bold)
                     Row(modifier = Modifier.fillMaxWidth()) {
                         Text("Record Type", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold)
                         Text("Phone", modifier = Modifier.weight(.55f), fontWeight = FontWeight.Bold)
@@ -115,9 +144,10 @@ fun CloudPreflightDialog(onDismiss: () -> Unit, onOpenOwnerLogin: () -> Unit) {
                     Text("Cloud upload: LOCKED — safe preview mode.",
                         color = ProColors.red, fontWeight = FontWeight.Bold)
                     Text(
-                        "Do not enable a second writer or restore another app's " +
-                            "backup over this preview without reconciling cloud UUIDs. " +
-                            result.writeBlockedReason,
+                        "Historical purchases, requisitions, cash and archived " +
+                            "items remain protected in the existing Cloud workspace. " +
+                            "Catalog-name matching is NOT enough to establish " +
+                            "financial record UUID mappings. No upload is enabled.",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
