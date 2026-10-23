@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -56,7 +57,7 @@ private val helpSections = listOf(
     ),
     MarketHelpSection(
         "🗂️ 3. Master Item Catalog – භාණ්ඩ ලේඛනය",
-        "• ඉහළ ඇති භාණ්ඩ පෙට්ටි සලකුණ (Item Catalog) ඔබන්න. Categories අනුව භාණ්ඩ ලැයිස්තුව තෝරන්න; Search කොටසෙන් භාණ්ඩ නම සොයන්න.\n• භාණ්ඩයක් නැත්නම් New Item Name යටතේ නම ටයිප් කර නිවැරදි Category එක තෝරා Add Item ඔබන්න.\n• Category එකක් අලුතින් අවශ්‍ය නම් Kitchens > Add Items තුළ Category එකක් එක් කිරීමේ විකල්පය භාවිත කරන්න.\n• දැනට ඇති භාණ්ඩයක් නම වෙනස් කළ යුතු නම් Edit සලකුණ භාවිත කරන්න. පරණ මිලදී ගැනීම් හා අවශ්‍යතා එම භාණ්ඩයට සම්බන්ධව පවතී.\n• එකම භාණ්ඩයට වෙනස් නම් කිහිපයක් නොයොදා නිවැරදි නමක් පවත්වාගන්න. එවිට Reports වඩාත් නිවැරදි වේ."
+        "• ඉහළ ඇති භාණ්ඩ පෙට්ටි සලකුණ (Item Catalog) ඔබන්න. Categories අනුව භාණ්ඩ ලැයිස්තුව තෝරන්න; Search කොටසෙන් භාණ්ඩ නම සොයන්න.\n• භාණ්ඩයක් නැත්නම් New Item Name යටතේ නම ටයිප් කර නිවැරදි Category එක තෝරා Add Item ඔබන්න.\n• Category එකක් අලුතින් අවශ්‍ය නම් Master Item Catalog තුළ Category එකක් එක් කිරීමේ විකල්පය භාවිත කරන්න.\n• දැනට ඇති භාණ්ඩයක් නම වෙනස් කළ යුතු නම් Edit සලකුණ භාවිත කරන්න. පරණ මිලදී ගැනීම් හා අවශ්‍යතා එම භාණ්ඩයට සම්බන්ධව පවතී.\n• Master Catalog එකෙන් භාණ්ඩයක් ඉවත් කිරීමට Remove සලකුණ තෝරා නිවැරදි අනුමැති අංකය ඇතුළත් කරන්න. එවිට අලුත් තේරීම්වලින් භාණ්ඩය සැඟවෙන නමුත් පරණ වාර්තා නොමැකේ.\n• එකම භාණ්ඩයට වෙනස් නම් කිහිපයක් නොයොදා නිවැරදි නමක් පවත්වාගන්න. එවිට Reports වඩාත් නිවැරදි වේ."
     ),
     MarketHelpSection(
         "🍽️ 4. Kitchens – අවශ්‍යතා ඇතුළත් කිරීම",
@@ -88,7 +89,7 @@ private val helpSections = listOf(
     ),
     MarketHelpSection(
         "☁️ 11. Cloud Owner සහ Cloud Sync (DEV)",
-        "• Cloud Owner Login / Sign Up මඟින් Owner Account එකට පිවිසිය හැකිය. Login වීමෙන් පමණක් Records Cloud එකට Upload නොවේ.\n• Cloud Sync & Backup (DEV) තවම පරීක්ෂණ මට්ටමේ පහසුකමකි. වගකිවයුතු පුද්ගලයාගේ උපදෙස් නොමැතිව Enable නොකරන්න.\n• Cloud Sync සක්‍රිය කිරීමට පෙර පැරණි App එකේ JSON Backup එක අලුත් App එකට Restore කර අවශ්‍ය දත්ත සම්පූර්ණව තිබෙන බව පරීක්ෂා කරන්න.\n• Invoice Photos Cloud Sync හරහා Upload නොවන නිසා ඒවා Device එකේම පවතී. ජාල සම්බන්ධතාව නැති විට Pending Changes තිබිය හැකිය."
+        "• Expressive Preview Build එකේ Cloud Owner Login සහ Cloud Sync ආරක්ෂාව සඳහා තාවකාලිකව අක්‍රීය කර ඇත. පැරණි app එකේ cloud records වෙනස් නොවේ.\n• Cloud Sync & Backup (DEV) තවම පරීක්ෂණ මට්ටමේ පහසුකමකි. වගකිවයුතු පුද්ගලයාගේ උපදෙස් නොමැතිව Enable නොකරන්න.\n• Cloud Sync සක්‍රිය කිරීමට පෙර පැරණි App එකේ JSON Backup එක අලුත් App එකට Restore කර අවශ්‍ය දත්ත සම්පූර්ණව තිබෙන බව පරීක්ෂා කරන්න.\n• Invoice Photos Cloud Sync හරහා Upload නොවන නිසා ඒවා Device එකේම පවතී. ජාල සම්බන්ධතාව නැති විට Pending Changes තිබිය හැකිය."
     ),
     MarketHelpSection(
         "🛠️ 12. ගැටලුවක් ඇති වුණොත්",
@@ -144,7 +145,7 @@ fun MarketHelpDialog(onDismiss: () -> Unit) {
                 LazyColumn(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     contentPadding = PaddingValues(top = 8.dp, bottom = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(15.dp)
+                    verticalArrangement = Arrangement.spacedBy(18.dp)
                 ) {
                     item(key = "introduction") {
                         Text(
@@ -156,22 +157,54 @@ fun MarketHelpDialog(onDismiss: () -> Unit) {
                         )
                     }
                     items(helpSections, key = { it.heading }) { section ->
-                        Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                            Text(
-                                section.heading,
-                                fontFamily = sinhalaGuideFont,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 18.sp,
-                                lineHeight = 29.sp,
-                                color = ink
-                            )
-                            Text(
-                                section.description,
-                                fontFamily = sinhalaGuideFont,
-                                fontSize = 17.sp,
-                                lineHeight = 28.sp,
-                                color = Color(0xFF3D4650)
-                            )
+                        // A self-contained lightweight section card; only the visible
+                        // sections render, even on devices with 4 GB RAM.
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(20.dp),
+                            color = Color.White,
+                            border = BorderStroke(1.dp, Color(0xFFD5DFE8)),
+                            shadowElevation = 1.dp
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 17.dp),
+                                verticalArrangement = Arrangement.spacedBy(15.dp)
+                            ) {
+                                Text(
+                                    section.heading,
+                                    fontFamily = sinhalaGuideFont,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 18.sp,
+                                    lineHeight = 29.sp,
+                                    color = ink
+                                )
+                                section.description.lines().filter { it.isNotBlank() }
+                                    .forEach { sentence ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.Top,
+                                            horizontalArrangement = Arrangement.spacedBy(11.dp)
+                                        ) {
+                                            // Bullets intentionally larger and aligned with the
+                                            // first line, not squeezed against multiline Sinhala.
+                                            Text(
+                                                "●",
+                                                fontSize = 19.sp,
+                                                lineHeight = 28.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = ProColors.teal
+                                            )
+                                            Text(
+                                                sentence.removePrefix("•").trimStart(),
+                                                modifier = Modifier.weight(1f),
+                                                fontFamily = sinhalaGuideFont,
+                                                fontSize = 17.sp,
+                                                lineHeight = 29.sp,
+                                                color = Color(0xFF3D4650)
+                                            )
+                                        }
+                                    }
+                            }
                         }
                     }
                     item(key = "contact-card") {
