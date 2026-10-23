@@ -31,7 +31,7 @@ import lk.peliyagoda.marketpro.cloud.CloudOwnerAuth
 import kotlinx.coroutines.launch
 
 @Composable
-fun CloudOwnerLoginDialog(onDismiss: () -> Unit) {
+fun CloudOwnerLoginDialog(onDismiss: () -> Unit, existingOwnerOnly: Boolean = false) {
     val context = LocalContext.current
     val client = remember(context) { CloudOwnerAuth(context.applicationContext) }
     val scope = rememberCoroutineScope()
@@ -45,9 +45,11 @@ fun CloudOwnerLoginDialog(onDismiss: () -> Unit) {
         val restored = runCatching { client.currentAccount() }
         account = restored.getOrNull()
         status = when {
-            account != null -> "Signed In. Open Cloud Sync & Backup To Check Enrollment, Pending Records And Opt-In Status."
+            account != null -> "Signed In. Use Cloud Connection (Read-Only) to inspect your workspace and compare record counts."
             restored.isFailure -> "Could Not Verify Saved Session. Connect To The Internet And Sign In."
-            else -> "Create Or Sign In To Your Market Pro DEV Account."
+            else -> if (existingOwnerOnly)
+                "Sign in using the EXISTING owner account for a read-only cloud check."
+                else "Create Or Sign In To Your Market Pro DEV Account."
         }
         working = false
     }
@@ -74,7 +76,9 @@ fun CloudOwnerLoginDialog(onDismiss: () -> Unit) {
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("DEV Only. Login Alone Does Not Upload Any Records. Cloud Sync Requires Explicit Activation. Invoice Photos Always Remain Local.")
+                Text(if (existingOwnerOnly)
+                    "Secure owner login for Phase 1 read-only preflight. Login does not upload, merge, delete or enable a cloud writer. Invoice photos remain local."
+                else "DEV Only. Login Alone Does Not Upload Any Records. Cloud Sync Requires Explicit Activation. Invoice Photos Always Remain Local.")
                 if (account == null) {
                     OutlinedTextField(
                         value = email,
@@ -101,13 +105,13 @@ fun CloudOwnerLoginDialog(onDismiss: () -> Unit) {
                             val enteredPassword = password
                             start {
                                 client.signIn(enteredEmail, enteredPassword).also { account = it }
-                                status = "Email Authenticated. Check Cloud Sync & Backup For Device Enrollment And Upload Status."
+                                status = "Owner authenticated. Return to Cloud Connection (Read-Only) to inspect the workspace."
                             }
                         },
                         enabled = !working && email.isNotBlank() && password.isNotBlank(),
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("Sign In") }
-                    TextButton(
+                    if (!existingOwnerOnly) TextButton(
                         onClick = {
                             val enteredEmail = email
                             val enteredPassword = password
