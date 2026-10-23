@@ -204,6 +204,10 @@ interface MarketDao {
     @Query("UPDATE items SET name = :name WHERE id = :id")
     suspend fun renameItem(id: Long, name: String): Int
 
+    // Reuse the existing isActive flag: item ID, invoices and past records stay untouched.
+    @Query("UPDATE items SET isActive = 0 WHERE id = :id AND isActive = 1")
+    suspend fun archiveItem(id: Long): Int
+
     @Query("SELECT * FROM requisitions WHERE businessDate = :date")
     fun observeRequisitions(date: String): Flow<List<RequisitionEntity>>
 
