@@ -102,41 +102,17 @@ import java.time.LocalDate
 
 @Composable
 private fun SectionCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = ProVisual.card),
-        border = BorderStroke(1.dp, ProVisual.cardBorder),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
-    ) {
-        Box(Modifier.padding(16.dp)) { content() }
-    }
+    ExpressiveSectionCard(modifier = modifier, content = content)
 }
 
 @Composable
-private fun Metric(label: String, value: String, modifier: Modifier = Modifier, accent: Color = ProColors.teal) {
-    val (fill, outline) = when (label) {
-        "Total Required" -> ProVisual.metricTeal to ProVisual.metricTealBorder
-        "Purchased" -> ProVisual.metricPurchased to ProVisual.metricPurchasedBorder
-        "Estimated Bill" -> ProVisual.metricPurple to ProVisual.metricPurpleBorder
-        "Item Count" -> ProVisual.metricNeutral to ProVisual.metricNeutralBorder
-        else -> ProVisual.metricNeutral to ProVisual.metricNeutralBorder
-    }
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        color = fill,
-        border = BorderStroke(1.dp, outline),
-        tonalElevation = 0.dp,
-        shadowElevation = 2.dp
-    ) {
-        Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(label, style = MaterialTheme.typography.labelMedium, color = ProColors.muted)
-            Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold,
-                color = accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-    }
+private fun Metric(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    accent: Color = ProColors.teal
+) {
+    ExpressiveMetricCard(label = label, value = value, modifier = modifier, accent = accent)
 }
 
 @Composable
@@ -189,6 +165,7 @@ private fun CategoryChip(category: String, active: Boolean, onClick: () -> Unit)
         else -> ProColors.teal
     }
     FilterChip(
+        shape = RoundedCornerShape(18.dp),
         selected = active,
         onClick = onClick,
         label = {
