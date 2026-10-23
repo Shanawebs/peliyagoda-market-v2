@@ -29,6 +29,7 @@ data class CloudPreflightReport(
     val local: Map<String, Int>,
     val deviceRegisteredAsWriter: Boolean,
     val catalogAudit: CatalogAudit,
+    val financialAudit: FinancialAudit,
     val writeBlockedReason: String
 )
 
@@ -109,13 +110,18 @@ class CloudReadinessInspector(private val context: Context) {
         val jwt = CloudOwnerAuth(app).accessTokenForOwner(CloudSyncConfig.OWNER_USER_ID)
         val localDao = MarketDatabase.get(app).dao()
         val phoneItems = localDao.allItems()
+        // Materialize a consistent local read phase before remote comparisons.
+        val phoneRequirements = localDao.allRequisitions()
+        val phonePurchases = localDao.allPurchases()
+        val phoneAdditions = localDao.allAdditions()
+        val phoneCash = localDao.allCashReceived()
         val localCounts = linkedMapOf(
             "categories" to localDao.allCategories().size,
             "items" to phoneItems.size,
-            "requisitions" to localDao.allRequisitions().size,
-            "purchases" to localDao.allPurchases().size,
-            "purchase_additions" to localDao.allAdditions().size,
-            "daily_cash_received" to localDao.allCashReceived().size
+            "requisitions" to phoneRequirements.size,
+            "purchases" to phonePurchases.size,
+            "purchase_additions" to phoneAdditions.size,
+            "daily_cash_received" to phoneCash.size
         )
         val cloudCounts = linkedMapOf<String, Int>()
         for (table in CloudReadinessRules.tableNames) {
@@ -156,11 +162,14 @@ class CloudReadinessInspector(private val context: Context) {
             itemRows.length() == cloudCounts["items"]) {
             "Cloud items changed during audit; retry"
         }
+        val cloudItemKeys = mutableMapOf<String, String>()
         val remoteCatalog = buildList {
             for (i in 0 until itemRows.length()) {
                 val row = itemRows.getJSONObject(i)
                 val category = categoryNames[row.getString("category_id")]
                     ?: throw IOException("Cloud item has an unknown category")
+                cloudItemKeys[row.getString("id")] =
+                    FinancialReconciliation.itemKey(row.getString("name"), category)
                 add(CatalogRecord(
                     row.getString("name"), category,
                     row.getBoolean("is_active") && row.isNull("deleted_at")
@@ -170,6 +179,90 @@ class CloudReadinessInspector(private val context: Context) {
         val audit = CatalogReconciliation.compare(
             phoneItems.map { CatalogRecord(it.name, it.category, it.isActive) },
             remoteCatalog
+        )
+
+        // Compare complete transaction FINGERPRINTS rather than aggregate row counts.
+        // Read-only REST queries scoped by workspace RLS. No write method exists here.
+        val phoneItemKeys = phoneItems.associate { it.id to
+            FinancialReconciliation.itemKey(it.name, it.category)
+        }
+        var unmappedPhone = 0
+        fun phoneKey(id: Long): String {
+            return phoneItemKeys[id] ?: run {
+                unmappedPhone++
+                "[missing-local-item:$id]"
+            }
+        }
+        val phoneFinancial = buildList {
+            for (r in phoneRequirements) add(FinancialReconciliation.row(
+                "requisitions", r.businessDate, phoneKey(r.itemId),
+                kitchen = r.kitchen, grams = r.quantityGrams
+            ))
+            for (p in phonePurchases) add(FinancialReconciliation.row(
+                "purchases", p.businessDate, phoneKey(p.itemId),
+                grams = p.quantityGrams, priceCentsPerKg = p.priceCentsPerKg
+            ))
+            for (p in phoneAdditions) add(FinancialReconciliation.row(
+                "purchase_additions", p.businessDate, phoneKey(p.itemId),
+                grams = p.quantityGrams, priceCentsPerKg = p.priceCentsPerKg
+            ))
+            for (c in phoneCash) add(FinancialReconciliation.row(
+                "daily_cash_received", c.businessDate, cashCents = c.amountCents
+            ))
+        }
+        var unmappedCloud = 0
+        fun cloudKey(id: String): String {
+            return cloudItemKeys[id] ?: run {
+                unmappedCloud++
+                "[missing-cloud-item:$id]"
+            }
+        }
+        val cloudFinancial = buildList {
+            for (table in listOf("requisitions", "purchases",
+                "purchase_additions", "daily_cash_received")) {
+                val columns = when (table) {
+                    "requisitions" -> "business_date,kitchen,item_id,quantity_grams,deleted_at"
+                    "daily_cash_received" -> "business_date,amount_cents,deleted_at"
+                    else -> "business_date,item_id,quantity_grams,price_cents_per_kg,deleted_at"
+                }
+                val (body, range) = fetch(
+                    jwt, "$table?select=$columns" +
+                        "&workspace_id=eq.${CloudSyncConfig.WORKSPACE_ID}&limit=500",
+                    countOnly = true, maxBodyChars = 160000
+                )
+                val rows = JSONArray(body)
+                check(rows.length() == CloudReadinessRules.countFromContentRange(range) &&
+                    rows.length() == cloudCounts[table]) {
+                    "Cloud $table changed during finance audit; retry"
+                }
+                for (i in 0 until rows.length()) {
+                    val data = rows.getJSONObject(i)
+                    // Cloud can retain soft-deleted rows; local Room has no
+                    // matching tombstone table. Fail CLOSED, never hide a difference.
+                    val date = data.getString("business_date")
+                    val id = if (table == "daily_cash_received") "" else
+                        cloudKey(data.getString("item_id"))
+                    val record = when (table) {
+                        "requisitions" -> FinancialReconciliation.row(
+                            table, date, id,
+                            kitchen = data.getString("kitchen"),
+                            grams = data.getLong("quantity_grams")
+                        )
+                        "daily_cash_received" -> FinancialReconciliation.row(
+                            table, date, cashCents = data.getLong("amount_cents")
+                        )
+                        else -> FinancialReconciliation.row(
+                            table, date, id, grams = data.getLong("quantity_grams"),
+                            priceCentsPerKg = data.getLong("price_cents_per_kg")
+                        )
+                    }
+                    add(if (data.isNull("deleted_at")) record
+                        else record.copy(signature = record.signature + ":cloud-archived"))
+                }
+            }
+        }
+        val financeAudit = FinancialReconciliation.compare(
+            phoneFinancial, cloudFinancial, unmappedPhone, unmappedCloud
         )
 
         // The original synced V2.31 phone is protected by a single-writer rule.
@@ -190,6 +283,7 @@ class CloudReadinessInspector(private val context: Context) {
             local = localCounts,
             deviceRegisteredAsWriter = enrolled,
             catalogAudit = audit,
+            financialAudit = financeAudit,
             writeBlockedReason = "Existing Cloud data and device-specific UUID mappings " +
                 "must be reconciled before enabling another writer. No upload or " +
                 "overwrite is allowed in this preview."
