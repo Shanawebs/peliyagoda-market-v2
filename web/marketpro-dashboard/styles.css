@@ -364,3 +364,9 @@ body.pdf-open{overflow:hidden}
   #panel-kitchens .category-band-count,
   #panel-purchases .category-band-count{font-size:12px;margin-left:8px}
 }
+
+/* V6: Excel report export, styled alongside the existing PDF control. */
+.tab-csv-button{margin-left:auto;align-self:center;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;background:#e0f3f3;color:#086f7d;border:1px solid #bcdede;border-radius:12px;padding:8px 13px;font-weight:850;font-size:12px;min-height:37px;white-space:nowrap;transition:background .2s}
+.tab-csv-button:hover,.tab-csv-button:focus-visible{background:#c8eded;border-color:#8fcbd0}
+@media(max-width:700px){.tab-csv-button{font-size:12px;padding:8px 11px;min-height:36px}}
+@media print{.tab-csv-button{display:none!important}}
