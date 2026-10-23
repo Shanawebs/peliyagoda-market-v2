@@ -82,6 +82,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -1437,6 +1438,7 @@ fun CatalogSheet(
     items: List<ItemEntity>, categories: List<String>, onClose: () -> Unit,
     add: (String, String) -> Unit,
     rename: (Long, String, (Boolean) -> Unit) -> Unit,
+    archive: (Long, String, (Boolean) -> Unit) -> Unit,
     addCategory: (String, (Boolean) -> Unit) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
@@ -1446,6 +1448,92 @@ fun CatalogSheet(
     var editedName by remember { mutableStateOf("") }
     var renameError by remember { mutableStateOf(false) }
     var renameSaving by remember { mutableStateOf(false) }
+    var archiveTarget by remember { mutableStateOf<ItemEntity?>(null) }
+    var archiveCode by remember { mutableStateOf("") }
+    var archiveError by remember { mutableStateOf(false) }
+    var archiveSaving by remember { mutableStateOf(false) }
+    archiveTarget?.let { item ->
+        AlertDialog(
+            onDismissRequest = {
+                if (!archiveSaving) {
+                    archiveTarget = null
+                    archiveCode = ""
+                    archiveError = false
+                }
+            },
+            title = { Text("Remove Item From Catalog?", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        item.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "This item will disappear from future Kitchen item selections. " +
+                            "Past requisitions, purchases, invoice photos, and reports " +
+                            "will remain linked to this item's original ID."
+                    )
+                    Text("ඉදිරියේ තේරීම් වලින් පමණක් ඉවත් වේ. පැරණි වාර්තා නොමැකේ.")
+                    OutlinedTextField(
+                        value = archiveCode,
+                        onValueChange = { input ->
+                            archiveCode = input.filter { it in '0'..'9' }.take(6)
+                            archiveError = false
+                        },
+                        label = { Text("Enter 6-digit secret code") },
+                        placeholder = { Text("••••••") },
+                        singleLine = true,
+                        isError = archiveError,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        supportingText = {
+                            if (archiveError) {
+                                Text(
+                                    "Incorrect code or unable to archive. Please try again.",
+                                    color = ProColors.red
+                                )
+                            }
+                        }
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !archiveSaving,
+                    onClick = {
+                        archiveTarget = null
+                        archiveCode = ""
+                        archiveError = false
+                    }
+                ) { Text("Cancel") }
+            },
+            confirmButton = {
+                Button(
+                    enabled = !archiveSaving && archiveCode.length == 6,
+                    onClick = {
+                        archiveSaving = true
+                        archive(item.id, archiveCode) { ok ->
+                            archiveSaving = false
+                            if (ok) {
+                                archiveTarget = null
+                                archiveCode = ""
+                                archiveError = false
+                            } else {
+                                archiveError = true
+                                archiveCode = ""
+                            }
+                        }
+                    },
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = ProColors.red
+                    )
+                ) { Text(if (archiveSaving) "Removing…" else "Remove Item") }
+            }
+        )
+    }
     editing?.let { item ->
         AlertDialog(
             onDismissRequest = { if (!renameSaving) editing = null },
@@ -1518,7 +1606,7 @@ fun CatalogSheet(
                 )
                 TextButton(onClick = onClose) { Text("Close") }
             }
-            Text("Add Or Rename Items In Any Category.", color = ProColors.muted)
+            Text("Add, Rename Or Remove Items In Any Category.", color = ProColors.muted)
             Row(
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1553,7 +1641,8 @@ fun CatalogSheet(
                 shape = RoundedCornerShape(12.dp), singleLine = true)
             val filteredItems = remember(items, category, search) {
                 items.filter { item ->
-                    item.category == category && item.name.contains(search, ignoreCase = true)
+                    item.isActive && item.category == category &&
+                        item.name.contains(search, ignoreCase = true)
                 }
             }
             Text("${filteredItems.size} ${category} Item(s)", color = ProColors.muted,
@@ -1595,6 +1684,18 @@ fun CatalogSheet(
                             Icon(Icons.Default.Edit,
                                 contentDescription = "Rename " + item.name,
                                 tint = ProColors.teal)
+                        }
+                        IconButton(onClick = {
+                            archiveTarget = item
+                            archiveCode = ""
+                            archiveError = false
+                            archiveSaving = false
+                        }) {
+                            Icon(
+                                Icons.Default.DeleteOutline,
+                                contentDescription = "Remove " + item.name + " from Master Catalog",
+                                tint = ProColors.red
+                            )
                         }
                     }
                     HorizontalDivider(color = ProColors.pale)
