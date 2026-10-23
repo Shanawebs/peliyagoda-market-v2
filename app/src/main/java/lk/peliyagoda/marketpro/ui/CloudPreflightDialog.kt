@@ -170,6 +170,61 @@ fun CloudPreflightDialog(onDismiss: () -> Unit, onOpenOwnerLogin: () -> Unit) {
                             style = MaterialTheme.typography.bodySmall)
                     }
                     HorizontalDivider()
+                    Text("Cloud UUID Mapping Verification", fontWeight = FontWeight.Bold)
+                    val identity = result.uuidAudit
+                    Text(
+                        "This checks the actual UUID of each matching record. " +
+                            "An identical Item name or purchase amount does NOT mean " +
+                            "the Cloud UUID is the same.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        "Identical UUIDs: ${identity.equalIds} | Different UUIDs: ${identity.differentIds}",
+                        color = if (identity.differentIds == 0) ProColors.green else ProColors.red,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "Pending local uploads: ${identity.pendingUploadOperations} — not sent",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (identity.pendingUploadOperations > 0) ProColors.red else ProColors.muted,
+                        fontWeight = FontWeight.Bold
+                    )
+                    for (section in identity.sections) {
+                        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text(section.type.replace('_', ' ').replaceFirstChar { it.uppercase() },
+                                color = ProColors.navy, fontWeight = FontWeight.SemiBold,
+                                style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                "Phone ${section.phoneRecords} / Cloud ${section.cloudRecords}   " +
+                                    "UUID same ${section.matchingUuid}, different ${section.differentUuid}",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            if (section.absentLocalUuid > 0 ||
+                                section.ambiguous > 0 || section.phoneOnly > 0 ||
+                                section.cloudOnly > 0) {
+                                Text(
+                                    "Missing phone UUID ${section.absentLocalUuid}; " +
+                                        "Ambiguous ${section.ambiguous}; " +
+                                        "Phone-only ${section.phoneOnly}; Cloud-only ${section.cloudOnly}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = ProColors.red
+                                )
+                            }
+                        }
+                    }
+                    if (identity.archivedRemoteRows > 0) {
+                        Text("Cloud archived financial rows: ${identity.archivedRemoteRows}. " +
+                            "Historical tombstones must remain protected.",
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                    Text(
+                        "NO WRITER APPROVAL. This report does not save UUID mappings, " +
+                            "clear pending changes, enroll a device, or upload records.",
+                        color = ProColors.red,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    HorizontalDivider()
                     Text("Record Comparison (counts)", fontWeight = FontWeight.Bold)
                     Row(modifier = Modifier.fillMaxWidth()) {
                         Text("Record Type", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold)
