@@ -9,7 +9,7 @@ internal data class CatalogRecord(
     val active: Boolean
 )
 
-internal data class CatalogAudit(
+data class CatalogAudit(
     val localActive: Int,
     val remoteActive: Int,
     val remoteArchived: Int,
