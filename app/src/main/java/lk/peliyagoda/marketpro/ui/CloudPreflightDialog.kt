@@ -39,6 +39,7 @@ fun CloudPreflightDialog(onDismiss: () -> Unit, onOpenOwnerLogin: () -> Unit) {
     var checking by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
     var report by remember { mutableStateOf<CloudPreflightReport?>(null) }
+    var showMigrationBlockers by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = { if (!checking) onDismiss() },
@@ -224,6 +225,48 @@ fun CloudPreflightDialog(onDismiss: () -> Unit, onOpenOwnerLogin: () -> Unit) {
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.bodySmall
                     )
+                    HorizontalDivider()
+                    Text("Safe Migration Dry Run", fontWeight = FontWeight.Bold)
+                    val dryRun = result.migrationDryRun
+                    Text(
+                        "Unique UUID candidates: ${dryRun.uniqueCandidates}/${dryRun.phoneRecords}" +
+                            "  |  Cloud records: ${dryRun.cloudRecords}",
+                        fontWeight = FontWeight.Bold,
+                        color = if (dryRun.contentMatches && dryRun.oneToOneCandidateCoverage)
+                            ProColors.green else ProColors.red
+                    )
+                    Text(
+                        "Unresolved/ambiguous: ${dryRun.unsafeOrUnmapped}" +
+                            "  |  Preserved archived items: ${dryRun.protectedCloudArchivedItems}",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        "Unsent local operations: ${dryRun.pendingLocalOperations}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (dryRun.pendingLocalOperations > 0)
+                            ProColors.red else ProColors.muted
+                    )
+                    Text(
+                        "CUTOVER BLOCKED — read-only planning only. No UUID rebind, " +
+                            "outbox reset, cloud upload or writer enrollment.",
+                        fontWeight = FontWeight.Bold,
+                        color = ProColors.red,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    TextButton(
+                        onClick = { showMigrationBlockers = !showMigrationBlockers },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (showMigrationBlockers) "Hide Migration Safeguards"
+                            else "Show Migration Safeguards (${dryRun.blockers.size})")
+                    }
+                    if (showMigrationBlockers) {
+                        for (blocker in dryRun.blockers) {
+                            Text("• $blocker",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = ProColors.muted)
+                        }
+                    }
                     HorizontalDivider()
                     Text("Record Comparison (counts)", fontWeight = FontWeight.Bold)
                     Row(modifier = Modifier.fillMaxWidth()) {
