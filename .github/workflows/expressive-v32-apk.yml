@@ -1,0 +1,102 @@
+name: Market Pro Expressive v3.2 - UI Refinements APK
+
+on:
+  push:
+    branches:
+      - prototype/marketpro-expressive-v320
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: expressive-v320-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-apk:
+    name: Validate, unit test, and publish standalone v3.2 APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout isolated v3.2 branch
+        uses: actions/checkout@v4
+
+      - name: Guard all older app identities and non-destructive removal
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "prototype/marketpro-expressive-v320"
+          grep -Fq 'applicationId = "lk.peliyagoda.marketpro.expressivepreview.v32"' app/build.gradle.kts
+          grep -Fq 'versionName = "3.1.0-expressive-refinement-preview"' app/build.gradle.kts
+          grep -Fq 'Market Pro ✦ v3.2' app/src/main/AndroidManifest.xml
+          grep -Fq 'UPDATE items SET isActive = 0 WHERE id = :id AND isActive = 1' app/src/main/java/lk/peliyagoda/marketpro/data/MarketDatabase.kt
+          grep -Fq 'items = catalogItems' app/src/main/java/lk/peliyagoda/marketpro/ui/MarketProApp.kt
+          grep -Fq 'selectedIconColor = Color.White' app/src/main/java/lk/peliyagoda/marketpro/ui/MarketProApp.kt
+          grep -Fq 'indicatorColor = ProColors.navy' app/src/main/java/lk/peliyagoda/marketpro/ui/MarketProApp.kt
+          grep -Fq 'Color(0xFF605B88)' app/src/main/java/lk/peliyagoda/marketpro/ui/MarketProApp.kt
+          grep -Fq 'OutlinedTextFieldDefaults.colors(' app/src/main/java/lk/peliyagoda/marketpro/ui/MarketScreens.kt
+          grep -Fq 'fontSize = 19.sp' app/src/main/java/lk/peliyagoda/marketpro/ui/MarketHelpDialog.kt
+          echo "Confirmed: isolated package, archive, navigation and v3.2 UI components."
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android SDK 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${ANDROID_HOME:-}"
+          sdkmanager_path="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          test -n "$sdkmanager_path"
+          yes | "$sdkmanager_path" --licenses >/dev/null 2>&1 || true
+          "$sdkmanager_path" --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+
+      - name: Setup Gradle 8.11.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Prepare verified Sinhala font assets
+        run: bash scripts/prepare_sinhala_font.sh
+
+      - name: Test and compile debug APK
+        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug
+
+      - name: Verify and name APK for direct download
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk MarketPro-Expressive-v3.2.apk
+          sha256sum MarketPro-Expressive-v3.2.apk
+
+      - name: Upload installable APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MarketPro-Expressive-v3.2-APK
+          path: MarketPro-Expressive-v3.2.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish separate preview release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="marketpro-expressive-v320-preview1"
+          NOTES="Standalone Expressive v3.2 refinement: stronger rename field, eliminate partial summary strips, #605B88 menu text and Help highlight, cards and spaced Sinhala bullets. v3.1 features retained. Earlier v2.36 v3.0 and v3.1 untouched. Independent package and cloud-disabled preview. Debug-signed APK."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" MarketPro-Expressive-v3.2.apk --clobber
+          else
+            gh release create "$TAG" MarketPro-Expressive-v3.2.apk \
+              --target "$GITHUB_SHA" \
+              --prerelease \
+              --title "Market Pro Expressive v3.2 - Isolated UI Preview" \
+              --notes "$NOTES"
+          fi
+          gh release view "$TAG" --json url,assets
