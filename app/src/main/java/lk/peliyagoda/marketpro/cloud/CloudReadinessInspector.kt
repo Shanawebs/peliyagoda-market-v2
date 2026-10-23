@@ -31,6 +31,7 @@ data class CloudPreflightReport(
     val catalogAudit: CatalogAudit,
     val financialAudit: FinancialAudit,
     val uuidAudit: UuidAuditResult,
+    val migrationDryRun: MigrationDryRunResult,
     val writeBlockedReason: String
 )
 
@@ -361,6 +362,12 @@ class CloudReadinessInspector(private val context: Context) {
             archivedRemoteRows = archivedCloudFinancialRows
         )
 
+        val migrationDryRun = MigrationDryRun.evaluate(
+            identities = uuidAudit,
+            catalog = audit,
+            finance = financeAudit
+        )
+
         // The original synced V2.31 phone is protected by a single-writer rule.
         val deviceId = CloudDeviceIdentity.get(app)
         val (devicePayload, _) = fetch(
@@ -381,6 +388,7 @@ class CloudReadinessInspector(private val context: Context) {
             catalogAudit = audit,
             financialAudit = financeAudit,
             uuidAudit = uuidAudit,
+            migrationDryRun = migrationDryRun,
             writeBlockedReason = "Existing Cloud data and device-specific UUID mappings " +
                 "must be reconciled before enabling another writer. No upload or " +
                 "overwrite is allowed in this preview."
