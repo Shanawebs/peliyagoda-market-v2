@@ -482,7 +482,7 @@ fun MarketProApp(vm: MarketViewModel) {
                                     menuOpen = false
                                     ownerLoginOpen = true
                                 })
-                                DropdownMenuItem(text = { Text("Cloud Connection (Read-Only)", color = Color(0xFF605B88), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
+                                DropdownMenuItem(text = { Text("Cloud Connection & Local Migration", color = Color(0xFF605B88), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
                                     menuOpen = false
                                     cloudStatusOpen = true
                                 })
