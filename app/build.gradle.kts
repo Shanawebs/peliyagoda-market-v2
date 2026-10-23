@@ -13,11 +13,11 @@ android {
         // Only PUBLIC Supabase identifiers; never put service-role credentials in an APK.
         buildConfigField("String", "MARKETPRO_SUPABASE_URL", "\"https://lkoptqhodgjeuwwfihfr.supabase.co\"")
         buildConfigField("String", "MARKETPRO_SUPABASE_PUBLISHABLE_KEY", "\"sb_publishable__7F9sfydgBtHiZNPV9kNzg_hGfazjxg\"")
-        applicationId = "lk.peliyagoda.marketpro.expressivepreview.v32"
+        applicationId = "lk.peliyagoda.marketpro.expressivepreview.v321"
         minSdk = 26
         targetSdk = 35
-        versionCode = 320
-        versionName = "3.2.0-expressive-refinement-preview"
+        versionCode = 321
+        versionName = "3.2.1-sticky-layout-fix-preview"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
