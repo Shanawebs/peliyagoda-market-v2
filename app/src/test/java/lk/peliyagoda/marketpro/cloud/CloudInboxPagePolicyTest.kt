@@ -79,7 +79,7 @@ class CloudInboxPagePolicyTest {
         )
     }
 
-    @Test(expected=IllegalArgumentException::class)
+    @Test(expected=java.time.format.DateTimeParseException::class)
     fun rejectBadCloudTimestamp() {
         val invalid=InboxWatermark("today","d0000000-0000-4000-8000-000000000001")
         CloudInboxPagePolicy.validate(
@@ -87,7 +87,7 @@ class CloudInboxPagePolicyTest {
         )
     }
 
-    @Test(expected=IllegalArgumentException::class)
+    @Test(expected=java.time.format.DateTimeParseException::class)
     fun rejectBadServerBusinessDate() {
         CloudInboxPagePolicy.validate(
             "purchase",workspace,null,emptyList(),false,null,"2026-02-30"
