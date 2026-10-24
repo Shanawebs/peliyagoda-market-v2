@@ -71,6 +71,20 @@ interface CloudInboxDao {
     @Query("SELECT entityKey FROM cloud_entity_ids WHERE entityType=:type AND cloudId=:cloudId LIMIT 1")
     suspend fun localKeyForCloudId(type: String, cloudId: String): String?
 
+    /** Read bounded, deterministic merge candidates without altering the cursor.
+     * UUID order is independent of server's (updated_at,id) pull watermark.
+     * Re-reading already-current rows is safe because the revision policy
+     * prevents re-application and keeps pending local changes untouched.
+     */
+    @Query("""
+        SELECT * FROM cloud_inbox_snapshots
+        WHERE entityType=:type AND cloudId > :afterId
+        ORDER BY cloudId ASC LIMIT :limit
+    """)
+    suspend fun financialMergeCandidates(
+        type: String, afterId: String, limit: Int
+    ): List<CloudInboxSnapshotEntity>
+
     /** Detect pending unsent edits by logical business key, even if no Cloud UUID was bound yet. */
     @Query("SELECT COUNT(*) FROM cloud_sync_outbox WHERE entityType=:type AND entityKey=:key")
     suspend fun pendingForLocalKey(type: String, key: String): Int
