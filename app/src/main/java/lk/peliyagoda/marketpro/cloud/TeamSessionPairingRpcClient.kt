@@ -33,7 +33,10 @@ internal class TeamSessionPairingRpcClient(context: Context) {
             "marketpro_staff_accept_invitation",
             "marketpro_owner_activate_staff_readonly",
             "marketpro_owner_enable_staff_writer",
-            "marketpro_owner_disable_staff_writer"
+            "marketpro_owner_disable_staff_writer",
+            "marketpro_owner_pending_key_review",
+            "marketpro_owner_approve_staff_signing_key",
+            "marketpro_owner_revoke_staff_key_and_phone"
         )
     }
 
@@ -50,6 +53,13 @@ internal class TeamSessionPairingRpcClient(context: Context) {
         requirePairingDeployed()
         check(BuildConfig.MARKETPRO_STAFF_WRITE_APPROVAL_RPC_DEPLOYED) {
             "Staff write approval has not passed live security cutover"
+        }
+    }
+
+    private fun requireKeyEnrollmentDeployed() {
+        requirePairingDeployed()
+        check(BuildConfig.MARKETPRO_STAFF_KEY_ENROLLMENT_RPC_DEPLOYED) {
+            "Staff signing-key approval is disabled in preview"
         }
     }
 
@@ -242,4 +252,75 @@ internal class TeamSessionPairingRpcClient(context: Context) {
             result.getBoolean("legacy_owner_writer_unchanged"))
         true
     }
+    /**
+     * Owner views only a Staff key that already passed server ECDSA proof.
+     * A fingerprint is NOT hardware attestation or automatic writer approval.
+     */
+    suspend fun ownerPendingStaffKey(
+        staffUserId:String,staffDeviceId:String
+    ):String=withContext(Dispatchers.IO) {
+        requireKeyEnrollmentDeployed()
+        require(TeamSessionPairingPolicy.validUuid(staffUserId) &&
+            TeamSessionPairingPolicy.validUuid(staffDeviceId) &&
+            staffUserId!=CloudSyncConfig.OWNER_USER_ID &&
+            staffDeviceId!=localDeviceId)
+        val r=post("marketpro_owner_pending_key_review",
+            ownerPayload().put("p_staff_user_id",staffUserId)
+                .put("p_staff_device_id",staffDeviceId),ownerJwt())
+        require(r.getBoolean("proof_of_possession_verified") &&
+            !r.getBoolean("owner_approved") &&
+            r.getString("staff_user_id")==staffUserId &&
+            r.getString("staff_device_id")==staffDeviceId)
+        r.getString("key_fingerprint_sha256")
+    }
+
+    /**
+     * Only explicit matching Staff screen + pending Server fingerprint,
+     * checked by Owner with typed APPROVE KEY, can request activation.
+     */
+    suspend fun ownerApproveStaffSigningKey(
+        target:OwnerWriterTarget,pendingServerFingerprint:String,
+        staffPhoneFingerprint:String,typedConfirmation:String,
+        ownerChecked:Boolean
+    ):Boolean=withContext(Dispatchers.IO) {
+        requireKeyEnrollmentDeployed()
+        val expected=ownerPendingStaffKey(target.staffUserId,target.staffDeviceId)
+        check(StaffKeyEnrollmentPolicy.ownerMayApprove(
+            target,pendingServerFingerprint,expected,staffPhoneFingerprint,
+            typedConfirmation,ownerChecked
+        )) { "Owner must compare exact Staff Key fingerprint before approval" }
+        require(target.workspaceId==CloudSyncConfig.WORKSPACE_ID &&
+            target.ownerDeviceId==localDeviceId &&
+            target.expectedOwnerUserId==CloudSyncConfig.OWNER_USER_ID)
+        val r=post("marketpro_owner_approve_staff_signing_key",
+            ownerPayload().put("p_staff_user_id",target.staffUserId)
+                .put("p_staff_device_id",target.staffDeviceId)
+                .put("p_expected_fingerprint",expected)
+                .put("p_confirmation","APPROVE KEY"),ownerJwt())
+        check(r.getBoolean("key_approved") &&
+            r.getString("key_fingerprint_sha256")==expected &&
+            r.getString("staff_device_id")==target.staffDeviceId &&
+            !r.getBoolean("staff_writer_enabled") &&
+            r.getBoolean("legacy_owner_writer_unchanged"))
+        true
+    }
+
+    /** Owner emergency lost-phone stop: disables Staff Phone, key and lease. */
+    suspend fun ownerRevokeStaffSigningKeyAndPhone(
+        staffUserId:String,staffDeviceId:String
+    ):Boolean=withContext(Dispatchers.IO) {
+        requireKeyEnrollmentDeployed()
+        require(TeamSessionPairingPolicy.validUuid(staffUserId) &&
+            TeamSessionPairingPolicy.validUuid(staffDeviceId) &&
+            staffUserId!=CloudSyncConfig.OWNER_USER_ID &&
+            staffDeviceId!=localDeviceId)
+        val r=post("marketpro_owner_revoke_staff_key_and_phone",
+            ownerPayload().put("p_staff_user_id",staffUserId)
+                .put("p_staff_device_id",staffDeviceId),ownerJwt())
+        check(r.getBoolean("staff_key_revoked") &&
+            r.getBoolean("staff_phone_disabled") &&
+            r.getBoolean("legacy_owner_writer_unchanged"))
+        true
+    }
+
 }

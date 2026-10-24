@@ -1,0 +1,95 @@
+name: Market Pro Two Phone - Owner Approved Staff Signing Key
+
+on:
+  push:
+    branches:
+      - feature/marketpro-two-phone-owner-key-enrollment
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-frozen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Owner phone, dashboard, migration and Staff kill switches unchanged
+        run: |
+          set -euo pipefail
+          git diff --exit-code a420270033edd880e79aa13d9a0eb5309340aad2 HEAD -- app/src/main/AndroidManifest.xml supabase/migrations/ web/marketpro-dashboard/
+          grep -Fq '"MARKETPRO_LOCAL_PREVIEW", "true"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_LOGIN_ENABLED", "false"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_PAIRING_RPC_DEPLOYED", "false"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_KEY_ENROLLMENT_RPC_DEPLOYED", "false"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_FINANCE_RPC_DEPLOYED", "false"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_DEVICE_PROOF_WRITE_ENFORCED", "false"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_OUTBOX_AUTO_UPLOAD", "false"' app/build.gradle.kts
+          grep -Fq 'android.permission.INTERNET" tools:node="remove"' app/src/main/AndroidManifest.xml
+
+  key-proof-webcrypto:
+    runs-on: ubuntu-latest
+    needs: production-frozen
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check secure Staff enrollment Edge Function
+        run: deno check supabase/functions/marketpro-staff-key-enrollment/index.ts
+      - name: Cross-verify Android DER pairing and existing finance protocol
+        run: node --test tests/two_phone_staff_key_proof.test.mjs tests/v375_device_proof_crypto.test.mjs tests/atomic_staff_finance_wire.test.mjs
+
+  pg17-owner-key:
+    runs-on: ubuntu-latest
+    needs: production-frozen
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run disposable PG17 Owner approval, private ACL and revoked phone tests
+        run: |
+          set -euo pipefail
+          docker run -d --rm --name marketpro_owner_key_pg \
+            -e POSTGRES_PASSWORD=testonly -v "$PWD":/work:ro -w /work postgres:17
+          for i in $(seq 1 50); do
+            if docker exec marketpro_owner_key_pg pg_isready -U postgres; then break; fi
+            sleep 1
+          done
+          docker exec marketpro_owner_key_pg psql -X -v ON_ERROR_STOP=1 \
+            -U postgres -d postgres \
+            -f supabase/tests/two_phone_owner_key_enrollment_pg17_local_only.sql
+      - name: Cleanup disposable PostgreSQL 17
+        if: always()
+        run: docker stop marketpro_owner_key_pg || true
+
+  android-owner-and-staff-compile:
+    runs-on: ubuntu-latest
+    needs: production-frozen
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Android SDK 35
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Prepare bundled Sinhala typeface
+        run: bash scripts/prepare_sinhala_font.sh
+      - name: Compile Android and all Owner/Staff JNI-independent unit tests
+        run: gradle --no-daemon :app:testDebugUnitTest
