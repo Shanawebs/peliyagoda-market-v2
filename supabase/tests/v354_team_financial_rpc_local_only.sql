@@ -253,8 +253,8 @@ BEGIN
  IF NOT denied THEN RAISE EXCEPTION 'Negative cash accepted'; END IF;
 
  -- All accepted edits created ONE audit row and ONE outbox ACK record.
- IF (SELECT count(*) FROM public.sync_operations)<>17 OR
-    (SELECT count(*) FROM marketpro_private.team_financial_audit)<>17 THEN
+ IF (SELECT count(*) FROM public.sync_operations)<>18 OR
+    (SELECT count(*) FROM marketpro_private.team_financial_audit)<>18 THEN
     RAISE EXCEPTION 'Audit/ledger count differs from accepted transactions';
  END IF;
  IF (SELECT revision FROM public.requisitions WHERE id=req_id)<>11 OR
