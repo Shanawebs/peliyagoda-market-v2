@@ -1,5 +1,6 @@
 package lk.peliyagoda.marketpro.data
 
+import lk.peliyagoda.marketpro.BuildConfig
 import lk.peliyagoda.marketpro.util.PurchaseEntryRules
 import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
@@ -14,6 +15,7 @@ class MarketRepository(private val db: MarketDatabase) {
     private val journal = CloudChangeJournal(cloudDao)
     val cloudPendingCount: Flow<Int> = cloudDao.observePendingCount()
     suspend fun cloudSyncEnabled(): Boolean =
+        !BuildConfig.MARKETPRO_LOCAL_PREVIEW &&
         cloudDao.state(lk.peliyagoda.marketpro.cloud.CloudSyncConfig.ENABLED) == "true"
 
     val items: Flow<List<ItemEntity>> = dao.observeItems()
