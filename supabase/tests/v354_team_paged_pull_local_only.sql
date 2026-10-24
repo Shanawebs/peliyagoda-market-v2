@@ -1,8 +1,12 @@
 -- Local throwaway PostgreSQL 17 smoke tests only. Never point at Supabase.
 \set ON_ERROR_STOP on
 
-CREATE ROLE anon;
-CREATE ROLE authenticated;
+DO $roles$
+BEGIN
+  BEGIN CREATE ROLE anon; EXCEPTION WHEN duplicate_object THEN NULL; END;
+  BEGIN CREATE ROLE authenticated; EXCEPTION WHEN duplicate_object THEN NULL; END;
+END;
+$roles$;
 CREATE SCHEMA auth;
 CREATE SCHEMA marketpro_private;
 CREATE TABLE public.workspace_members(
