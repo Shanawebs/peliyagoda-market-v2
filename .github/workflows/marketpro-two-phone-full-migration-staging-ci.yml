@@ -133,4 +133,4 @@ jobs:
           deno check supabase/functions/marketpro-staff-finance/index.ts
           node --test tests/two_phone_staff_key_proof.test.mjs \
             tests/v375_device_proof_crypto.test.mjs \
-            tests/atomic_staff_finance_wire.test.mjs
+            tests/atomic_staff_finance_wire.test.mjs tests/two_phone_atomic_bundle_integrity.test.mjs
