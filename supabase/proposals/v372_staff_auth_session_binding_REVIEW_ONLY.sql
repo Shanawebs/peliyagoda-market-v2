@@ -90,55 +90,21 @@ BEGIN
     IF v_verified IS DISTINCT FROM true THEN
         RAISE EXCEPTION 'Verified staff email required' USING ERRCODE='42501';
     END IF;
-    -- JWT is validated by PostgREST; inspect signed session_id claim on
-    -- the server. Validate against auth.sessions to reject signed-out JWTs.
-    -- This is NOT supplied by the client as a mutable device field.
+    -- Signed JWT session_id must still belong to an ACTIVE Auth session.
     v_session_claim := auth.jwt()->>'session_id';
     IF v_session_claim IS NULL OR
-       v_session_claim !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
-    SELECT * INTO v_row
-    FROM marketpro_private.pending_team_enrollments
-    WHERE workspace_id=p_workspace_id AND staff_user_id=v_user
-    FOR UPDATE;
-    IF NOT FOUND OR
-       v_row.intended_device_id IS DISTINCT FROM p_staff_device_id OR
-       v_row.status <> 'invited' OR v_row.expires_at <= clock_timestamp() OR
-       v_row.token_sha256 IS DISTINCT FROM
-         extensions.digest(pg_catalog.convert_to(p_one_time_code,'UTF8'),'sha256') THEN
-       RAISE EXCEPTION 'Enrollment invitation invalid, expired or consumed'
-           USING ERRCODE='42501';
-    END IF;
-    UPDATE marketpro_private.pending_team_enrollments
-    SET status='accepted',accepted_at=clock_timestamp()
-    WHERE workspace_id=p_workspace_id AND staff_user_id=v_user;
-    -- Pair the *one-time invitation* to this signed session, transactionally
-    -- with its consumption; cannot rebind later with a copied device UUID.
-    INSERT INTO marketpro_private.staff_session_bindings(
-      workspace_id,staff_user_id,device_id,session_id,bound_at,revoked_at)
-    VALUES(p_workspace_id,v_user,p_staff_device_id,v_session_id,
-           clock_timestamp(),NULL)
-    ON CONFLICT(workspace_id) DO UPDATE SET
-       staff_user_id=EXCLUDED.staff_user_id,device_id=EXCLUDED.device_id,
-       session_id=EXCLUDED.session_id,bound_at=clock_timestamp(),revoked_at=NULL;
-    -- CRITICAL: no real membership or registered writer is created here.
-    RETURN pg_catalog.jsonb_build_object(
-       'invitation_accepted',true,
-       'status','awaiting_owner_activation_and_server_cutover',
-       'workspace_id',p_workspace_id
-    );
-END;
-$f$; THEN
+       v_session_claim !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
        RAISE EXCEPTION 'Verified active Supabase session required'
-           USING ERRCODE='42501';
+         USING ERRCODE='42501';
     END IF;
-    v_session_id:=v_session_claim::uuid;
+    v_session_id := v_session_claim::uuid;
     IF NOT EXISTS (
        SELECT 1 FROM auth.sessions s
        WHERE s.id=v_session_id AND s.user_id=v_user
          AND (s.not_after IS NULL OR s.not_after>clock_timestamp())
     ) THEN
        RAISE EXCEPTION 'Expired or revoked Auth session'
-           USING ERRCODE='42501';
+         USING ERRCODE='42501';
     END IF;
     -- The staff account alone cannot select an invitation or change its role.
     SELECT * INTO v_row
@@ -156,6 +122,15 @@ $f$; THEN
     UPDATE marketpro_private.pending_team_enrollments
     SET status='accepted',accepted_at=clock_timestamp()
     WHERE workspace_id=p_workspace_id AND staff_user_id=v_user;
+    INSERT INTO marketpro_private.staff_session_bindings(
+      workspace_id,staff_user_id,device_id,session_id,bound_at,revoked_at)
+    VALUES(p_workspace_id,v_user,p_staff_device_id,v_session_id,
+           clock_timestamp(),NULL)
+    ON CONFLICT(workspace_id) DO UPDATE SET
+      staff_user_id=EXCLUDED.staff_user_id,
+      device_id=EXCLUDED.device_id,
+      session_id=EXCLUDED.session_id,
+      bound_at=clock_timestamp(),revoked_at=NULL;
     -- CRITICAL: no real membership or registered writer is created here.
     RETURN pg_catalog.jsonb_build_object(
        'invitation_accepted',true,
