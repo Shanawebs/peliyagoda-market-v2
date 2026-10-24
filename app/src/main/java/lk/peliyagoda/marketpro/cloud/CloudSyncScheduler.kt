@@ -35,6 +35,8 @@ object CloudSyncScheduler {
         WorkManager.getInstance(context.applicationContext).enqueueUniqueWork(
             IMMEDIATE, ExistingWorkPolicy.KEEP, request
         )
+        // Separate Staff ledger; live Owner V1 behavior is unchanged.
+        StaffFinanceAutoSyncScheduler.kick(context)
     }
 
     fun schedulePeriodic(context: Context) {
@@ -47,6 +49,7 @@ object CloudSyncScheduler {
         WorkManager.getInstance(context.applicationContext).enqueueUniquePeriodicWork(
             PERIODIC, ExistingPeriodicWorkPolicy.KEEP, periodic
         )
+        StaffFinanceAutoSyncScheduler.schedule(context)
     }
 }
 
