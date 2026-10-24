@@ -22,7 +22,8 @@ enum class CloudRecordType(val wireName: String) {
     REQUISITION("requisition"),
     PURCHASE("purchase"),
     PURCHASE_ADDITION("purchase_addition"),
-    DAILY_CASH_RECEIVED("daily_cash_received")
+    DAILY_CASH_RECEIVED("daily_cash_received"),
+    DAILY_OTHER_EXPENSES("daily_other_expenses")
 }
 
 enum class CloudAction { UPSERT, DELETE }
@@ -49,6 +50,7 @@ object CloudRecordKey {
     }
     fun addition(lotId: Long): String = item(lotId)
     fun cash(date: String): String = LocalDate.parse(date).toString()
+    fun otherExpense(date: String): String = LocalDate.parse(date).toString()
 }
 
 /**
@@ -187,6 +189,23 @@ class CloudChangeJournal(private val dao: CloudSyncDao) {
                 lk.peliyagoda.marketpro.cloud.FreshAttachState.originKey(wireType, key),
                 id
             ))
+        }
+        if (dao.state("staff_outbox_verified_v1") == "true" &&
+            wireType in setOf("purchase","purchase_addition","requisition",
+                "daily_cash_received","daily_other_expenses")
+        ) {
+            val cloudUuid = dao.cloudId(wireType,key)
+            // This origin marker is NOT permission. Server independently
+            // checks Staff approved device, active session and today's date.
+            if (cloudUuid != null &&
+                dao.state("staff_fresh_origin|$wireType|$cloudUuid") == null &&
+                dao.state("pull_applied_rev|$wireType|$cloudUuid") == null &&
+                dao.state("staff_last_ack_rev|$wireType|$cloudUuid") == null
+            ) {
+                dao.setState(CloudSyncStateEntity(
+                    "staff_fresh_origin|$wireType|$cloudUuid",cloudUuid
+                ))
+            }
         }
         dao.putPending(
             CloudOutboxEntity(
