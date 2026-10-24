@@ -68,7 +68,10 @@ class StaffOutboxUploadPolicyTest {
     @Test fun historicOrUnmappedAndCollisionCannotOverwriteCloud() {
         blocked(candidate(origin=false))
         blocked(candidate(base=2,remote=3,origin=false))
-        blocked(candidate(base=2,remote=2,origin=true))
+        // A fresh Staff-created record keeps its origin marker after the first ACK;
+        // its next edit must use the server revision as a correction.
+        assertEquals("correct",StaffOutboxUploadPolicy.prepare(
+            candidate(base=2,remote=2,origin=true)).action)
         blocked(candidate().copy(hasRemoteBusinessKeyCollision=true))
         blocked(candidate().copy(cloudItemUuid=null))
         blocked(candidate().copy(pendingAction="delete"))
