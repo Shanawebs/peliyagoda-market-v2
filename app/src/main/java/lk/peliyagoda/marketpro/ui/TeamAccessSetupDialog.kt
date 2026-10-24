@@ -133,6 +133,7 @@ fun TeamAccessSetupDialog(onDismiss: () -> Unit) {
                                 "and network sync are disabled. No credentials are collected."
                         )
                     }
+                    StaffSessionPairingPanel()
                     StaffCatalogCandidatePanel()
                     Text(
                         "After Owner and server activation: today’s entries may be " +
@@ -141,6 +142,7 @@ fun TeamAccessSetupDialog(onDismiss: () -> Unit) {
                     )
                 } else {
                     TeamPhoneManagementPreview()
+                    OwnerSessionPairingPanel()
                     Text("Owner — Team Access Control",
                         style = MaterialTheme.typography.titleMedium)
                     Button(onClick = { showCatalogReview = true }) {
