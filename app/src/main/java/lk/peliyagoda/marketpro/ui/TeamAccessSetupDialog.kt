@@ -140,6 +140,7 @@ fun TeamAccessSetupDialog(onDismiss: () -> Unit) {
                             "read-only on Staff Phone, based on Sri Lanka server date."
                     )
                 } else {
+                    TeamPhoneManagementPreview()
                     Text("Owner — Team Access Control",
                         style = MaterialTheme.typography.titleMedium)
                     Button(onClick = { showCatalogReview = true }) {

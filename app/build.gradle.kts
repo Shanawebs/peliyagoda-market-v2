@@ -22,6 +22,8 @@ android {
         buildConfigField("boolean", "MARKETPRO_STAFF_LOGIN_ENABLED", "false")
         // V3.6.5 candidate upload/Owner review RPC is still REVIEW_ONLY SQL.
         buildConfigField("boolean", "MARKETPRO_CATALOG_REVIEW_RPC_DEPLOYED", "false")
+        // 3.6.8 replace/revoke APIs are still proposal SQL; never enable in preview.
+        buildConfigField("boolean", "MARKETPRO_TEAM_PHONE_TRANSFER_RPC_DEPLOYED", "false")
         buildConfigField("String", "MARKETPRO_SUPABASE_URL", "\"https://lkoptqhodgjeuwwfihfr.supabase.co\"")
         buildConfigField("String", "MARKETPRO_SUPABASE_PUBLISHABLE_KEY", "\"sb_publishable__7F9sfydgBtHiZNPV9kNzg_hGfazjxg\"")
         applicationId = "lk.peliyagoda.marketpro.security.foundation.v350"
