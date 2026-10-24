@@ -222,6 +222,7 @@ internal fun OwnerSessionPairingPanel() {
                 Text("Issue Staff Invitation — Server Activation Required")
             }
         }
+        OwnerStaffWriterApprovalPanel(staffUserId, staffDeviceId)
         if (status.isNotBlank()) Text(status,
             style = MaterialTheme.typography.bodySmall)
     }
