@@ -36,6 +36,20 @@ data class DailyCashReceivedEntity(
     val amountCents: Long
 )
 
+@Entity(tableName = "daily_other_expenses")
+data class DailyOtherExpenseEntity(
+    @PrimaryKey val businessDate: String,
+    val transportCents: Long = 0L,
+    val laborChargeCents: Long = 0L,
+    val mealsDrinksCents: Long = 0L,
+    val othersCents: Long = 0L,
+    val remarks: String = ""
+) {
+    fun amounts() = OtherExpenseAmounts(
+        transportCents, laborChargeCents, mealsDrinksCents, othersCents, remarks
+    )
+}
+
 @Entity(tableName = "purchase_additions", indices = [Index("businessDate"), Index("itemId")])
 data class PurchaseAdditionEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -88,6 +102,23 @@ data class PurchaseHistoryLot(
 
 @Dao
 interface MarketDao {
+    @Query("SELECT * FROM daily_other_expenses WHERE businessDate = :date LIMIT 1")
+    fun observeOtherExpenses(date: String): Flow<DailyOtherExpenseEntity?>
+
+    @Query("SELECT * FROM daily_other_expenses WHERE businessDate = :date LIMIT 1")
+    suspend fun otherExpensesForDate(date: String): DailyOtherExpenseEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveOtherExpenses(entry: DailyOtherExpenseEntity)
+
+    @Query("SELECT * FROM daily_other_expenses ORDER BY businessDate")
+    suspend fun allOtherExpenses(): List<DailyOtherExpenseEntity>
+
+    @Query("DELETE FROM daily_other_expenses")
+    suspend fun clearOtherExpenses()
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun restoreOtherExpenses(rows: List<DailyOtherExpenseEntity>)
     @Query("SELECT * FROM daily_cash_received WHERE businessDate = :date LIMIT 1")
     fun observeCashReceived(date: String): Flow<DailyCashReceivedEntity?>
 
@@ -128,6 +159,10 @@ interface MarketDao {
         SELECT businessDate FROM purchase_additions WHERE quantityGrams > 0
         UNION
         SELECT businessDate FROM daily_cash_received WHERE amountCents > 0
+        UNION
+        SELECT businessDate FROM daily_other_expenses WHERE
+            transportCents > 0 OR laborChargeCents > 0 OR mealsDrinksCents > 0 OR
+            othersCents > 0 OR remarks != ''
         ORDER BY businessDate
     """)
     fun observeDatesWithData(): Flow<List<String>>
@@ -258,10 +293,10 @@ interface MarketDao {
     entities = [
         ItemEntity::class, RequisitionEntity::class, PurchaseEntity::class,
         CategoryEntity::class, PurchaseAdditionEntity::class,
-        DailyCashReceivedEntity::class, CatalogStateEntity::class,
+        DailyCashReceivedEntity::class, DailyOtherExpenseEntity::class, CatalogStateEntity::class,
         CloudOutboxEntity::class, CloudIdentityEntity::class, CloudSyncStateEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class MarketDatabase : RoomDatabase() {
@@ -332,13 +367,28 @@ abstract class MarketDatabase : RoomDatabase() {
             }
         }
 
+        /** Non-destructive local migration; existing purchase/cash/outbox tables survive. */
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS daily_other_expenses (" +
+                        "businessDate TEXT NOT NULL PRIMARY KEY, " +
+                        "transportCents INTEGER NOT NULL, " +
+                        "laborChargeCents INTEGER NOT NULL, " +
+                        "mealsDrinksCents INTEGER NOT NULL, " +
+                        "othersCents INTEGER NOT NULL, " +
+                        "remarks TEXT NOT NULL)"
+                )
+            }
+        }
+
         @Volatile private var instance: MarketDatabase? = null
         fun get(context: Context): MarketDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 MarketDatabase::class.java,
                 "peliyagoda-market-pro.db"
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build().also { instance = it }
         }
     }
 }
