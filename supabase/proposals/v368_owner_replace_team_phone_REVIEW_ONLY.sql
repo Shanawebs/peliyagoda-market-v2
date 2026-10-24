@@ -100,6 +100,8 @@ DECLARE
  v_token text;
  v_expires timestamptz:=clock_timestamp()+interval '30 minutes';
  v_verified boolean;
+ v_last_old uuid;
+ v_last_new uuid;
 BEGIN
  v_owner:=marketpro_private.require_enrolled_owner(
    p_workspace_id,p_owner_device_id
@@ -133,6 +135,18 @@ BEGIN
     WHERE id=p_new_device_id
  ) THEN
    RAISE EXCEPTION 'Staff/old phone mismatch or new device identity already used'
+     USING ERRCODE='42501';
+ END IF;
+ -- Only the most recently replaced pair is eligible for reissue.
+ -- Without this guard a twice-retired UUID could be passed when no staff
+ -- device is currently enabled, bypassing the replacement chain.
+ SELECT a.old_device_id,a.new_device_id INTO v_last_old,v_last_new
+ FROM marketpro_private.staff_device_transfer_audit a
+ WHERE a.workspace_id=p_workspace_id AND a.staff_user_id=p_staff_user_id
+   AND a.action='replace'
+ ORDER BY a.changed_at DESC,a.transfer_id DESC LIMIT 1;
+ IF v_last_old IS NOT NULL AND p_old_device_id NOT IN (v_last_old,v_last_new) THEN
+   RAISE EXCEPTION 'Stale retired Staff device cannot start a new replacement'
      USING ERRCODE='42501';
  END IF;
  -- Cannot replace an unrelated active staff device using a stale old ID;
