@@ -49,7 +49,10 @@ internal class CloudStaffAuth(context: Context) {
         val userId: String,
         val accessToken: String,
         val refreshToken: String
-    )
+    ) {
+        override fun toString(): String =
+            "StaffEncryptedSession(userId=$userId, email=$email, tokens=[REDACTED])"
+    }
     private class InvalidAuth : IOException("Staff sign-in expired or was rejected")
 
     private fun requireActivatedAuth() {
