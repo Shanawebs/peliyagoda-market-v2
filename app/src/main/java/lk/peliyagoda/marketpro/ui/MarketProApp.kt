@@ -486,14 +486,16 @@ fun MarketProApp(vm: MarketViewModel) {
                                     restoreText = null
                                     restorePinOpen = true
                                 })
-                                DropdownMenuItem(text = { Text("Cloud Owner Login", color = Color(0xFF605B88), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
-                                    menuOpen = false
-                                    ownerLoginOpen = true
-                                })
-                                DropdownMenuItem(text = { Text("Cloud Connection & Fresh Sync", color = Color(0xFF605B88), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
-                                    menuOpen = false
-                                    cloudStatusOpen = true
-                                })
+                                if (!BuildConfig.MARKETPRO_LOCAL_PREVIEW) {
+                                    DropdownMenuItem(text = { Text("Cloud Owner Login", color = Color(0xFF605B88), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
+                                        menuOpen = false
+                                        ownerLoginOpen = true
+                                    })
+                                    DropdownMenuItem(text = { Text("Cloud Connection & Fresh Sync", color = Color(0xFF605B88), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
+                                        menuOpen = false
+                                        cloudStatusOpen = true
+                                    })
+                                }
                                 DropdownMenuItem(
                                     text = {
                                         Text(
