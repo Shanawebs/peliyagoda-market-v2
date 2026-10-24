@@ -16,6 +16,8 @@ android {
     defaultConfig {
         // Only PUBLIC Supabase identifiers; never put service-role credentials in an APK.
         buildConfigField("boolean", "MARKETPRO_LOCAL_PREVIEW", "true")
+        // Remains FALSE until server v2, staff enrollment and two-phone QA are approved.
+        buildConfigField("boolean", "MARKETPRO_TEAM_PULL_RPC_DEPLOYED", "false")
         buildConfigField("String", "MARKETPRO_SUPABASE_URL", "\"https://lkoptqhodgjeuwwfihfr.supabase.co\"")
         buildConfigField("String", "MARKETPRO_SUPABASE_PUBLISHABLE_KEY", "\"sb_publishable__7F9sfydgBtHiZNPV9kNzg_hGfazjxg\"")
         applicationId = "lk.peliyagoda.marketpro.security.foundation.v350"
