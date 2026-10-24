@@ -1,0 +1,48 @@
+name: Market Pro V3.7.1 - Owner-approved Staff Writer Tests
+
+on:
+  push:
+    branches:
+      - feature/marketpro-v371-owner-staff-write-approval
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  security-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Freeze production migrations, Android preview, web dashboard
+        run: |
+          set -euo pipefail
+          git diff --exit-code e87204c31706653779c6c5fd21d0d0eaaa01fbff HEAD -- supabase/migrations/ app/ web/marketpro-dashboard/
+          test -f supabase/proposals/v371_owner_staff_write_approval_REVIEW_ONLY.sql
+          test -f supabase/tests/v371_owner_staff_write_approval_pg17_local_only.sql
+          grep -Fq 'staff_writer_activation_audit' supabase/proposals/v371_owner_staff_write_approval_REVIEW_ONLY.sql
+          grep -Fq 'g.team_writes_reviewed' supabase/proposals/v371_owner_staff_write_approval_REVIEW_ONLY.sql
+          grep -Fq '"MARKETPRO_LOCAL_PREVIEW", "true"' app/build.gradle.kts
+      - name: Start disposable PostgreSQL 17
+        run: |
+          set -euo pipefail
+          docker run -d --rm --name marketpro_v371_pg \
+            -e POSTGRES_PASSWORD=testonly \
+            -v "$PWD":/work:ro -w /work postgres:17
+          for i in $(seq 1 50); do
+            if docker exec marketpro_v371_pg pg_isready -U postgres; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Run original V370 plus Owner activation and revoke tests
+        run: |
+          set -euo pipefail
+          docker exec marketpro_v371_pg psql -X -v ON_ERROR_STOP=1 \
+            -U postgres -d postgres \
+            -f supabase/tests/v371_owner_staff_write_approval_pg17_local_only.sql
+      - name: Clean disposable database
+        if: always()
+        run: docker stop marketpro_v371_pg || true
