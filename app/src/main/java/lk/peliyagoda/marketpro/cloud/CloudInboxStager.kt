@@ -28,8 +28,8 @@ class CloudInboxStager(private val db: MarketDatabase) {
     private val dao = db.inboxDao()
 
     private val allowedColumns = mapOf(
-        "category" to setOf("id","workspace_id","name","revision","deleted_at","created_at","updated_at"),
-        "item" to setOf("id","workspace_id","category_id","name","is_active","revision",
+        "category" to setOf("id","workspace_id","name","name_key","revision","deleted_at","created_at","updated_at"),
+        "item" to setOf("id","workspace_id","category_id","name","name_key","is_active","revision",
             "deleted_at","created_at","updated_at"),
         "requisition" to setOf("id","workspace_id","business_date","kitchen","item_id",
             "quantity_grams","revision","deleted_at","created_at","updated_at"),
