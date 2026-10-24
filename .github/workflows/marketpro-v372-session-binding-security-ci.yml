@@ -1,0 +1,47 @@
+name: Market Pro V3.7.2 - Signed Session Pairing Guard
+
+on:
+  push:
+    branches:
+      - feature/marketpro-v372-staff-auth-session-binding
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  paired-session-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Preserve live Owner, dashboard, and previous migrations
+        run: |
+          set -euo pipefail
+          git diff --exit-code 985db86b6ae179652cefcef54d16d3d89ac5ccb3 HEAD -- supabase/migrations/ app/ web/marketpro-dashboard/
+          grep -Fq '"MARKETPRO_LOCAL_PREVIEW", "true"' app/build.gradle.kts
+          grep -Fq 'auth.sessions' supabase/proposals/v372_staff_auth_session_binding_REVIEW_ONLY.sql
+          grep -Fq 'is_verified_staff_session' supabase/proposals/v372_staff_auth_session_binding_REVIEW_ONLY.sql
+          grep -Fq 'one-time' supabase/proposals/v372_staff_auth_session_binding_REVIEW_ONLY.sql
+      - name: Launch disposable PostgreSQL 17
+        run: |
+          set -euo pipefail
+          docker run -d --rm --name marketpro_v372_pg \
+            -e POSTGRES_PASSWORD=testonly \
+            -v "$PWD":/work:ro -w /work postgres:17
+          for i in $(seq 1 50); do
+            if docker exec marketpro_v372_pg pg_isready -U postgres; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Run full V370 V371 and Staff session tests
+        run: |
+          set -euo pipefail
+          docker exec marketpro_v372_pg psql -X -v ON_ERROR_STOP=1 \
+             -U postgres -d postgres \
+             -f supabase/tests/v372_staff_auth_session_binding_pg17_local_only.sql
+      - name: Clean test-only database
+        if: always()
+        run: docker stop marketpro_v372_pg || true
