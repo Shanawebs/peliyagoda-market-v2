@@ -1,5 +1,7 @@
 package lk.peliyagoda.marketpro.data
 
+import android.content.Context
+import lk.peliyagoda.marketpro.security.RestorePinGuard
 import lk.peliyagoda.marketpro.BuildConfig
 import lk.peliyagoda.marketpro.util.PurchaseEntryRules
 import androidx.room.withTransaction
@@ -159,8 +161,12 @@ class MarketRepository(private val db: MarketDatabase) {
      * Existing requisitions, purchase lots, invoice photos and item ID are retained.
      * Reject incorrect approval codes before opening the write transaction.
      */
-    suspend fun archiveItem(id: Long, approvalCode: String): Boolean {
-        if (!lk.peliyagoda.marketpro.security.CatalogArchiveAuthorization.valid(approvalCode)) {
+    suspend fun archiveItem(id: Long, approvalCode: String, appContext: Context): Boolean {
+        // No universal secret in the APK. Owner configures their own Keystore
+        // 6-digit PIN; failed attempts have a persisted timed lockout.
+        val guard = RestorePinGuard(appContext)
+        if (!guard.isConfigured() ||
+            guard.verify(approvalCode) !is RestorePinGuard.Check.Accepted) {
             return false
         }
         return db.withTransaction {
