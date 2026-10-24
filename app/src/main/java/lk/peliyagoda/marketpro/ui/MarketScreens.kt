@@ -1735,7 +1735,7 @@ fun CatalogSheet(
                             archiveCode = input.filter { it in '0'..'9' }.take(6)
                             archiveError = false
                         },
-                        label = { Text("Enter 6-digit secret code") },
+                        label = { Text("Owner Security PIN (6 Digits)") },
                         placeholder = { Text("••••••") },
                         singleLine = true,
                         isError = archiveError,
@@ -1746,7 +1746,7 @@ fun CatalogSheet(
                         supportingText = {
                             if (archiveError) {
                                 Text(
-                                    "Incorrect code or unable to archive. Please try again.",
+                                    "PIN not set, incorrect, temporarily locked, or unable to archive. Open Security & Team Sync in the menu.",
                                     color = ProColors.red
                                 )
                             }
