@@ -42,6 +42,7 @@ fun TeamAccessSetupDialog(onDismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
     val staffAuth = remember(context) { CloudStaffAuth(context) }
     var showStaff by remember { mutableStateOf(true) }
+    var showCatalogReview by remember { mutableStateOf(false) }
     var email by remember { mutableStateOf("") }
     // Password stays only in ephemeral Compose state, never SavedState or logs.
     var password by remember { mutableStateOf("") }
@@ -51,7 +52,7 @@ fun TeamAccessSetupDialog(onDismiss: () -> Unit) {
         BuildConfig.MARKETPRO_TEAM_PULL_RPC_DEPLOYED &&
         BuildConfig.MARKETPRO_STAFF_LOGIN_ENABLED
 
-    AlertDialog(
+    if (!showCatalogReview) AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = Color.White,
         title = { Text("Team Account & Device Setup") },
@@ -140,6 +141,10 @@ fun TeamAccessSetupDialog(onDismiss: () -> Unit) {
                 } else {
                     Text("Owner — Team Access Control",
                         style = MaterialTheme.typography.titleMedium)
+                    Button(onClick = { showCatalogReview = true }) {
+                        Text("Review Cloud / Phone Item Mapping")
+                    }
+                    Text("Catalog Review Is Read-Only. Owner Approval Is Not Yet Active.")
                     Text("1. Invite a separately verified Staff Account.")
                     Text("2. Share a one-time, 30-minute invitation securely.")
                     Text("3. Staff accepts invitation on their designated phone.")
@@ -170,4 +175,7 @@ fun TeamAccessSetupDialog(onDismiss: () -> Unit) {
             TextButton(onClick = onDismiss) { Text("Close") }
         }
     )
+    if (showCatalogReview) {
+        OwnerCatalogReviewDialog(onDismiss = { showCatalogReview = false })
+    }
 }

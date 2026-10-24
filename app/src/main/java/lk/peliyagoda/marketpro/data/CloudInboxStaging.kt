@@ -53,6 +53,13 @@ interface CloudInboxDao {
     @Query("SELECT COUNT(*) FROM cloud_inbox_snapshots WHERE entityType=:type")
     suspend fun snapshotCountFor(type: String): Int
 
+    /** Read-only, bounded input for future Owner mapping review UI. */
+    @Query("""
+        SELECT * FROM cloud_inbox_snapshots
+        WHERE entityType=:type ORDER BY cloudId ASC LIMIT :limit
+    """)
+    suspend fun catalogReviewSnapshots(type: String, limit: Int): List<CloudInboxSnapshotEntity>
+
     @Query("""
         SELECT COUNT(*) FROM cloud_sync_outbox AS o
         JOIN cloud_entity_ids AS i
