@@ -1,0 +1,63 @@
+name: Market Pro V3.7.5 - Device Challenge Security Review
+
+on:
+  push:
+    branches:
+      - feature/marketpro-v375-staff-device-challenge-review
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-unchanged:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Freeze Owner Android App, live Dashboard and migrations
+        run: |
+          set -euo pipefail
+          git diff --exit-code b308aeab42798323163e5703ee764540d967e64e HEAD -- app/ web/marketpro-dashboard/ supabase/migrations/
+          grep -Fq '"MARKETPRO_LOCAL_PREVIEW", "true"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_LOGIN_ENABLED", "false"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_WRITE_APPROVAL_RPC_DEPLOYED", "false"' app/build.gradle.kts
+          grep -Fq 'android.permission.INTERNET" tools:node="remove"' app/src/main/AndroidManifest.xml
+          grep -Fq "business_write_permission_granted',false" supabase/proposals/v375_staff_device_challenge_ledger_REVIEW_ONLY.sql
+          test -f supabase/functions/marketpro-staff-device-proof/index.ts
+
+  ec-signature-webcrypto:
+    runs-on: ubuntu-latest
+    needs: production-unchanged
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify Android DER P-256 against server WebCrypto
+        run: node --test tests/v375_device_proof_crypto.test.mjs
+
+  pg17-one-use-challenges:
+    runs-on: ubuntu-latest
+    needs: production-unchanged
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - name: Disposable PG17 Staff session/key/nonce one-use regression
+        run: |
+          set -euo pipefail
+          docker run -d --rm --name marketpro_v375_pg \
+            -e POSTGRES_PASSWORD=testonly -v "$PWD":/work:ro -w /work postgres:17
+          for i in $(seq 1 50); do
+            if docker exec marketpro_v375_pg pg_isready -U postgres; then break; fi
+            sleep 1
+          done
+          docker exec marketpro_v375_pg psql -X -v ON_ERROR_STOP=1 \
+            -U postgres -d postgres \
+            -f supabase/tests/v375_staff_device_challenge_pg17_local_only.sql
+      - name: Stop disposable database
+        if: always()
+        run: docker stop marketpro_v375_pg || true
