@@ -103,6 +103,10 @@ jobs:
           grep -Fq 'staff_device_transfer_audit' supabase/proposals/v368_owner_replace_team_phone_REVIEW_ONLY.sql
           test -f app/src/main/java/lk/peliyagoda/marketpro/cloud/TeamPhoneReplacementPolicy.kt
           test -f app/src/test/java/lk/peliyagoda/marketpro/cloud/TeamPhoneReplacementPolicyTest.kt
+          test -f app/src/main/java/lk/peliyagoda/marketpro/cloud/OwnerTeamPhoneTransferClient.kt
+          grep -Fq 'marketpro_owner_replace_team_phone' app/src/main/java/lk/peliyagoda/marketpro/cloud/OwnerTeamPhoneTransferClient.kt
+          grep -Fq 'MARKETPRO_TEAM_PHONE_TRANSFER_RPC_DEPLOYED' app/src/main/java/lk/peliyagoda/marketpro/cloud/OwnerTeamPhoneTransferClient.kt
+          grep -Fq 'instanceFollowRedirects=false' app/src/main/java/lk/peliyagoda/marketpro/cloud/OwnerTeamPhoneTransferClient.kt
           grep -Fq 'MARKETPRO_TEAM_PHONE_TRANSFER_RPC_DEPLOYED", "false"' app/build.gradle.kts
           test -f app/src/main/java/lk/peliyagoda/marketpro/ui/TeamPhoneManagementPreview.kt
           grep -Fq 'TeamPhoneManagementPreview()' app/src/main/java/lk/peliyagoda/marketpro/ui/TeamAccessSetupDialog.kt
