@@ -1,0 +1,49 @@
+name: Market Pro V3.5.1 - Day-Scoped Team Permission Tests
+
+on:
+  push:
+    branches:
+      - feature/marketpro-v351-same-day-staff-corrections
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  permission-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Protect old Cloud Dashboard and running app
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code c30ec897e4135fb49dea616c965fb3889ace5510 HEAD -- web/marketpro-dashboard/
+          grep -Fq 'Asia/Colombo' docs/V350_OWNER_PURCHASING_TEAM_SYNC_SECURITY_ROLLOUT.md
+          grep -Fq 'dateVerifiedByServer' app/src/main/java/lk/peliyagoda/marketpro/cloud/TeamAccessPolicy.kt
+          grep -Fq 'Previous days are read-only' app/src/main/java/lk/peliyagoda/marketpro/cloud/TeamAccessPolicy.kt
+          grep -Fq 'without owner approval' app/src/main/java/lk/peliyagoda/marketpro/ui/SecurityAndTeamStatusDialog.kt
+          test ! -f app/src/main/java/lk/peliyagoda/marketpro/security/CatalogArchiveAuthorization.kt
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${ANDROID_HOME:-}"
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Prepare verified Sinhala assets
+        run: bash scripts/prepare_sinhala_font.sh
+      - name: Run Kotlin permission and financial unit tests
+        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest
