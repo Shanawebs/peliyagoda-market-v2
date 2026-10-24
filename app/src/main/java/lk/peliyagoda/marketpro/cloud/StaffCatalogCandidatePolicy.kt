@@ -55,7 +55,7 @@ internal object StaffCatalogCandidatePolicy {
                 i.localCategory.length <= 250 &&
                 i.localActive != null)
         } else {
-            require(i.localKey == i.localName &&
+            require(i.localKey == lk.peliyagoda.marketpro.data.CloudRecordKey.category(i.localName) &&
                 i.localCategory == null && i.localActive == null)
         }
         return StaffCatalogCandidate(
