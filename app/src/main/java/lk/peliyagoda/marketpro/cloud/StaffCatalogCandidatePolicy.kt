@@ -107,6 +107,6 @@ internal object OwnerRemoteCandidatePolicy {
         (if (e.entityType == "item")
             e.localItemKey.matches(Regex("[1-9][0-9]{0,17}")) &&
                 e.localCategory?.isNotBlank() == true && e.localActive != null
-        else e.localItemKey == e.localName &&
+        else e.localItemKey == lk.peliyagoda.marketpro.data.CloudRecordKey.category(e.localName) &&
             e.localCategory == null && e.localActive == null)
 }
