@@ -90,7 +90,9 @@ jobs:
           grep -Fq 'marketpro_owner_approve_submitted_catalog' app/src/main/java/lk/peliyagoda/marketpro/cloud/HttpsCatalogReviewRpcTransport.kt
           grep -Fq 'instanceFollowRedirects=false' app/src/main/java/lk/peliyagoda/marketpro/cloud/HttpsCatalogReviewRpcTransport.kt
           grep -Fq 'lastOwnerCandidates[candidateId]' app/src/main/java/lk/peliyagoda/marketpro/cloud/CatalogReviewNetworkCoordinator.kt
-          grep -Fq 'Staff Phone Review Inbox — Not Yet Connected' app/src/main/java/lk/peliyagoda/marketpro/ui/OwnerCatalogReviewDialog.kt
+          grep -Fq 'Staff Phone Review Inbox — Not Yet Connected' app/src/main/java/lk/peliyagoda/marketpro/ui/RemoteStaffCatalogReviewPanel.kt
+          test -f app/src/main/java/lk/peliyagoda/marketpro/ui/RemoteStaffCatalogReviewPanel.kt
+          grep -Fq 'RemoteStaffCatalogReviewPanel()' app/src/main/java/lk/peliyagoda/marketpro/ui/OwnerCatalogReviewDialog.kt
           grep -Fq 'enabled=false' app/src/main/java/lk/peliyagoda/marketpro/ui/OwnerCatalogReviewDialog.kt
           grep -Fq 'Approve Mapping — Requires Secure Server' app/src/main/java/lk/peliyagoda/marketpro/ui/OwnerCatalogReviewDialog.kt
           grep -Fq 'enabled=false' app/src/main/java/lk/peliyagoda/marketpro/ui/OwnerCatalogReviewDialog.kt
