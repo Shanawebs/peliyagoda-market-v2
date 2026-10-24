@@ -438,7 +438,7 @@ fun MarketProApp(vm: MarketViewModel) {
                             // formerly used by "PELIYAGODA" in Market Pro 2.36.
                             Text("BELLAGIO", style = MaterialTheme.typography.labelSmall,
                                 color = ProColors.teal, fontWeight = FontWeight.Bold)
-                            Text("Market Pro", style = MaterialTheme.typography.titleLarge,
+                            Text(if (BuildConfig.MARKETPRO_DEMO_ARCHIVE_ONLY) "Market Pro · Demo" else "Market Pro", style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.ExtraBold, color = ProVisual.itemInk)
                             // Generated from the same Gradle displayVersion as
                             // the APK versionName and launcher label.
