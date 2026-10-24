@@ -1,0 +1,78 @@
+name: Market Pro Two Phone - Atomic Staff Proof Finance
+
+on:
+  push:
+    branches:
+      - feature/marketpro-two-phone-atomic-proof-finance
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  untouched-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Block Owner/production changes and unprotected Staff release
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code ffbbc2e4ca00247b4300be6bbc2bdc7fcc54f793 HEAD -- app/ web/marketpro-dashboard/ supabase/migrations/
+          grep -Fq '"MARKETPRO_LOCAL_PREVIEW", "true"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_FINANCE_RPC_DEPLOYED", "false"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_DEVICE_PROOF_WRITE_ENFORCED", "false"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_OUTBOX_AUTO_UPLOAD", "false"' app/build.gradle.kts
+          grep -Fq 'android.permission.INTERNET" tools:node="remove"' app/src/main/AndroidManifest.xml
+          grep -Fq 'REVOKE ALL ON FUNCTION public.marketpro_apply_team_financial_change(' supabase/proposals/two_phone_atomic_proof_financial_write_REVIEW_ONLY.sql
+          grep -Fq 'REVOKE ALL ON FUNCTION public.marketpro_apply_team_purchase_change(' supabase/proposals/two_phone_atomic_proof_financial_write_REVIEW_ONLY.sql
+          grep -Fq 'REVOKE ALL ON FUNCTION public.marketpro_apply_team_other_expense(' supabase/proposals/two_phone_atomic_proof_financial_write_REVIEW_ONLY.sql
+
+  protocol-webcrypto:
+    runs-on: ubuntu-latest
+    needs: untouched-live
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify intent whitelist and DER-P256 signature checking
+        run: node --test tests/atomic_staff_finance_wire.test.mjs tests/v375_device_proof_crypto.test.mjs
+
+  edge-deno-types:
+    runs-on: ubuntu-latest
+    needs: untouched-live
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Validate authenticated finance Edge TypeScript
+        run: deno check supabase/functions/marketpro-staff-finance/index.ts
+
+  pg17-atomicity:
+    runs-on: ubuntu-latest
+    needs: untouched-live
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run full V370-V375 and atomic-finance integration in disposable PostgreSQL
+        run: |
+          set -euo pipefail
+          docker run -d --rm --name marketpro_atomic_pg \
+            -e POSTGRES_PASSWORD=testonly -v "$PWD":/work:ro -w /work postgres:17
+          for i in $(seq 1 50); do
+            if docker exec marketpro_atomic_pg pg_isready -U postgres; then break; fi
+            sleep 1
+          done
+          docker exec marketpro_atomic_pg psql -X -v ON_ERROR_STOP=1 \
+            -U postgres -d postgres \
+            -f supabase/tests/two_phone_atomic_proof_finance_pg17_local_only.sql
+      - name: Stop disposable database
+        if: always()
+        run: docker stop marketpro_atomic_pg || true
