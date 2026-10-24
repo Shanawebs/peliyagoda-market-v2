@@ -72,6 +72,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import lk.peliyagoda.marketpro.BuildConfig
 import lk.peliyagoda.marketpro.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -323,9 +324,14 @@ fun MarketProApp(vm: MarketViewModel) {
                     restoreText = null
                     restoreAuthorized = false
                 },
-                title = { Text("Restore Backup?") },
+                title = { Text(if (BuildConfig.MARKETPRO_DEMO_ARCHIVE_ONLY) "Restore Old Demo Backup?" else "Restore Backup?") },
                 text = {
                     Text(
+                        (if (BuildConfig.MARKETPRO_DEMO_ARCHIVE_ONLY)
+                            "OFFLINE DEMO ONLY — This separate app never connects to Supabase. " +
+                            "Restoring replaces ONLY this demo app’s local data. " +
+                            "The live V3.3.7 Cloud app and the Web Dashboard remain untouched. "
+                         else "") +
                         "⚠️ මෙය දැනට ඇති Catalog, Kitchen සහ Purchase Records " +
                             "Backup File එකේ දත්ත මඟින් Replace කරනු ඇත. " +
                             "Restore කිරීමට පෙර අලුත් JSON Backup එකක් Save කරගන්න. " +
@@ -348,7 +354,7 @@ fun MarketProApp(vm: MarketViewModel) {
                         // Repository performs full schema checks before an atomic replace.
                         // Cloud-enrolled restores remain blocked at repository level.
                         vm.restoreBackup(json) { result ->
-                            message(if (result.isSuccess) "Backup Restored Successfully" else
+                            message(if (result.isSuccess) "Demo Backup Restored Locally — Cloud Unchanged" else
                                 "Restore Failed: ${result.exceptionOrNull()?.message ?: "Invalid File"}")
                         }
                     }) { Text("Replace & Restore") }
