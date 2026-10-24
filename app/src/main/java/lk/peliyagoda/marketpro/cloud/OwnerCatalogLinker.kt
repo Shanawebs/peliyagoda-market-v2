@@ -34,7 +34,8 @@ internal class OwnerCatalogLinker(private val db: MarketDatabase) {
         // Prevent a programming mistake enabling linking in offline preview.
         check(!BuildConfig.MARKETPRO_LOCAL_PREVIEW &&
             BuildConfig.MARKETPRO_TEAM_PULL_RPC_DEPLOYED &&
-            BuildConfig.MARKETPRO_STAFF_LOGIN_ENABLED) {
+            BuildConfig.MARKETPRO_STAFF_LOGIN_ENABLED &&
+            BuildConfig.MARKETPRO_CATALOG_REVIEW_RPC_DEPLOYED) {
             "Owner-approved catalog linking has no live backend in this build"
         }
         return db.withTransaction {
@@ -85,7 +86,8 @@ internal class OwnerCatalogLinker(private val db: MarketDatabase) {
                 if (categoryRow.optString("id") == remoteCategoryUuid &&
                     categoryRow.optString("workspace_id") == approval.workspaceId &&
                     categoryRow.optLong("revision") == categoryShadow.revision &&
-                    categoryShadow.revision > 0)
+                    categoryShadow.revision > 0 &&
+                    categoryRow.isNull("deleted_at"))
                     categoryRow.optString("name")
                 else null
             } else null

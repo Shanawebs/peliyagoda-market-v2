@@ -24,6 +24,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import lk.peliyagoda.marketpro.BuildConfig
 import lk.peliyagoda.marketpro.cloud.CatalogReviewNetworkCoordinator
+import lk.peliyagoda.marketpro.cloud.StaffCatalogApprovedLinkCoordinator
+import lk.peliyagoda.marketpro.cloud.OwnerCatalogLinkResult
 import lk.peliyagoda.marketpro.cloud.CatalogReviewReader
 import lk.peliyagoda.marketpro.cloud.CatalogReviewRow
 import lk.peliyagoda.marketpro.cloud.CatalogReviewStatus
@@ -58,6 +60,7 @@ internal fun StaffCatalogCandidatePanel() {
     val context=LocalContext.current.applicationContext
     val reader=remember(context){CatalogReviewReader(MarketDatabase.get(context))}
     val controller=remember(context){CatalogReviewNetworkCoordinator(context)}
+    val approvedLink=remember(context){StaffCatalogApprovedLinkCoordinator(context)}
     val scope=rememberCoroutineScope()
     var rows by remember{ mutableStateOf<List<CatalogReviewRow>>(emptyList()) }
     var selected by remember{ mutableStateOf<CatalogReviewRow?>(null) }
@@ -131,6 +134,30 @@ internal fun StaffCatalogCandidatePanel() {
                 } finally {busy=false}
             }
         }){Text("Submit Selected Candidate — Owner Review Required")}
+
+        // This fetches a freshly server-reviewed Owner approval; it never
+        // accepts a QR, PIN, local fake flag or caller-supplied fingerprint.
+        Button(enabled=!busy,onClick={
+            busy=true;notice=""
+            scope.launch {
+                try {
+                    val result=approvedLink.fetchAndApply(choice.type,choice.cloudUuid)
+                    notice=when(result) {
+                        OwnerCatalogLinkResult.CAN_LINK,
+                        OwnerCatalogLinkResult.ALREADY_LINKED ->
+                            "Approved canonical UUID linked after Room recheck. " +
+                            "Historical purchases and invoice photos unchanged."
+                        else ->
+                            "Owner approval was found but current Phone data " +
+                            "did not match. No mapping was linked: $result"
+                    }
+                    rows=emptyList();selected=null
+                } catch (_:Exception) {
+                    notice="No valid Owner approval on this Staff Phone, or " +
+                        "catalog changed. Nothing linked; refresh Owner review."
+                } finally {busy=false}
+            }
+        }) {Text("Fetch Owner Approval & Verify Link")}
     }
     if(notice.isNotBlank())
         Text(notice,color=ProColors.teal,style=MaterialTheme.typography.bodySmall)
