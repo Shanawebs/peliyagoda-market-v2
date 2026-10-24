@@ -59,7 +59,16 @@ internal object UnavailableStaffWriteTransport:StaffProofBoundWriteTransport {
  */
 internal class StaffFinancialOutboxCoordinator(
     context:Context,
-    private val transport:StaffProofBoundWriteTransport=UnavailableStaffWriteTransport,
+    private val transport:StaffProofBoundWriteTransport=
+        if (StaffOutboxUploadPolicy.releaseReady(
+            BuildConfig.MARKETPRO_LOCAL_PREVIEW,
+            BuildConfig.MARKETPRO_STAFF_LOGIN_ENABLED,
+            BuildConfig.MARKETPRO_TEAM_PULL_RPC_DEPLOYED,
+            BuildConfig.MARKETPRO_STAFF_FINANCE_RPC_DEPLOYED,
+            BuildConfig.MARKETPRO_STAFF_DEVICE_PROOF_WRITE_ENFORCED,
+            BuildConfig.MARKETPRO_STAFF_OUTBOX_AUTO_UPLOAD
+        )) StaffSignedFinanceHttpTransport(context)
+        else UnavailableStaffWriteTransport,
     private val sessionProvider:TeamPullSessionProvider =
         VerifiedStaffPullSessionProvider(context)
 ) {
