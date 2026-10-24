@@ -665,6 +665,7 @@ private fun RequirementCard(
     }
     var confirmDelete by remember { mutableStateOf(false) }
     if (confirmDelete) AlertDialog(
+            containerColor = Color.White,
         onDismissRequest = { confirmDelete = false },
         title = { Text("Remove " + item.name + "?") },
         text = { Text("This Kitchen's Requirement For This Date Will Be Removed. Other Kitchens Are Unaffected.") },
@@ -737,6 +738,7 @@ private fun CategoryStrip(
     var busy by remember { mutableStateOf(false) }
     if (adding) {
         AlertDialog(
+            containerColor = Color.White,
             onDismissRequest = { if (!busy) adding = false },
             title = { Text("New Item Category") },
             text = {
@@ -811,6 +813,7 @@ private fun ItemPickerSheet(
     }
     val pickerSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
+        containerColor = Color.White,
         onDismissRequest = onDismiss,
         sheetState = pickerSheetState,
         sheetGesturesEnabled = false,
@@ -918,6 +921,7 @@ fun MarketScreen(
         )
         var otherExpanded by remember(businessDate) { mutableStateOf(false) }
         AlertDialog(
+            containerColor = Color.White,
             onDismissRequest = { cashDialogOpen = false },
             shape = RoundedCornerShape(28.dp),
             title = {
@@ -1339,6 +1343,7 @@ private fun PurchaseCard(
     )
     if (showInitialPurchaseHelp) {
         AlertDialog(
+            containerColor = Color.White,
             onDismissRequest = { showInitialPurchaseHelp = false },
             title = { Text("Enter The Initial Purchase First") },
             text = {
@@ -1361,6 +1366,7 @@ private fun PurchaseCard(
         val extraGrams = MarketMath.parseGrams(additionalQty)
         val extraPrice = MarketMath.parsePriceCents(additionalPrice)
         AlertDialog(
+            containerColor = Color.White,
             onDismissRequest = { if (!savingAddition) addOpen = false },
             title = { Text("Additional Purchase • " + row.item.name) },
             text = {
@@ -1701,6 +1707,7 @@ fun CatalogSheet(
     var archiveSaving by remember { mutableStateOf(false) }
     archiveTarget?.let { item ->
         AlertDialog(
+            containerColor = Color.White,
             onDismissRequest = {
                 if (!archiveSaving) {
                     archiveTarget = null
@@ -1783,6 +1790,7 @@ fun CatalogSheet(
     }
     editing?.let { item ->
         AlertDialog(
+            containerColor = Color.White,
             onDismissRequest = { if (!renameSaving) editing = null },
             title = { Text("Rename " + item.name) },
             text = {
@@ -1838,6 +1846,7 @@ fun CatalogSheet(
         catalogListState.scrollToItem(0)
     }
     ModalBottomSheet(
+        containerColor = Color.White,
         onDismissRequest = onClose,
         sheetState = catalogSheetState,
         sheetGesturesEnabled = false,
