@@ -7,7 +7,7 @@ plugins {
 
 // Single source of truth for user-visible version labels.
 // Next release: update this number only; both header and launcher follow it.
-val marketProDisplayVersion = "3.3.7"
+val marketProDisplayVersion = "3.4.0"
 
 android {
     namespace = "lk.peliyagoda.marketpro"
@@ -15,17 +15,18 @@ android {
 
     defaultConfig {
         // Only PUBLIC Supabase identifiers; never put service-role credentials in an APK.
+        buildConfigField("boolean", "MARKETPRO_LOCAL_PREVIEW", "true")
         buildConfigField("String", "MARKETPRO_SUPABASE_URL", "\"https://lkoptqhodgjeuwwfihfr.supabase.co\"")
         buildConfigField("String", "MARKETPRO_SUPABASE_PUBLISHABLE_KEY", "\"sb_publishable__7F9sfydgBtHiZNPV9kNzg_hGfazjxg\"")
-        applicationId = "lk.peliyagoda.marketpro.freshtest.v337"
+        applicationId = "lk.peliyagoda.marketpro.otherexpenses.preview.v340"
         minSdk = 26
         targetSdk = 35
-        versionCode = 337
+        versionCode = 340
         versionName = marketProDisplayVersion
         // Generated from the SAME version as the APK metadata. Never hardcode
         // versions separately in AndroidManifest or a Compose text component.
         resValue("string", "marketpro_version_caption", "• v$marketProDisplayVersion")
-        resValue("string", "marketpro_launcher_name", "Market Pro ✦ v$marketProDisplayVersion")
+        resValue("string", "marketpro_launcher_name", "Market Pro Preview ✦ v$marketProDisplayVersion")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
