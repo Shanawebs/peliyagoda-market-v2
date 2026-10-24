@@ -19,7 +19,7 @@ data class InboxCheckpoint(
 object CloudInboxPagePolicy {
     val allowedTypes: Set<String> = setOf(
         "category", "item", "requisition", "purchase",
-        "purchase_addition", "daily_cash_received"
+        "purchase_addition", "daily_cash_received", "daily_other_expenses"
     )
 
     fun uuid(value: String): Boolean = runCatching {
