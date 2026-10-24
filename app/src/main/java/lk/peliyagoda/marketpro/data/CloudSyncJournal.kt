@@ -115,6 +115,21 @@ interface CloudSyncDao {
     @Query("SELECT COUNT(*) FROM cloud_sync_outbox")
     suspend fun pendingCountNow(): Int
 
+    /**
+     * Staff cannot upload catalog rows or deletes via the Owner-only v1 RPC.
+     * This isolated query survives all process restarts and excludes
+     * unsupported types without hiding them or erasing journal history.
+     */
+    @Query("""
+        SELECT * FROM cloud_sync_outbox WHERE
+          entityType IN (
+            'purchase','purchase_addition','requisition',
+            'daily_cash_received','daily_other_expenses'
+          )
+        ORDER BY changedAtMs,entityType,entityKey LIMIT :limit
+    """)
+    suspend fun pendingStaffFinancial(limit: Int): List<CloudOutboxEntity>
+
     /** Strict dependency ordering: category → item → financial rows. */
     @Query("""
         SELECT * FROM cloud_sync_outbox
