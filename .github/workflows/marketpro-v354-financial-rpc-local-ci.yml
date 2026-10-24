@@ -30,6 +30,9 @@ jobs:
           test -f supabase/tests/v353_team_purchase_rpc_local_only.sql
           test -f supabase/proposals/v354_team_financial_rpc_REVIEW_ONLY.sql
           test -f supabase/tests/v354_team_financial_rpc_local_only.sql
+          test -f supabase/proposals/v354_team_paged_pull_REVIEW_ONLY.sql
+          test -f supabase/tests/v354_team_paged_pull_local_only.sql
+          grep -Fq 'server_today_colombo' supabase/proposals/v354_team_paged_pull_REVIEW_ONLY.sql
           grep -Fq 'p_expected_revision' supabase/proposals/v354_team_financial_rpc_REVIEW_ONLY.sql
           grep -Fq 'team_financial_audit' supabase/proposals/v354_team_financial_rpc_REVIEW_ONLY.sql
           grep -Fq 'p_expected_revision' supabase/proposals/v353_team_purchase_rpc_REVIEW_ONLY.sql
@@ -59,6 +62,11 @@ jobs:
           docker exec marketpro_v354_pg psql -v ON_ERROR_STOP=1 \
             -U postgres -d postgres \
             -f supabase/tests/v354_team_financial_rpc_local_only.sql
+          docker exec marketpro_v354_pg psql -v ON_ERROR_STOP=1 \
+            -U postgres -d postgres -c "CREATE DATABASE marketpro_pull_test"
+          docker exec marketpro_v354_pg psql -v ON_ERROR_STOP=1 \
+            -U postgres -d marketpro_pull_test \
+            -f supabase/tests/v354_team_paged_pull_local_only.sql
 
       - name: Cleanup throwaway test container
         if: always()
