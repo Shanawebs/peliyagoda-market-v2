@@ -1,0 +1,136 @@
+name: Market Pro Two Phone - Full Migration Staging Audit
+
+on:
+  push:
+    branches:
+      - feature/marketpro-two-phone-staging-migration-audit
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  freeze-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Protect installed Owner app and deployed migrations
+        run: |
+          set -euo pipefail
+          git diff --exit-code e96dcbdde04516d8a41b3be2c5cd0b7e26622948 HEAD -- app/ web/marketpro-dashboard/ supabase/migrations/
+          grep -Fq '"MARKETPRO_LOCAL_PREVIEW", "true"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_LOGIN_ENABLED", "false"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_OUTBOX_AUTO_UPLOAD", "false"' app/build.gradle.kts
+          grep -Fq 'android.permission.INTERNET" tools:node="remove"' app/src/main/AndroidManifest.xml
+          test -s supabase/proposals/two_phone_daily_summary_expense_reconciliation_REVIEW_ONLY.sql
+          test -s supabase/tests/two_phone_full_migration_pg17_staging_only.sql
+
+  pg17-full-schema-migration:
+    runs-on: ubuntu-latest
+    needs: freeze-live
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build actual deployed Owner V1 schema then replay every Team proposal
+        run: |
+          set -euo pipefail
+          docker run -d --rm --name marketpro_full_cutover_pg17 \
+            -e POSTGRES_PASSWORD=testonly \
+            -v "$PWD":/work:ro -w /work postgres:17
+          for i in $(seq 1 50); do
+            if docker exec marketpro_full_cutover_pg17 pg_isready -U postgres; then break; fi
+            sleep 1
+          done
+          docker exec marketpro_full_cutover_pg17 psql -X \
+            -v ON_ERROR_STOP=1 -U postgres -d postgres \
+            -f supabase/tests/two_phone_full_migration_pg17_staging_only.sql
+      - name: Destroy disposable test data
+        if: always()
+        run: docker stop marketpro_full_cutover_pg17 || true
+
+  pg17-single-transaction-cutover:
+    runs-on: ubuntu-latest
+    needs: freeze-live
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate ONE all-or-nothing Team cutover against deployed Cloud V1
+        run: |
+          set -euo pipefail
+          grep -Fq "marketpro.staging_disposable" supabase/release_candidates/two_phone_atomic_cutover_STAGING_ONLY.sql
+          test "$(grep -c '^BEGIN;$' supabase/release_candidates/two_phone_atomic_cutover_STAGING_ONLY.sql)" -eq 1
+          test "$(grep -c '^COMMIT;$' supabase/release_candidates/two_phone_atomic_cutover_STAGING_ONLY.sql)" -eq 1
+          docker run -d --rm --name marketpro_atomic_cutover_pg17 \
+            -e POSTGRES_PASSWORD=testonly \
+            -v "$PWD":/work:ro -w /work postgres:17
+          for i in $(seq 1 50); do
+            if docker exec marketpro_atomic_cutover_pg17 pg_isready -U postgres; then break; fi
+            sleep 1
+          done
+          docker exec marketpro_atomic_cutover_pg17 psql -X \
+            -v ON_ERROR_STOP=1 -U postgres -d postgres \
+            -f supabase/tests/two_phone_atomic_cutover_pg17_staging_only.sql
+      - name: Destroy isolated atomic database
+        if: always()
+        run: docker stop marketpro_atomic_cutover_pg17 || true
+
+  regression-two-phone-atomic:
+    runs-on: ubuntu-latest
+    needs: freeze-live
+    timeout-minutes: 27
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test ECDSA proof, replay denial, owner key approval and revocation
+        run: |
+          set -euo pipefail
+          docker run -d --rm --name marketpro_regression_cutover_pg17 \
+            -e POSTGRES_PASSWORD=testonly \
+            -v "$PWD":/work:ro -w /work postgres:17
+          for i in $(seq 1 50); do
+            if docker exec marketpro_regression_cutover_pg17 pg_isready -U postgres; then break; fi
+            sleep 1
+          done
+          docker exec marketpro_regression_cutover_pg17 psql -X \
+            -v ON_ERROR_STOP=1 -U postgres -d postgres \
+            -f supabase/tests/two_phone_atomic_proof_finance_pg17_local_only.sql
+          # PostgreSQL roles are CLUSTER-global. These regression scripts
+          # deliberately create anon/authenticated/service_role from scratch;
+          # a second DATABASE in the same cluster is NOT isolated.
+          docker stop marketpro_regression_cutover_pg17
+          docker run -d --rm --name marketpro_regression_owner_key_pg17 \
+            -e POSTGRES_PASSWORD=testonly \
+            -v "$PWD":/work:ro -w /work postgres:17
+          for i in $(seq 1 50); do
+            if docker exec marketpro_regression_owner_key_pg17 pg_isready -U postgres; then break; fi
+            sleep 1
+          done
+          docker exec marketpro_regression_owner_key_pg17 psql -X \
+            -v ON_ERROR_STOP=1 -U postgres -d postgres \
+            -f supabase/tests/two_phone_owner_key_enrollment_pg17_local_only.sql
+      - name: Cleanup isolated regressions
+        if: always()
+        run: docker stop marketpro_regression_owner_key_pg17 || true
+
+  cryptographic-edge-protocol:
+    runs-on: ubuntu-latest
+    needs: freeze-live
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Run real P-256 signature and financial whitelist checks
+        run: |
+          set -euo pipefail
+          deno check supabase/functions/marketpro-staff-key-enrollment/index.ts
+          deno check supabase/functions/marketpro-staff-finance/index.ts
+          node --test tests/two_phone_staff_key_proof.test.mjs \
+            tests/v375_device_proof_crypto.test.mjs \
+            tests/atomic_staff_finance_wire.test.mjs tests/two_phone_atomic_bundle_integrity.test.mjs
