@@ -18,7 +18,8 @@ data class DomainMergeEvidence(
     val remoteTombstone: Boolean,
     val remoteRevision: Long,
     val lastAppliedRevision: Long?,
-    val localContentsMatchRemote: Boolean
+    val localContentsMatchRemote: Boolean,
+    val localContentsMatchLastApplied: Boolean
 )
 
 enum class DomainMergeDecision {
@@ -66,6 +67,10 @@ object DomainMergePolicy {
                 DomainMergeDecision.ALREADY_CURRENT
             else DomainMergeDecision.CONFLICT_REVISION_OR_LOCAL_CONTENT
         }
-        return DomainMergeDecision.UPDATE_EXISTING
+        // Even if no outbox row is visible, a changed/restored local record
+        // must not be overwritten unless it matches our previous checkpoint.
+        return if (e.localContentsMatchLastApplied)
+            DomainMergeDecision.UPDATE_EXISTING
+        else DomainMergeDecision.CONFLICT_REVISION_OR_LOCAL_CONTENT
     }
 }
