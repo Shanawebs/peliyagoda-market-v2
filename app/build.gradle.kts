@@ -18,6 +18,7 @@ android {
         buildConfigField("boolean", "MARKETPRO_LOCAL_PREVIEW", "true")
         // Remains FALSE until server v2, staff enrollment and two-phone QA are approved.
         buildConfigField("boolean", "MARKETPRO_TEAM_PULL_RPC_DEPLOYED", "false")
+        buildConfigField("boolean", "MARKETPRO_STAFF_READ_PROOF_ENFORCED", "false")
         // Explicitly blocked until verified, complete staged pull and
         // all catalog/financial UUID reconciliation are signed off.
         buildConfigField("boolean", "MARKETPRO_TEAM_DOMAIN_MERGE_DEPLOYED", "false")

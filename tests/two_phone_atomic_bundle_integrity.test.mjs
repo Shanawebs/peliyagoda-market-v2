@@ -22,7 +22,8 @@ const sources=[
   "two_phone_other_expenses_pull_REVIEW_ONLY.sql",
   "two_phone_atomic_proof_financial_write_REVIEW_ONLY.sql",
   "two_phone_owner_staff_key_enrollment_REVIEW_ONLY.sql",
-  "two_phone_daily_summary_expense_reconciliation_REVIEW_ONLY.sql"
+  "two_phone_daily_summary_expense_reconciliation_REVIEW_ONLY.sql",
+  "two_phone_signed_staff_pull_REVIEW_ONLY.sql"
 ];
 const read=relative=>fs.readFileSync(path.join(process.cwd(),relative),"utf8");
 const bundle=read("supabase/release_candidates/two_phone_atomic_cutover_STAGING_ONLY.sql");

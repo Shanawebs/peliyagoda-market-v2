@@ -32,6 +32,7 @@ then replays the reviewed team SQL in this dependency order:
 17. `two_phone_atomic_proof_financial_write` (**removes all direct Staff v2 finance RPC EXECUTE grants**)
 18. `two_phone_owner_staff_key_enrollment`
 19. `two_phone_daily_summary_expense_reconciliation`
+20. `two_phone_signed_staff_pull` (closes copied-JWT read bypass)
 
 The test then inserts a NEW mock Owner, Staff, registered phones, category,
 Item, Purchase, Additional Purchase, Cash and four Other Expenses amounts.
@@ -59,7 +60,7 @@ No invoice photographs are uploaded.
 
 The source-accurate, **202 KB STAGING-ONLY** SQL bundle
 `supabase/release_candidates/two_phone_atomic_cutover_STAGING_ONLY.sql`
-contains ALL 19 proposals in their original dependency order, with each
+contains ALL 20 proposals in their original dependency order, with each
 standalone BEGIN/COMMIT relocated into ONE outer transaction.
 It refuses to start without an explicit disposable-session sentinel.
 `supabase/tests/two_phone_atomic_cutover_pg17_staging_only.sql` verifies
@@ -88,13 +89,13 @@ with real Auth JWT gateway/Edge deploy or real phones. For a safe deployment:
 - All eligible public views must be `security_invoker` or inaccessible to
   Staff. Audit grants, default PUBLIC function EXECUTE, authenticated role
   membership, rollout-gate defaults and purchase/catalog UUID mapping.
-- **UNRESOLVED STAFF READ PROOF:** current `marketpro_team_pull_page` checks
+- **STAFF READ PROOF CODE PREPARED, NOT DEPLOYED:** original live `marketpro_team_pull_page` checks
   signed Auth JWT session and registered device UUID but DOES NOT require a
   fresh Android Keystore challenge signature on each read. A copied Staff
   bearer token plus known device UUID may still bypass physical key possession
-  while the session is active. Before Staff Pull is activated, implement and
-  test a per-read proof-bound Edge access path, and revoke/replace the older
-  direct Staff pull authorization without breaking Owner's existing app.
+  while the session is active. A reviewed per-page proof-bound Edge+SQL+Android path is now staged and
+  protected by default-OFF Android flag; real Supabase staging and physical
+  device verification remain mandatory before activating Staff Pull.
   This is a SECURITY NO-GO, despite passing role-level RLS checks.
 - Existing Owner v3.3.7 and production data stay on the one original device
   while Staff Phone gets its own registered JWT and independently approved key.
