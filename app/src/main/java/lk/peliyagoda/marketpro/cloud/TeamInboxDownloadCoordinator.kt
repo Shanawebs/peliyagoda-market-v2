@@ -50,7 +50,7 @@ internal class TeamInboxDownloadCoordinator(
      *
      * Cursors in staging and revision checkpoints in domain merging are
      * separate: a successful pull cannot silently ACK/drop a pending edit.
-     * Catalog, addition lots and tombstones remain explicitly blocked.
+     * Catalog mutations and tombstones remain explicitly blocked.\n     * Addition-lot imports are allowed only when no unbound historical lot\n     * shares their date/item; otherwise Owner review is required.
      */
     data class FinanceSyncResult(
         val type: String,
@@ -72,7 +72,8 @@ internal class TeamInboxDownloadCoordinator(
             "Team domain merge is disabled pending verified two-phone cutover"
         }
         require(type in setOf(
-            "purchase","requisition","daily_cash_received","daily_other_expenses"
+            "purchase","purchase_addition","requisition",
+            "daily_cash_received","daily_other_expenses"
         ))
         require(maxReviewRows in 1..200)
         val fetched = stageCloudType(type,pageSize=35,maxPages=8)
