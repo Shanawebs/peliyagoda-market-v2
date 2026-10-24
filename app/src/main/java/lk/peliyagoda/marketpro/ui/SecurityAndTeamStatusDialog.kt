@@ -32,8 +32,9 @@ fun SecurityAndTeamStatusDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current.applicationContext
     val guard = remember(context) { RestorePinGuard(context) }
     var showPinPrompt by remember { mutableStateOf(false) }
+    var showTeamSetup by remember { mutableStateOf(false) }
     var lastResult by remember { mutableStateOf("") }
-    AlertDialog(
+    if (!showTeamSetup) AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = Color.White,
         title = { Text("Security & Team Sync") },
@@ -90,6 +91,9 @@ fun SecurityAndTeamStatusDialog(onDismiss: () -> Unit) {
                         color = ProColors.teal
                     )
                 }
+                Button(onClick = { showTeamSetup = true }) {
+                    Text("Staff Login & Owner Activation Preview")
+                }
                 Button(onClick = { showPinPrompt = true }) {
                     Text(if (guard.isConfigured())
                         "Verify 6-Digit Local PIN" else "Set 6-Digit Local PIN")
@@ -103,6 +107,9 @@ fun SecurityAndTeamStatusDialog(onDismiss: () -> Unit) {
             TextButton(onClick = onDismiss) { Text("Close") }
         }
     )
+    if (showTeamSetup) {
+        TeamAccessSetupDialog(onDismiss = { showTeamSetup = false })
+    }
     if (showPinPrompt) {
         RestorePinDialog(
             guard = guard,

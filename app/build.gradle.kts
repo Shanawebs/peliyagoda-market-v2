@@ -18,6 +18,8 @@ android {
         buildConfigField("boolean", "MARKETPRO_LOCAL_PREVIEW", "true")
         // Remains FALSE until server v2, staff enrollment and two-phone QA are approved.
         buildConfigField("boolean", "MARKETPRO_TEAM_PULL_RPC_DEPLOYED", "false")
+        // Preview fields are disabled; no Owner/Staff password collection or network login.
+        buildConfigField("boolean", "MARKETPRO_STAFF_LOGIN_ENABLED", "false")
         buildConfigField("String", "MARKETPRO_SUPABASE_URL", "\"https://lkoptqhodgjeuwwfihfr.supabase.co\"")
         buildConfigField("String", "MARKETPRO_SUPABASE_PUBLISHABLE_KEY", "\"sb_publishable__7F9sfydgBtHiZNPV9kNzg_hGfazjxg\"")
         applicationId = "lk.peliyagoda.marketpro.security.foundation.v350"
