@@ -72,6 +72,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import lk.peliyagoda.marketpro.BuildConfig
 import lk.peliyagoda.marketpro.R
 import lk.peliyagoda.marketpro.data.OtherExpenseAmounts
 import androidx.compose.ui.text.font.FontWeight
@@ -440,7 +441,7 @@ fun MarketProApp(vm: MarketViewModel) {
                             // formerly used by "PELIYAGODA" in Market Pro 2.36.
                             Text("BELLAGIO", style = MaterialTheme.typography.labelSmall,
                                 color = ProColors.teal, fontWeight = FontWeight.Bold)
-                            Text("Market Pro", style = MaterialTheme.typography.titleLarge,
+                            Text(if (BuildConfig.MARKETPRO_LOCAL_PREVIEW) "Market Pro · Preview" else "Market Pro", style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.ExtraBold, color = ProVisual.itemInk)
                             // Generated from the same Gradle displayVersion as
                             // the APK versionName and launcher label.
