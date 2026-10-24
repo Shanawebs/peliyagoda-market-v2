@@ -144,7 +144,7 @@ BEGIN
   PERFORM public.marketpro_device_catalog_link_approval(w,staff_dev,'item',item_id);
  EXCEPTION WHEN SQLSTATE '42501' THEN denied:=true; END;
  IF NOT denied THEN RAISE EXCEPTION 'Changed Cloud category approval usable'; END IF;
- UPDATE public.items SET category_id=category_id WHERE id=item_id;
+ UPDATE public.items SET category_id='c1111111-1111-4111-8111-111111111111'::uuid WHERE id=item_id;
 
  -- A direct, arbitrary v362 Approval (even inserted privately as postgres) is
  -- NEVER enough without an approved Staff candidate review.
