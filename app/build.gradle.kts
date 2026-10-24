@@ -32,6 +32,8 @@ android {
         buildConfigField("boolean", "MARKETPRO_TEAM_PHONE_TRANSFER_RPC_DEPLOYED", "false")
         // V3.7.3 Dormant Auth-session pairing. No staff OTP or password input in preview.
         buildConfigField("boolean", "MARKETPRO_STAFF_PAIRING_RPC_DEPLOYED", "false")
+        // V3.7.8 Owner-approved key PoP endpoint remains review-only.
+        buildConfigField("boolean", "MARKETPRO_STAFF_KEY_ENROLLMENT_RPC_DEPLOYED", "false")
         // Dedicated Owner confirmation + server audit not activated.
         buildConfigField("boolean", "MARKETPRO_STAFF_WRITE_APPROVAL_RPC_DEPLOYED", "false")
         buildConfigField("String", "MARKETPRO_SUPABASE_URL", "\"https://lkoptqhodgjeuwwfihfr.supabase.co\"")
