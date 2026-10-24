@@ -85,6 +85,20 @@ interface CloudInboxDao {
         type: String, afterId: String, limit: Int
     ): List<CloudInboxSnapshotEntity>
 
+    /**
+     * Prevent duplicate lot imports against an old Owner/Staff phone:
+     * any historical local + lot without an exact Cloud UUID mapping blocks
+     * auto-import of another lot on that same day/item.
+     */
+    @Query("""
+        SELECT COUNT(*) FROM purchase_additions AS p
+        LEFT JOIN cloud_entity_ids AS c
+          ON c.entityType='purchase_addition' AND
+             c.entityKey=CAST(p.id AS TEXT)
+        WHERE p.businessDate=:date AND p.itemId=:itemId AND c.cloudId IS NULL
+    """)
+    suspend fun unmappedAdditionCount(date: String, itemId: Long): Int
+
     /** Detect pending unsent edits by logical business key, even if no Cloud UUID was bound yet. */
     @Query("SELECT COUNT(*) FROM cloud_sync_outbox WHERE entityType=:type AND entityKey=:key")
     suspend fun pendingForLocalKey(type: String, key: String): Int
