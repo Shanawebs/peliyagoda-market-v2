@@ -76,6 +76,15 @@ class StaffAuthSafetyPolicyTest {
         assertTrue(StaffAuthSafetyPolicy.allowNetwork(false,true,true))
     }
 
+    @Test fun cloudSessionNeverPrintsAccessToken() {
+        val sensitive = "example-sensitive-token-which-must-be-private"
+        val session = TeamPullSession(sensitive,staffId,
+            "b1111111-1111-4111-8111-111111111111",
+            "e46b90c5-ed6a-4952-82e9-8582fac06d89")
+        assertFalse(session.toString().contains(sensitive))
+        assertTrue(session.toString().contains("[REDACTED]"))
+    }
+
     @Test fun staffAuthCannotBeUsedToEscalateToOwnerRights() {
         val verified = staffIdentity()
         StaffAuthSafetyPolicy.checkIdentity(verified,verified.email,ownerId,staffId)
