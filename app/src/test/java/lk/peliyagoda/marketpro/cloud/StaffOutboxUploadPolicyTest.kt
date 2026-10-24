@@ -88,7 +88,8 @@ class StaffOutboxUploadPolicyTest {
     @Test fun defaultPreviewOrMissingServerCryptoStopsAllUploads() {
         for(i in 0..5) {
             val f=BooleanArray(6){true}
-            if(i==0) f[0]=true else f[i]=false
+            f[0]=i==0
+            if(i>0) f[i]=false
             assertFalse(StaffOutboxUploadPolicy.releaseReady(
                 preview=f[0],staffLogin=f[1],staffPull=f[2],
                 financeRpcs=f[3],deviceProofEnforced=f[4],staffOutboxEnabled=f[5]))
