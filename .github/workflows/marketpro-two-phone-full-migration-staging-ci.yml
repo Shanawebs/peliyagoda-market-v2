@@ -100,19 +100,19 @@ jobs:
           # deliberately create anon/authenticated/service_role from scratch;
           # a second DATABASE in the same cluster is NOT isolated.
           docker stop marketpro_regression_cutover_pg17
-          docker run -d --rm --name marketpro_regression_cutover_pg17 \
+          docker run -d --rm --name marketpro_regression_owner_key_pg17 \
             -e POSTGRES_PASSWORD=testonly \
             -v "$PWD":/work:ro -w /work postgres:17
           for i in $(seq 1 50); do
-            if docker exec marketpro_regression_cutover_pg17 pg_isready -U postgres; then break; fi
+            if docker exec marketpro_regression_owner_key_pg17 pg_isready -U postgres; then break; fi
             sleep 1
           done
-          docker exec marketpro_regression_cutover_pg17 psql -X \
+          docker exec marketpro_regression_owner_key_pg17 psql -X \
             -v ON_ERROR_STOP=1 -U postgres -d postgres \
             -f supabase/tests/two_phone_owner_key_enrollment_pg17_local_only.sql
       - name: Cleanup isolated regressions
         if: always()
-        run: docker stop marketpro_regression_cutover_pg17 || true
+        run: docker stop marketpro_regression_owner_key_pg17 || true
 
   cryptographic-edge-protocol:
     runs-on: ubuntu-latest
