@@ -40,6 +40,9 @@ internal class CloudRestClient {
     private val origin = BuildConfig.MARKETPRO_SUPABASE_URL
 
     private fun send(path: String, bearer: String, body: JSONObject? = null): String {
+        check(!BuildConfig.MARKETPRO_DEMO_ARCHIVE_ONLY) {
+            "Offline demo archive has no network access"
+        }
         val url = URL(origin + path)
         require(url.protocol == "https" && url.host == "lkoptqhodgjeuwwfihfr.supabase.co")
         val connection = (url.openConnection() as HttpURLConnection).apply {
@@ -192,10 +195,14 @@ class CloudSyncEngine(private val context: Context) {
     private val client = CloudRestClient()
     private val auth = CloudOwnerAuth(app)
 
-    suspend fun isEnabled(): Boolean = cloud.state(CloudSyncConfig.ENABLED) == "true"
+    suspend fun isEnabled(): Boolean = !BuildConfig.MARKETPRO_DEMO_ARCHIVE_ONLY &&
+        cloud.state(CloudSyncConfig.ENABLED) == "true"
 
     /** The old empty-workspace import is permanently disabled in V3 fresh mode. */
     suspend fun enableAfterOwnerConfirmation(): Int {
+        check(!BuildConfig.MARKETPRO_DEMO_ARCHIVE_ONLY) {
+            "Offline demo archive cannot enable Cloud Sync"
+        }
         throw CloudUploadRejected("Bulk historical import is disabled for V3; use fresh catalog attach")
     }
 

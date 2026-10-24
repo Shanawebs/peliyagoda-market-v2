@@ -1,5 +1,6 @@
 package lk.peliyagoda.marketpro.data
 
+import lk.peliyagoda.marketpro.BuildConfig
 import lk.peliyagoda.marketpro.util.PurchaseEntryRules
 import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
@@ -14,6 +15,7 @@ class MarketRepository(private val db: MarketDatabase) {
     private val journal = CloudChangeJournal(cloudDao)
     val cloudPendingCount: Flow<Int> = cloudDao.observePendingCount()
     suspend fun cloudSyncEnabled(): Boolean =
+        !BuildConfig.MARKETPRO_DEMO_ARCHIVE_ONLY &&
         cloudDao.state(lk.peliyagoda.marketpro.cloud.CloudSyncConfig.ENABLED) == "true"
 
     val items: Flow<List<ItemEntity>> = dao.observeItems()
@@ -268,6 +270,9 @@ class MarketRepository(private val db: MarketDatabase) {
 
     /** Validate *everything* before replacing records, then change the database in one transaction. */
     suspend fun restoreBackup(json: String) {
+        // This isolated demo APK is never enrolled. PIN-gated restore replaces
+        // ONLY its own local Room data and cannot mutate Supabase or V3.3.7.
+        // Never replace data if this app is actually enrolled, even in archive mode.
         // A user-approved full cloud rebootstrap protocol is required after enrollment.
         // Do NOT silently rewrite remote UUID identities when importing a backup.
         check(cloudDao.state("enrolled") != "true") {

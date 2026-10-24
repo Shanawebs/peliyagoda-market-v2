@@ -1,0 +1,103 @@
+name: Market Pro V3.3.8 - Isolated Offline Demo Restore APK
+
+on:
+  push:
+    branches:
+      - feature/marketpro-v338-isolated-offline-demo-restore
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: marketpro-v338-offline-demo-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Protect original Cloud Dashboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code c30ec897e4135fb49dea616c965fb3889ace5510 HEAD -- web/marketpro-dashboard/
+          grep -Fq 'applicationId = "lk.peliyagoda.marketpro.offlinedemo.v338"' app/build.gradle.kts
+          grep -Fq 'val marketProDisplayVersion = "3.3.8"' app/build.gradle.kts
+          grep -Fq 'Bulk historical import is disabled' app/src/main/java/lk/peliyagoda/marketpro/cloud/CloudSyncEngine.kt
+          grep -Fq 'FreshOnlyUploadPolicy.evaluate' app/src/main/java/lk/peliyagoda/marketpro/cloud/CloudSyncEngine.kt
+          grep -Fq 'MARKETPRO_DEMO_ARCHIVE_ONLY", "true"' app/build.gradle.kts
+          grep -Fq 'android.permission.INTERNET" tools:node="remove"' app/src/main/AndroidManifest.xml
+          grep -Fq 'if (!BuildConfig.MARKETPRO_DEMO_ARCHIVE_ONLY)' app/src/main/java/lk/peliyagoda/marketpro/ui/MarketProApp.kt
+          grep -Fq 'check(!BuildConfig.MARKETPRO_DEMO_ARCHIVE_ONLY)' app/src/main/java/lk/peliyagoda/marketpro/cloud/CloudSyncEngine.kt
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${ANDROID_HOME:-}"
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Prepare licensed Sinhala fonts
+        run: bash scripts/prepare_sinhala_font.sh
+      - name: Kotlin/Room unit tests and assemble standalone test APK
+        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug
+      - name: Check APK version, standalone package and checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk MarketPro-Demo-Archive-v3.3.8.apk
+          sha256sum MarketPro-Demo-Archive-v3.3.8.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging MarketPro-Demo-Archive-v3.3.8.apk > /tmp/marketpro-badging.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('/tmp/marketpro-badging.txt').read_text()
+          assert "package: name='lk.peliyagoda.marketpro.offlinedemo.v338'" in s
+          assert "versionName='3.3.8'" in s
+          assert "application-label:'Market Pro Demo ✦ v3.3.8'" in s
+          print("PASS: isolated package, version and launcher label verified")
+          PY
+      - name: Verify offline-only permissions in built APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions MarketPro-Demo-Archive-v3.3.8.apk > /tmp/v338-permissions.txt
+          if grep -Fq 'android.permission.INTERNET' /tmp/v338-permissions.txt; then echo 'Offline demo APK unexpectedly has INTERNET permission'; exit 1; fi
+          echo 'PASS: no INTERNET permission in the APK'
+      - name: Publish verified APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MarketPro-Demo-Archive-v3.3.8-APK
+          path: MarketPro-Demo-Archive-v3.3.8.apk
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish standalone test APK download
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="marketpro-v338-offline-demo-restore1"
+          NOTES="Market Pro v3.3.8 isolated OFFLINE demo archive. Separate app and no INTERNET permission. PIN-gated restore of existing JSON replaces ONLY this local demo app data; does not touch Cloud V3.3.7 data, registered writer, or original web dashboard. Cloud sign-in and activation menu hidden. Backup JSON does not include invoice photos. Do NOT uninstall or clear original V3.3.7 Cloud app."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" MarketPro-Demo-Archive-v3.3.8.apk --clobber
+          else
+            gh release create "$TAG" MarketPro-Demo-Archive-v3.3.8.apk \
+              --target "$GITHUB_SHA" --prerelease \
+              --title "Market Pro v3.3.8 - Offline Demo Restore (separate app)" \
+              --notes "$NOTES"
+          fi
+          gh release view "$TAG" --json url,assets

@@ -72,6 +72,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import lk.peliyagoda.marketpro.BuildConfig
 import lk.peliyagoda.marketpro.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -323,9 +324,14 @@ fun MarketProApp(vm: MarketViewModel) {
                     restoreText = null
                     restoreAuthorized = false
                 },
-                title = { Text("Restore Backup?") },
+                title = { Text(if (BuildConfig.MARKETPRO_DEMO_ARCHIVE_ONLY) "Restore Old Demo Backup?" else "Restore Backup?") },
                 text = {
                     Text(
+                        (if (BuildConfig.MARKETPRO_DEMO_ARCHIVE_ONLY)
+                            "OFFLINE DEMO ONLY — This separate app never connects to Supabase. " +
+                            "Restoring replaces ONLY this demo app’s local data. " +
+                            "The live V3.3.7 Cloud app and the Web Dashboard remain untouched. "
+                         else "") +
                         "⚠️ මෙය දැනට ඇති Catalog, Kitchen සහ Purchase Records " +
                             "Backup File එකේ දත්ත මඟින් Replace කරනු ඇත. " +
                             "Restore කිරීමට පෙර අලුත් JSON Backup එකක් Save කරගන්න. " +
@@ -348,7 +354,7 @@ fun MarketProApp(vm: MarketViewModel) {
                         // Repository performs full schema checks before an atomic replace.
                         // Cloud-enrolled restores remain blocked at repository level.
                         vm.restoreBackup(json) { result ->
-                            message(if (result.isSuccess) "Backup Restored Successfully" else
+                            message(if (result.isSuccess) "Demo Backup Restored Locally — Cloud Unchanged" else
                                 "Restore Failed: ${result.exceptionOrNull()?.message ?: "Invalid File"}")
                         }
                     }) { Text("Replace & Restore") }
@@ -432,7 +438,7 @@ fun MarketProApp(vm: MarketViewModel) {
                             // formerly used by "PELIYAGODA" in Market Pro 2.36.
                             Text("BELLAGIO", style = MaterialTheme.typography.labelSmall,
                                 color = ProColors.teal, fontWeight = FontWeight.Bold)
-                            Text("Market Pro", style = MaterialTheme.typography.titleLarge,
+                            Text(if (BuildConfig.MARKETPRO_DEMO_ARCHIVE_ONLY) "Market Pro · Demo" else "Market Pro", style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.ExtraBold, color = ProVisual.itemInk)
                             // Generated from the same Gradle displayVersion as
                             // the APK versionName and launcher label.
@@ -477,14 +483,16 @@ fun MarketProApp(vm: MarketViewModel) {
                                     restoreText = null
                                     restorePinOpen = true
                                 })
-                                DropdownMenuItem(text = { Text("Cloud Owner Login", color = Color(0xFF605B88), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
-                                    menuOpen = false
-                                    ownerLoginOpen = true
-                                })
-                                DropdownMenuItem(text = { Text("Cloud Connection & Fresh Sync", color = Color(0xFF605B88), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
-                                    menuOpen = false
-                                    cloudStatusOpen = true
-                                })
+                                if (!BuildConfig.MARKETPRO_DEMO_ARCHIVE_ONLY) {
+                                    DropdownMenuItem(text = { Text("Cloud Owner Login", color = Color(0xFF605B88), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
+                                        menuOpen = false
+                                        ownerLoginOpen = true
+                                    })
+                                    DropdownMenuItem(text = { Text("Cloud Connection & Fresh Sync", color = Color(0xFF605B88), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
+                                        menuOpen = false
+                                        cloudStatusOpen = true
+                                    })
+                                }
                                 DropdownMenuItem(
                                     text = {
                                         Text(
