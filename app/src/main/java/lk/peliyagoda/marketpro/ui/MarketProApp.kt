@@ -328,6 +328,7 @@ fun MarketProApp(vm: MarketViewModel) {
 
         if (restoreText != null && restoreAuthorized) {
             AlertDialog(
+                containerColor = Color.White,
                 onDismissRequest = {
                     restoreText = null
                     restoreAuthorized = false
