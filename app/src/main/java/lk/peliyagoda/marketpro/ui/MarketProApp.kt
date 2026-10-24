@@ -487,6 +487,25 @@ fun MarketProApp(vm: MarketViewModel) {
                                     restoreText = null
                                     restorePinOpen = true
                                 })
+                                // The live Cloud owner remains attached to the original v3.3.7 app.
+                                // Make the preview limitation discoverable without exposing
+                                // a login that could never succeed (NO INTERNET permission).
+                                if (BuildConfig.MARKETPRO_LOCAL_PREVIEW) {
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                "Cloud Owner Login · V3.3.7 Only",
+                                                color = Color(0xFF647985),
+                                                fontWeight = FontWeight.SemiBold,
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                        },
+                                        onClick = {
+                                            menuOpen = false
+                                            message("This Is An Offline Preview. Use Market Pro V3.3.7 For Cloud Owner Login And Sync.")
+                                        }
+                                    )
+                                }
                                 if (!BuildConfig.MARKETPRO_LOCAL_PREVIEW) {
                                     DropdownMenuItem(text = { Text("Cloud Owner Login", color = Color(0xFF605B88), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
                                         menuOpen = false
