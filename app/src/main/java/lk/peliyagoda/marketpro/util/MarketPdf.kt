@@ -9,6 +9,8 @@ import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
 import java.io.OutputStream
+import lk.peliyagoda.marketpro.data.OtherExpenseAmounts
+import lk.peliyagoda.marketpro.data.cashBalanceAfterOtherExpenses
 
 /** Only fully purchased, requested items qualify as completed for the final-cost PDF. */
 fun completedPurchases(rows: List<ConsolidatedRow>): List<ConsolidatedRow> =
@@ -93,6 +95,14 @@ object MarketPdf {
         rows: List<ConsolidatedRow>,
         cashReceivedCents: Long,
         output: OutputStream
+    ) = write(date, rows, cashReceivedCents, OtherExpenseAmounts(), output)
+
+    fun write(
+        date: String,
+        rows: List<ConsolidatedRow>,
+        cashReceivedCents: Long,
+        otherExpenses: OtherExpenseAmounts,
+        output: OutputStream
     ) {
         require(cashReceivedCents >= 0) { "Cash received cannot be negative" }
         val groups = completedCategoryGroups(rows)
@@ -100,7 +110,9 @@ object MarketPdf {
         require(count > 0) { "No completed purchases to export" }
         val completedTotal = groups.sumOf { it.subtotalCents }
         val spent = totalMarketSpentCents(rows)
-        val balance = cashReceivedCents - spent
+        val balance = cashBalanceAfterOtherExpenses(
+            cashReceivedCents, spent, otherExpenses.totalCents
+        )
 
         val document = PdfDocument()
         var pageNumber = 0
@@ -222,7 +234,40 @@ object MarketPdf {
             y += 6f
             drawTotalBar("COMPLETED FINAL TOTAL (" + count + ")", completedTotal, navy)
             drawTotalBar("CASH RECEIVED", cashReceivedCents, Color.rgb(93, 87, 134))
-            drawTotalBar("TOTAL SPENT (ALL PURCHASES)", spent, Color.rgb(93, 87, 134))
+            drawTotalBar("PURCHASE EXPENSES (ALL PURCHASES)", spent, Color.rgb(93, 87, 134))
+            // Other Expenses are separate from item costing / price charts.
+            drawTotalBar("OTHER EXPENSES", otherExpenses.totalCents, teal)
+            val expenseBreakdown = listOf(
+                "Transport" to otherExpenses.transportCents,
+                "Labor Charge" to otherExpenses.laborChargeCents,
+                "Meals and Drinks" to otherExpenses.mealsDrinksCents,
+                "Others" to otherExpenses.othersCents
+            )
+            for ((label, cents) in expenseBreakdown) {
+                ensure(21f)
+                c().drawText(label, LEFT + 14f, y + 15f, paint(10f, muted))
+                c().drawText(
+                    "Rs. " + MarketMath.lkr(cents),
+                    RIGHT - 12f, y + 15f,
+                    paint(10f, navy, true).apply { textAlign = Paint.Align.RIGHT }
+                )
+                y += 21f
+            }
+            if (otherExpenses.remarks.isNotBlank()) {
+                val remarksPaint = paint(10f, navy)
+                val safeRemarks = "Special Remarks: " + otherExpenses.remarks
+                // StaticLayout shapes Sinhala and supports wrapped multi-line remarks.
+                val maxHeight = StaticLayout.Builder.obtain(
+                    safeRemarks, 0, safeRemarks.length, remarksPaint, 450
+                ).setIncludePad(false).build().height.toFloat()
+                if (maxHeight > BOTTOM - 153f) {
+                    throw IllegalArgumentException("Remarks cannot fit on one PDF page")
+                }
+                ensure(maxHeight + 12f)
+                y += drawWrapped(c(), safeRemarks, LEFT + 8f, y + 5f, 450, remarksPaint)
+                y += 12f
+            }
+            drawTotalBar("GRAND TOTAL EXPENSES", spent + otherExpenses.totalCents, navy)
             drawTotalBar(
                 "CASH BALANCE",
                 balance,
@@ -234,7 +279,7 @@ object MarketPdf {
             ensure(35f)
             drawWrapped(
                 c(),
-                "Cash balance uses every purchased lot (including incomplete items). " +
+                "Cash balance includes all purchases, additional lots and other expenses. " +
                     "Completed final total contains completed items only.",
                 LEFT + 2f, y + 3f, 470, paint(9f, muted)
             )

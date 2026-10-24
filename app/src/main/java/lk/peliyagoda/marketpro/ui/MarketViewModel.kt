@@ -5,6 +5,7 @@ import lk.peliyagoda.marketpro.cloud.CloudSyncScheduler
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import lk.peliyagoda.marketpro.data.OtherExpenseField
 import lk.peliyagoda.marketpro.data.ItemEntity
 import lk.peliyagoda.marketpro.data.MarketRepository
 import lk.peliyagoda.marketpro.data.PurchaseEntity
@@ -49,6 +50,8 @@ class MarketViewModel(private val repository: MarketRepository, private val appC
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val additions = date.flatMapLatest { repository.additions(it.toString()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val dailyOtherExpenses = date.flatMapLatest { repository.otherExpenses(it.toString()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val dailyCashReceived = date.flatMapLatest { repository.cashReceived(it.toString()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val cloudPendingCount = repository.cloudPendingCount
@@ -169,6 +172,31 @@ class MarketViewModel(private val repository: MarketRepository, private val appC
         val day = date.value.toString()
         doWork({
             cashWriteMutex.withLock { repository.saveCashReceived(day, amountCents) }
+        }, done)
+    }
+
+    fun saveOtherExpenseAmount(
+        field: OtherExpenseField,
+        cents: Long,
+        done: (Result<Unit>) -> Unit = {}
+    ) {
+        val day = date.value.toString()
+        doWork({
+            cashWriteMutex.withLock {
+                repository.updateOtherExpenseAmount(day, field, cents)
+            }
+        }, done)
+    }
+
+    fun saveOtherExpenseRemarks(
+        remarks: String,
+        done: (Result<Unit>) -> Unit = {}
+    ) {
+        val day = date.value.toString()
+        doWork({
+            cashWriteMutex.withLock {
+                repository.updateOtherExpenseRemarks(day, remarks)
+            }
         }, done)
     }
 

@@ -27,6 +27,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import lk.peliyagoda.marketpro.data.OtherExpenseAmounts
+import lk.peliyagoda.marketpro.data.cashBalanceAfterOtherExpenses
 import lk.peliyagoda.marketpro.util.ConsolidatedRow
 import lk.peliyagoda.marketpro.util.MarketMath
 import lk.peliyagoda.marketpro.util.completedCategoryGroups
@@ -76,6 +78,7 @@ fun CompletedPdfDialog(
     date: LocalDate,
     rows: List<ConsolidatedRow>,
     cashReceivedCents: Long,
+    otherExpenses: OtherExpenseAmounts,
     onClose: () -> Unit,
     onSavePdf: (List<ConsolidatedRow>) -> Unit
 ) {
@@ -83,7 +86,9 @@ fun CompletedPdfDialog(
     val completed = remember(groups) { groups.flatMap { it.rows } }
     val finalCents = completed.sumOf { it.lineCents }
     val totalSpent = totalMarketSpentCents(rows)
-    val balance = cashReceivedCents - totalSpent
+    val balance = cashBalanceAfterOtherExpenses(
+        cashReceivedCents, totalSpent, otherExpenses.totalCents
+    )
 
     AlertDialog(
         onDismissRequest = onClose,
@@ -177,7 +182,18 @@ fun CompletedPdfDialog(
                                 "Cash Received", cashReceivedCents
                             )
                             ReportMoneyRow(
-                                "Total Spent (All Purchases)", totalSpent
+                                "Purchase Expenses (All Purchases)", totalSpent
+                            )
+                            ReportMoneyRow("Other Expenses", otherExpenses.totalCents)
+                            if (otherExpenses.remarks.isNotBlank()) {
+                                Text("Special Remarks: " + otherExpenses.remarks,
+                                    color = ProColors.muted,
+                                    style = MaterialTheme.typography.bodySmall)
+                            }
+                            ReportMoneyRow(
+                                "Grand Total Expenses",
+                                totalSpent + otherExpenses.totalCents,
+                                ProColors.navy, prominent = true
                             )
                             HorizontalDivider()
                             ReportMoneyRow(

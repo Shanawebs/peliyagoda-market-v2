@@ -192,10 +192,12 @@ class CloudSyncEngine(private val context: Context) {
     private val client = CloudRestClient()
     private val auth = CloudOwnerAuth(app)
 
-    suspend fun isEnabled(): Boolean = cloud.state(CloudSyncConfig.ENABLED) == "true"
+    suspend fun isEnabled(): Boolean = !BuildConfig.MARKETPRO_LOCAL_PREVIEW &&
+        cloud.state(CloudSyncConfig.ENABLED) == "true"
 
     /** The old empty-workspace import is permanently disabled in V3 fresh mode. */
     suspend fun enableAfterOwnerConfirmation(): Int {
+        check(!BuildConfig.MARKETPRO_LOCAL_PREVIEW) { "Local preview cannot enable Cloud" }
         throw CloudUploadRejected("Bulk historical import is disabled for V3; use fresh catalog attach")
     }
 

@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -89,6 +91,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import lk.peliyagoda.marketpro.data.ItemEntity
+import lk.peliyagoda.marketpro.data.OtherExpenseAmounts
+import lk.peliyagoda.marketpro.data.OtherExpenseField
+import lk.peliyagoda.marketpro.data.cashBalanceAfterOtherExpenses
 import lk.peliyagoda.marketpro.data.MarketConstants
 import lk.peliyagoda.marketpro.data.PurchaseAdditionEntity
 import lk.peliyagoda.marketpro.data.RequisitionEntity
@@ -883,7 +888,10 @@ fun MarketScreen(
     categories: List<String>,
     vm: MarketViewModel,
     cashReceivedCents: Long,
+    otherExpenses: OtherExpenseAmounts,
     onSaveCash: (Long) -> Unit,
+    onSaveOtherAmount: (OtherExpenseField, Long) -> Unit,
+    onSaveOtherRemarks: (String) -> Unit,
     message: (String) -> Unit,
     listState: LazyListState,
     filter: String,
@@ -904,7 +912,11 @@ fun MarketScreen(
         val valid = parsed != null && parsed in 0L..9_999_999_999L
         val spentCents = rows.sumOf { it.lineCents }
         val effectiveCash = parsed?.takeIf { valid } ?: cashReceivedCents
-        val remainingCents = effectiveCash - spentCents
+        val otherSpentCents = otherExpenses.totalCents
+        val remainingCents = cashBalanceAfterOtherExpenses(
+            effectiveCash, spentCents, otherSpentCents
+        )
+        var otherExpanded by remember(businessDate) { mutableStateOf(false) }
         AlertDialog(
             onDismissRequest = { cashDialogOpen = false },
             shape = RoundedCornerShape(28.dp),
@@ -919,7 +931,9 @@ fun MarketScreen(
             },
             text = {
                 Column(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth()
+                        .heightIn(max = 520.dp)
+                        .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Text(
@@ -974,7 +988,7 @@ fun MarketScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                "Total Spent",
+                                "Purchase Expenses",
                                 modifier = Modifier.weight(1f),
                                 color = ProColors.muted,
                                 style = MaterialTheme.typography.bodyMedium
@@ -987,6 +1001,48 @@ fun MarketScreen(
                                 style = MaterialTheme.typography.bodyMedium
                             )
                         }
+                        // Expand inline: NO separate Dashboard card or navigation tab.
+                        Surface(
+                            onClick = { otherExpanded = !otherExpanded },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            color = Color(0xFFE8F3F4)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    if (otherExpanded) "▲" else "▼",
+                                    color = ProColors.teal,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Text(
+                                    "Other Expenses",
+                                    modifier = Modifier.weight(1f),
+                                    color = ProColors.navy,
+                                    fontWeight = FontWeight.SemiBold,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Text(
+                                    "Rs. " + MarketMath.lkr(otherSpentCents),
+                                    textAlign = TextAlign.End,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = ProColors.teal,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                        if (otherExpanded) {
+                            OtherExpensesExpandedEditor(
+                                businessDate = businessDate,
+                                expenses = otherExpenses,
+                                onSaveAmount = onSaveOtherAmount,
+                                onSaveRemarks = onSaveOtherRemarks
+                            )
+                        }
+                        HorizontalDivider(color = Color(0xFFD5DFE5))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
