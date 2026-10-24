@@ -50,7 +50,7 @@ class TeamSessionPairingPolicyTest {
     @Test fun codeMustBeExactAndLowercase() {
         denied { staffClaim(invite="123456") }
         denied { staffClaim(invite=code.dropLast(1)) }
-        denied { staffClaim(invite=code.uppercase().replace('A','F')) }
+        denied { staffClaim(invite="A".repeat(64)) }
         denied { staffClaim(invite=code + "0") }
         denied { staffClaim(invite="0".repeat(63)+"!") }
     }
