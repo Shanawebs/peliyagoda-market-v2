@@ -507,6 +507,12 @@ class MarketRepository(private val db: MarketDatabase) {
             restoredCash.forEach {
                 journal.record(CloudRecordType.DAILY_CASH_RECEIVED, CloudRecordKey.cash(it.businessDate))
             }
+            restoredOtherExpenses.forEach {
+                journal.record(
+                    CloudRecordType.DAILY_OTHER_EXPENSES,
+                    CloudRecordKey.otherExpense(it.businessDate)
+                )
+            }
         }
         if (backupVersion < 4) seedCatalogOnce()
     }
