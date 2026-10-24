@@ -100,7 +100,7 @@ internal object StaffOutboxUploadPolicy {
                 "Historical or unverified Cloud row cannot be created"
             }
         } else {
-            require(base>=1L && !c.verifiedFreshCreation) {
+            require(base>=1L) {
                 "A verified Cloud baseline is required before correction"
             }
         }
