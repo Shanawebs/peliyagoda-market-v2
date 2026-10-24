@@ -109,26 +109,7 @@ internal fun OwnerCatalogReviewDialog(onDismiss: () -> Unit) {
                     }
                 }
                 if (sourceTab=="staff_phone") {
-                    Text(
-                        "Staff Phone Review Inbox — Not Yet Connected",
-                        style=MaterialTheme.typography.titleMedium,
-                        color=ProColors.teal,
-                        fontWeight=FontWeight.Bold
-                    )
-                    Text(
-                        "The secure Staff Phone submission and Owner-only " +
-                            "candidate review APIs are development proposals. " +
-                            "No remote phone items are available in this " +
-                            "offline APK. Your Owner Phone's items are NOT " +
-                            "substituted for Staff Phone records.",
-                        style=MaterialTheme.typography.bodyMedium
-                    )
-                    Text(
-                        "When activated, this view will identify Staff Device, " +
-                            "Local Item ID, Name, Category, Cloud UUID, Revision " +
-                            "and Owner Approval Status. Nothing is approved here.",
-                        style=MaterialTheme.typography.bodySmall
-                    )
+                    RemoteStaffCatalogReviewPanel()
                 } else {
                 Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                     TextButton(onClick={ selectedType="category";expanded=null }) {
