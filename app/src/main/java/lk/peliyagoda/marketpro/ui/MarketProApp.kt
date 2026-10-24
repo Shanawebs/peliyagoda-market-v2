@@ -73,6 +73,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import lk.peliyagoda.marketpro.R
+import lk.peliyagoda.marketpro.data.OtherExpenseAmounts
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -143,6 +144,8 @@ fun MarketProApp(vm: MarketViewModel) {
         val purchases by vm.purchases.collectAsState()
         val additions by vm.additions.collectAsState()
         val dailyCash by vm.dailyCashReceived.collectAsState()
+        val dailyOther by vm.dailyOtherExpenses.collectAsState()
+        val otherExpenses = dailyOther?.amounts() ?: OtherExpenseAmounts()
         val cloudPendingCount by vm.cloudPendingCount.collectAsState()
         val cashReceivedCents = dailyCash
             ?.takeIf { it.businessDate == date.toString() }?.amountCents ?: 0L
@@ -202,6 +205,7 @@ fun MarketProApp(vm: MarketViewModel) {
         var pendingPdfDate by remember { mutableStateOf("") }
         var pendingPdfRows by remember { mutableStateOf<List<ConsolidatedRow>>(emptyList()) }
         var pendingPdfCashCents by remember { mutableStateOf(0L) }
+        var pendingPdfOtherExpenses by remember { mutableStateOf(OtherExpenseAmounts()) }
         var pendingBackup by remember { mutableStateOf("") }
         var restoreText by remember { mutableStateOf<String?>(null) }
 
@@ -241,15 +245,17 @@ fun MarketProApp(vm: MarketViewModel) {
             val day = pendingPdfDate
             val snapshot = pendingPdfRows
             val cashSnapshot = pendingPdfCashCents
+            val otherSnapshot = pendingPdfOtherExpenses
             pendingPdfDate = ""
             pendingPdfRows = emptyList()
             pendingPdfCashCents = 0L
+            pendingPdfOtherExpenses = OtherExpenseAmounts()
             if (uri != null && day.isNotBlank() && snapshot.isNotEmpty()) {
                 scope.launch {
                     runCatching {
                         withContext(Dispatchers.IO) {
                             context.contentResolver.openOutputStream(uri)?.use { output ->
-                                MarketPdf.write(day, snapshot, cashSnapshot, output)
+                                MarketPdf.write(day, snapshot, cashSnapshot, otherSnapshot, output)
                             } ?: error("Cannot open PDF destination")
                         }
                     }.onSuccess { message("Completed Purchase PDF Saved") }
@@ -264,6 +270,7 @@ fun MarketProApp(vm: MarketViewModel) {
                 date = date,
                 rows = rows,
                 cashReceivedCents = cashReceivedCents,
+                otherExpenses = otherExpenses,
                 onClose = { pdfDialogOpen = false },
                 onSavePdf = { _ ->
                     pendingPdfDate = date.toString()
@@ -271,6 +278,7 @@ fun MarketProApp(vm: MarketViewModel) {
                     // group rows only if COMPLETED.
                     pendingPdfRows = rows.toList()
                     pendingPdfCashCents = cashReceivedCents
+                    pendingPdfOtherExpenses = otherExpenses
                     pdfDialogOpen = false
                     pdfSaver.launch("Completed-Purchases-" + date + ".pdf")
                 }
@@ -620,6 +628,17 @@ fun MarketProApp(vm: MarketViewModel) {
                             categories = categories,
                             vm = vm,
                             cashReceivedCents = cashReceivedCents,
+                            otherExpenses = otherExpenses,
+                            onSaveOtherAmount = { field, cents ->
+                                vm.saveOtherExpenseAmount(field, cents) { result ->
+                                    if (result.isFailure) message("Could Not Save Other Expenses")
+                                }
+                            },
+                            onSaveOtherRemarks = { remarks ->
+                                vm.saveOtherExpenseRemarks(remarks) { result ->
+                                    if (result.isFailure) message("Could Not Save Remarks")
+                                }
+                            },
                             onSaveCash = { cents ->
                                 vm.saveCashReceived(cents) { result ->
                                     if (result.isFailure) message("Could Not Save Cash Received")
