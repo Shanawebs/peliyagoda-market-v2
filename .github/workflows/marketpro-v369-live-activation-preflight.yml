@@ -21,7 +21,7 @@ jobs:
         run: |
           set -euo pipefail
           git diff --exit-code c30ec897e4135fb49dea616c965fb3889ace5510 HEAD -- web/marketpro-dashboard/
-          git diff --exit-code feature/marketpro-v368-replace-team-phone HEAD -- supabase/migrations/ || true
+          git diff --exit-code 8a3e4808c558dd6acaf1d43005e39101a64be0d6 HEAD -- supabase/migrations/
           test -f scripts/v369_live_activation_preflight_READ_ONLY.sql
           if grep -Eiq '^[[:space:]]*(CREATE|DROP|ALTER|INSERT|UPDATE|DELETE|TRUNCATE|GRANT|REVOKE|CALL|DO|COPY|MERGE|BEGIN)[[:space:];]' scripts/v369_live_activation_preflight_READ_ONLY.sql; then
             echo "ERROR: destructive or write-capable SQL keyword in the preflight" >&2
