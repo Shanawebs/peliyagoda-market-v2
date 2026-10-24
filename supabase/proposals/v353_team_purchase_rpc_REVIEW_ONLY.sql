@@ -65,7 +65,7 @@ BEGIN
     IF NOT (
        p_payload ? 'business_date' AND p_payload ? 'item_id' AND
        p_payload ? 'quantity_grams' AND p_payload ? 'price_cents_per_kg'
-    ) OR jsonb_object_length(p_payload) <> 4 THEN
+    ) THEN
         RAISE EXCEPTION 'Purchase fields must be an exact allowlist'
           USING ERRCODE = '22023';
     END IF;
