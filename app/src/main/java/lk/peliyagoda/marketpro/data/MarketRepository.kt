@@ -27,6 +27,41 @@ class MarketRepository(private val db: MarketDatabase) {
     fun additions(date: String) = dao.observeAdditions(date)
     fun purchaseHistory(itemId: Long) = dao.observePurchaseHistory(itemId)
     fun cashReceived(date: String) = dao.observeCashReceived(date)
+    fun otherExpenses(date: String) = dao.observeOtherExpenses(date)
+
+    /** A single-field change re-reads the most recent row inside a Room transaction. */
+    suspend fun updateOtherExpenseAmount(
+        date: String, field: OtherExpenseField, cents: Long
+    ) {
+        LocalDate.parse(date)
+        require(cents in 0L..OtherExpenseAmounts.MAX_CATEGORY_CENTS)
+        db.withTransaction {
+            val previous = dao.otherExpensesForDate(date)?.amounts() ?: OtherExpenseAmounts()
+            val updated = previous.withAmount(field, cents)
+            dao.saveOtherExpenses(
+                DailyOtherExpenseEntity(
+                    date, updated.transportCents, updated.laborChargeCents,
+                    updated.mealsDrinksCents, updated.othersCents, updated.remarks
+                )
+            )
+            // Local only in V3.4 preview: Cloud RPC / dashboard aggregation must
+            // be extended BEFORE this type is eligible for server upload.
+        }
+    }
+
+    suspend fun updateOtherExpenseRemarks(date: String, remarks: String) {
+        LocalDate.parse(date)
+        require(remarks.length <= OtherExpenseAmounts.MAX_REMARK_CHARS)
+        db.withTransaction {
+            val previous = dao.otherExpensesForDate(date)?.amounts() ?: OtherExpenseAmounts()
+            dao.saveOtherExpenses(
+                DailyOtherExpenseEntity(
+                    date, previous.transportCents, previous.laborChargeCents,
+                    previous.mealsDrinksCents, previous.othersCents, remarks
+                )
+            )
+        }
+    }
 
     suspend fun saveCashReceived(date: String, amountCents: Long) {
         LocalDate.parse(date)
@@ -226,8 +261,20 @@ class MarketRepository(private val db: MarketDatabase) {
     suspend fun exportBackup(): String {
         val root = JSONObject()
         root.put("format", "peliyagoda-market-pro")
-        root.put("schemaVersion", 4)
+        root.put("schemaVersion", 5)
         root.put("createdAt", OffsetDateTime.now().toString())
+        root.put("otherExpenses", JSONArray().apply {
+            dao.allOtherExpenses().forEach {
+                put(JSONObject().apply {
+                    put("date", it.businessDate)
+                    put("transportCents", it.transportCents)
+                    put("laborChargeCents", it.laborChargeCents)
+                    put("mealsDrinksCents", it.mealsDrinksCents)
+                    put("othersCents", it.othersCents)
+                    put("remarks", it.remarks)
+                })
+            }
+        })
         root.put("cashReceived", JSONArray().apply {
             dao.allCashReceived().forEach {
                 put(JSONObject().apply {
@@ -276,15 +323,17 @@ class MarketRepository(private val db: MarketDatabase) {
         val root = JSONObject(json)
         require(root.optString("format") == "peliyagoda-market-pro") { "Not a Market Pro backup" }
         val backupVersion = root.optInt("schemaVersion")
-        require(backupVersion in 1..4) { "Unsupported backup version" }
+        require(backupVersion in 1..5) { "Unsupported backup version" }
         val itemArray = root.getJSONArray("items")
         val reqArray = root.getJSONArray("requisitions")
         val purchaseArray = root.getJSONArray("purchases")
         val additionsArray = if (backupVersion >= 2) root.getJSONArray("additions") else JSONArray()
         val cashArray = if (backupVersion >= 3) root.getJSONArray("cashReceived") else JSONArray()
+        val otherExpensesArray = if (backupVersion >= 5)
+            root.getJSONArray("otherExpenses") else JSONArray()
         require(itemArray.length() <= 100_000 && reqArray.length() <= 500_000 &&
                 purchaseArray.length() <= 500_000 && additionsArray.length() <= 500_000 &&
-                cashArray.length() <= 100_000) { "Backup too large" }
+                cashArray.length() <= 100_000 && otherExpensesArray.length() <= 100_000) { "Backup too large" }
         val restoredItems = ArrayList<ItemEntity>(itemArray.length())
         for (i in 0 until itemArray.length()) {
             val obj = itemArray.getJSONObject(i)
@@ -375,12 +424,30 @@ class MarketRepository(private val db: MarketDatabase) {
             restoredCash.add(cash)
         }
         require(restoredCash.map { it.businessDate }.distinct().size == restoredCash.size)
+        val restoredOtherExpenses = ArrayList<DailyOtherExpenseEntity>(otherExpensesArray.length())
+        for (i in 0 until otherExpensesArray.length()) {
+            val obj = otherExpensesArray.getJSONObject(i)
+            val date = readDate(obj)
+            val amounts = OtherExpenseAmounts(
+                transportCents = obj.getLong("transportCents"),
+                laborChargeCents = obj.getLong("laborChargeCents"),
+                mealsDrinksCents = obj.getLong("mealsDrinksCents"),
+                othersCents = obj.getLong("othersCents"),
+                remarks = obj.optString("remarks", "")
+            )
+            restoredOtherExpenses.add(DailyOtherExpenseEntity(
+                date, amounts.transportCents, amounts.laborChargeCents,
+                amounts.mealsDrinksCents, amounts.othersCents, amounts.remarks
+            ))
+        }
+        require(restoredOtherExpenses.map { it.businessDate }.distinct().size == restoredOtherExpenses.size)
 
         db.withTransaction {
             // Re-check under lock before performing any destructive local restore.
             check(cloudDao.state("enrolled") != "true") {
                 "Cannot replace data while Cloud Sync enrollment is active."
             }
+            dao.clearOtherExpenses()
             dao.clearCashReceived()
             dao.clearAdditions()
             dao.clearPurchases()
@@ -393,6 +460,7 @@ class MarketRepository(private val db: MarketDatabase) {
             dao.restorePurchases(restoredPurchases)
             dao.restoreAdditions(restoredAdditions)
             dao.restoreCashReceived(restoredCash)
+            dao.restoreOtherExpenses(restoredOtherExpenses)
             // A legacy backup must be upgraded to the new curated catalog.
             // An actual V4 backup retains the owner's saved catalog state.
             dao.setCuratedCatalogVersion(
