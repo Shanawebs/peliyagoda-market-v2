@@ -30,9 +30,9 @@ class StaffCatalogCandidatePolicyTest {
 
     @Test fun categoryUsesItsNaturalPrimaryKeyInsteadOfAutoId() {
         val output=StaffCatalogCandidatePolicy.draft(input().copy(
-            entityType="category",localKey="Vegetables",
+            entityType="category",localKey="vegetables",
             localName="Vegetables",localCategory=null,localActive=null))
-        assertEquals("Vegetables",output.localKey)
+        assertEquals("vegetables",output.localKey)
     }
 
     @Test(expected=IllegalArgumentException::class)

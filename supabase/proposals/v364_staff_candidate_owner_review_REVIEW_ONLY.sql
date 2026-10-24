@@ -68,7 +68,7 @@ BEGIN
       OR p_local_category <> btrim(p_local_category)
       OR p_local_is_active IS NULL))
     OR (p_entity_type='category' AND (
-      p_local_key<>p_local_name OR p_local_category IS NOT NULL
+      p_local_key<>pg_catalog.lower(p_local_name) OR p_local_category IS NOT NULL
       OR p_local_is_active IS NOT NULL)) THEN
    RAISE EXCEPTION 'Invalid catalog candidate data' USING ERRCODE='22023';
  END IF;

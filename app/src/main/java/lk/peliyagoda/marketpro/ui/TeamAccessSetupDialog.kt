@@ -133,6 +133,7 @@ fun TeamAccessSetupDialog(onDismiss: () -> Unit) {
                                 "and network sync are disabled. No credentials are collected."
                         )
                     }
+                    StaffCatalogCandidatePanel()
                     Text(
                         "After Owner and server activation: today’s entries may be " +
                             "corrected any number of times; previous days are " +

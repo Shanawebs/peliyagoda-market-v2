@@ -68,10 +68,28 @@ internal class CatalogReviewNetworkCoordinator(
         }
     }
 
-    /** Only new staff evidence is uploaded; NEVER grants Cloud write permissions. */
-    suspend fun staffSubmit(inputs: StaffCandidateInputs): String {
+    private val staffReader by lazy {
+        StaffCatalogCandidateReader(
+            lk.peliyagoda.marketpro.data.MarketDatabase.get(app),
+            actualDeviceId
+        )
+    }
+
+    /**
+     * Staff explicitly selects a *local logical key* and a *Cloud UUID*;
+     * BOTH records are re-read from Room in one read-only transaction.
+     * No arbitrary UI-provided Item name, category, fingerprint or revision
+     * may be sent to the server; they always originate from live local rows.
+     */
+    suspend fun staffSubmitLocalCatalog(
+        type: String, localKey: String, cloudUuid: String
+    ): String = mutex.withLock {
         requireReady()
-        val candidate=StaffCatalogCandidatePolicy.draft(inputs)
+        val captured = staffReader.capture(type,localKey,cloudUuid)
+        require(captured.decision == StaffCatalogCaptureDecision.READY_FOR_OWNER_REVIEW) {
+            "Staff catalog changed, has pending edits, or requires category mapping"
+        }
+        val candidate=requireNotNull(captured.candidate)
         val session=staffSession()
         require(candidate.workspaceId==session.workspaceUuid &&
             candidate.deviceId==actualDeviceId)
@@ -81,7 +99,15 @@ internal class CatalogReviewNetworkCoordinator(
             json.getLong("cloud_revision")==candidate.cloudRevision) {
             "Invalid server staff candidate acknowledgement"
         }
-        return json.getString("candidate_id")
+        // If Room changed while the network request was in flight, never
+        // report success. A server pending record may still exist; target
+        // phone fingerprint/revision must be checked again before binding.
+        val after = staffReader.capture(type,localKey,cloudUuid)
+        check(after.decision == StaffCatalogCaptureDecision.READY_FOR_OWNER_REVIEW &&
+            after.candidate == candidate) {
+            "Local catalog changed during upload; do not treat candidate as current"
+        }
+        json.getString("candidate_id")
     }
 
     /**
