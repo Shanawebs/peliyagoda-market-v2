@@ -8,7 +8,7 @@ import { financeRpcArgs,validUuid } from "../_shared/finance_wire.mjs";
 const proofBase64=/^[A-Za-z0-9_-]{12,256}$/;
 const reject=()=>Response.json({ok:false,error:"Staff finance request rejected"},
  {status:403,headers:{"Cache-Control":"no-store"}});
-const safeResponse = value => Response.json(value,
+const safeResponse = (value:unknown) => Response.json(value,
  {headers:{"Cache-Control":"no-store"}});
 export default {
  fetch:withSupabase({auth:"user"},async(req,ctx)=>{
