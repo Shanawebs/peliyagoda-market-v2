@@ -39,7 +39,10 @@ class CloudInboxStager(private val db: MarketDatabase) {
             "quantity_grams","price_cents_per_kg","revision","deleted_at",
             "created_at","updated_at"),
         "daily_cash_received" to setOf("id","workspace_id","business_date",
-            "amount_cents","revision","deleted_at","created_at","updated_at")
+            "amount_cents","revision","deleted_at","created_at","updated_at"),
+        "daily_other_expenses" to setOf("id","workspace_id","business_date",
+            "transport_cents","labor_charge_cents","meals_drinks_cents",
+            "others_cents","remarks","revision","created_at","updated_at")
     )
 
     /**
@@ -92,7 +95,8 @@ class CloudInboxStager(private val db: MarketDatabase) {
             val deleted = if (row.isNull("deleted_at")) null else
                 row.getString("deleted_at").also { OffsetDateTime.parse(it) }
             if (requestedType in setOf(
-                "purchase","purchase_addition","requisition","daily_cash_received"
+                "purchase","purchase_addition","requisition","daily_cash_received",
+                "daily_other_expenses"
             )) {
                 val date = row.getString("business_date")
                 require(LocalDate.parse(date).toString() == date)
@@ -101,6 +105,28 @@ class CloudInboxStager(private val db: MarketDatabase) {
                 require(CloudInboxPagePolicy.uuid(row.getString(
                     if (requestedType == "item") "category_id" else "item_id"
                 )))
+            }
+            if (requestedType == "daily_other_expenses") {
+                // Reject missing fields, non-integer amounts and unsafe notes
+                // BEFORE staging; never trust a server-produced dynamic JSON blob.
+                val required = listOf(
+                    "transport_cents","labor_charge_cents","meals_drinks_cents",
+                    "others_cents","remarks"
+                )
+                require(required.all { row.has(it) && !row.isNull(it) })
+                val amounts = required.take(4).map { key ->
+                    val value = row.get(key)
+                    require(value is Number &&
+                        value.toString().matches(Regex("[0-9]+"))) {
+                        "Other expense must be whole integer cents"
+                    }
+                    row.getLong(key)
+                }
+                require(row.get("remarks") is String)
+                OtherExpensesShadowPolicy.validateAmounts(
+                    amounts[0],amounts[1],amounts[2],amounts[3],
+                    row.getString("remarks")
+                )
             }
             val canonical = row.toString()
             require(canonical.length <= 4096) { "Oversized Cloud record" }

@@ -97,7 +97,7 @@ class CloudInboxPagePolicyTest {
     @Test fun shadowPageNeverIncludesPhotosOrOperations() {
         assertFalse("invoice_photos" in CloudInboxPagePolicy.allowedTypes)
         assertFalse("sync_operations" in CloudInboxPagePolicy.allowedTypes)
-        assertFalse("daily_other_expenses" in CloudInboxPagePolicy.allowedTypes)
+        assertTrue("daily_other_expenses" in CloudInboxPagePolicy.allowedTypes)
         assertTrue("daily_cash_received" in CloudInboxPagePolicy.allowedTypes)
     }
 }

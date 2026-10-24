@@ -18,6 +18,9 @@ android {
         buildConfigField("boolean", "MARKETPRO_LOCAL_PREVIEW", "true")
         // Remains FALSE until server v2, staff enrollment and two-phone QA are approved.
         buildConfigField("boolean", "MARKETPRO_TEAM_PULL_RPC_DEPLOYED", "false")
+        // Explicitly blocked until verified, complete staged pull and
+        // all catalog/financial UUID reconciliation are signed off.
+        buildConfigField("boolean", "MARKETPRO_TEAM_DOMAIN_MERGE_DEPLOYED", "false")
         // Preview fields are disabled; no Owner/Staff password collection or network login.
         buildConfigField("boolean", "MARKETPRO_STAFF_LOGIN_ENABLED", "false")
         // V3.6.5 candidate upload/Owner review RPC is still REVIEW_ONLY SQL.
