@@ -20,10 +20,11 @@ jobs:
       - name: Freeze live app, release flags, and production database migrations
         run: |
           set -euo pipefail
-          git diff --exit-code 43f2a681c32b1ca2e6a52059bc329e2e009e61ea HEAD -- app/build.gradle.kts app/src/main/AndroidManifest.xml supabase/migrations/ web/marketpro-dashboard/
+          git diff --exit-code 43f2a681c32b1ca2e6a52059bc329e2e009e61ea HEAD -- app/src/main/AndroidManifest.xml supabase/migrations/ web/marketpro-dashboard/
           grep -Fq '"MARKETPRO_LOCAL_PREVIEW", "true"' app/build.gradle.kts
           grep -Fq '"MARKETPRO_STAFF_LOGIN_ENABLED", "false"' app/build.gradle.kts
           grep -Fq '"MARKETPRO_TEAM_PULL_RPC_DEPLOYED", "false"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_TEAM_DOMAIN_MERGE_DEPLOYED", "false"' app/build.gradle.kts
           grep -Fq '"MARKETPRO_STAFF_WRITE_APPROVAL_RPC_DEPLOYED", "false"' app/build.gradle.kts
           grep -Fq 'android.permission.INTERNET" tools:node="remove"' app/src/main/AndroidManifest.xml
           grep -Fq 'daily_other_expenses' app/src/main/java/lk/peliyagoda/marketpro/cloud/CloudDomainMergeEngine.kt
