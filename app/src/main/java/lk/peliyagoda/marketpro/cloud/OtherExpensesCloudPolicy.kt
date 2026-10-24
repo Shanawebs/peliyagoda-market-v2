@@ -43,7 +43,7 @@ internal object OtherExpensesCloudPolicy {
                 runCatching { UUID.fromString(value).toString()
                     .equals(value,ignoreCase = true) }.getOrDefault(false)
         }) { "Authenticated Cloud record identifiers required" }
-        require(draft.businessDate == LocalDate.parse(draft.businessDate).toString()) {
+        require(runCatching { draft.businessDate == LocalDate.parse(draft.businessDate).toString() }.getOrDefault(false)) {
             "Invalid expense business date"
         }
         require(access.businessDate == draft.businessDate)
