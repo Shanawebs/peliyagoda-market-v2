@@ -88,6 +88,14 @@ with real Auth JWT gateway/Edge deploy or real phones. For a safe deployment:
 - All eligible public views must be `security_invoker` or inaccessible to
   Staff. Audit grants, default PUBLIC function EXECUTE, authenticated role
   membership, rollout-gate defaults and purchase/catalog UUID mapping.
+- **UNRESOLVED STAFF READ PROOF:** current `marketpro_team_pull_page` checks
+  signed Auth JWT session and registered device UUID but DOES NOT require a
+  fresh Android Keystore challenge signature on each read. A copied Staff
+  bearer token plus known device UUID may still bypass physical key possession
+  while the session is active. Before Staff Pull is activated, implement and
+  test a per-read proof-bound Edge access path, and revoke/replace the older
+  direct Staff pull authorization without breaking Owner's existing app.
+  This is a SECURITY NO-GO, despite passing role-level RLS checks.
 - Existing Owner v3.3.7 and production data stay on the one original device
   while Staff Phone gets its own registered JWT and independently approved key.
 - Verify conflict resolution for old Room records, all four Other Expenses,
