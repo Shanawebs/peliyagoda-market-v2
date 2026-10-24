@@ -20,7 +20,7 @@ DECLARE
  staff_phone uuid:='f1111111-1111-4111-8111-111111111111';
  owner_phone uuid:='a1111111-1111-4111-8111-111111111111';
  sess uuid:='91111111-1111-4111-8111-111111111111';
- der text:=encode(decode(repeat('ab',100),'hex'),'base64');
+ der text:=replace(encode(decode(repeat('ab',100),'hex'),'base64'),chr(10),'');
  key_fp text:=encode(extensions.digest(decode(repeat('ab',100),'hex'),'sha256'),'hex');
  challenge jsonb;
  review jsonb;
