@@ -174,7 +174,9 @@ class CloudChangeJournal(private val dao: CloudSyncDao) {
     ) {
         require(key.isNotBlank())
         val wireType = type.wireName
-        dao.insertIdentity(CloudIdentityEntity(wireType, key, UUID.randomUUID().toString()))
+        val newlyCreatedCloudIdentity = dao.insertIdentity(
+            CloudIdentityEntity(wireType, key, UUID.randomUUID().toString())
+        ) > 0L
         // Each new financial record is tagged in the SAME Room transaction as
         // its change and pending operation. Historical restored rows cannot
         // be trusted merely because their UUID format looks valid.
@@ -190,7 +192,8 @@ class CloudChangeJournal(private val dao: CloudSyncDao) {
                 id
             ))
         }
-        if (dao.state("staff_outbox_verified_v1") == "true" &&
+        if (newlyCreatedCloudIdentity && action == CloudAction.UPSERT &&
+            dao.state("staff_outbox_verified_v1") == "true" &&
             wireType in setOf("purchase","purchase_addition","requisition",
                 "daily_cash_received","daily_other_expenses")
         ) {
