@@ -57,7 +57,7 @@ export function canonicalStaffProofTranscript(challenge,nowMs) {
     !["workspace_id","staff_user_id","device_id","session_id","challenge_id"]
       .every(k=>UUID.test(challenge[k])) ||
     !HEX64.test(challenge.nonce_hex) ||
-    !["read","write"].includes(challenge.purpose) ||
+    !["pair","read","write"].includes(challenge.purpose) ||
     !Number.isSafeInteger(challenge.issued_at_millis) ||
     !Number.isSafeInteger(challenge.expires_at_millis) ||
     !Number.isSafeInteger(nowMs) ||
