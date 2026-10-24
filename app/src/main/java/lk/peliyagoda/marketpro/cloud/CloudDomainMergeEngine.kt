@@ -8,6 +8,7 @@ import lk.peliyagoda.marketpro.data.DailyCashReceivedEntity
 import lk.peliyagoda.marketpro.data.DailyOtherExpenseEntity
 import lk.peliyagoda.marketpro.data.MarketDatabase
 import lk.peliyagoda.marketpro.data.PurchaseEntity
+import lk.peliyagoda.marketpro.data.PurchaseAdditionEntity
 import lk.peliyagoda.marketpro.data.RequisitionEntity
 import org.json.JSONObject
 import java.security.MessageDigest
@@ -30,7 +31,7 @@ internal class CloudDomainMergeEngine(private val db: MarketDatabase) {
 
     data class Result(val decision: DomainMergeDecision, val cloudRevision: Long?)
 
-    private val mergeable = setOf("purchase", "requisition", "daily_cash_received", "daily_other_expenses")
+    private val mergeable = setOf("purchase", "requisition", "daily_cash_received", "daily_other_expenses", "purchase_addition")
 
     private fun fingerprint(value: String): String {
         val bytes = MessageDigest.getInstance("SHA-256")
@@ -44,6 +45,125 @@ internal class CloudDomainMergeEngine(private val db: MarketDatabase) {
     }
 
     /**
+     * Additional purchase lots are NOT keyed by date+item: one vegetable
+     * can have several separate prices/lots per day. A new Cloud lot is
+     * imported only if the local date/item has NO unmapped historical lots.
+     * Existing mapped lots require exact UUID/revision and no pending edit.
+     *
+     * Each decision, insertion, UUID link and revision state uses one Room
+     * transaction. Legacy photos and other purchase lots are never changed.
+     */
+    private suspend fun mergeAdditionShadow(
+        remoteUuid: String, trustedWorkspace: String
+    ): Result = db.withTransaction {
+        val type = "purchase_addition"
+        val shadow = inbox.snapshot(type,remoteUuid)
+            ?: return@withTransaction Result(DomainMergeDecision.BLOCK_UNTRUSTED,null)
+        val row = JSONObject(shadow.canonicalJson)
+        require(shadow.workspaceId == trustedWorkspace &&
+            row.getString("workspace_id") == trustedWorkspace &&
+            row.getString("id") == remoteUuid &&
+            shadow.cloudId == remoteUuid && shadow.entityType == type &&
+            row.getLong("revision") == shadow.revision && shadow.revision > 0L) {
+            "Untrusted purchase addition snapshot"
+        }
+        if(shadow.deletedAtUtc != null)
+            return@withTransaction Result(
+                DomainMergeDecision.REVIEW_REMOTE_TOMBSTONE,shadow.revision
+            )
+        val date=validDate(row.getString("business_date"))
+        val cloudItemUuid=row.getString("item_id")
+        require(CloudInboxPagePolicy.uuid(cloudItemUuid))
+        val localItemKey=inbox.localKeyForCloudId("item",cloudItemUuid)
+        val localItemId=localItemKey?.toLongOrNull()?.takeIf { it > 0L }
+        val localItem=localItemId?.let { cloud.findItem(it) }
+        if(localItem == null || cloud.cloudId("item",localItem.id.toString()) != cloudItemUuid)
+            return@withTransaction Result(
+                DomainMergeDecision.WAIT_FOR_EXACT_ITEM_UUID_MAPPING,shadow.revision
+            )
+
+        val qty=row.getLong("quantity_grams")
+        val price=row.getLong("price_cents_per_kg")
+        require(qty in 0L..1_000_000_000L &&
+            price in 0L..1_000_000_000L)
+        val remoteSignature="$date|${localItem.id}|$qty|$price"
+        val mappedKey=inbox.localKeyForCloudId(type,remoteUuid)
+        val mappedId=mappedKey?.toLongOrNull()?.takeIf { it > 0L }
+        val old=mappedId?.let { cloud.findAddition(it) }
+        if(mappedKey != null && (mappedId == null || old == null ||
+                old.businessDate != date || old.itemId != localItem.id ||
+                cloud.cloudId(type,mappedKey) != remoteUuid)) {
+            return@withTransaction Result(
+                DomainMergeDecision.CONFLICT_UUID_OR_BUSINESS_KEY,shadow.revision
+            )
+        }
+        if(mappedKey == null && inbox.unmappedAdditionCount(date,localItem.id)>0)
+            return@withTransaction Result(
+                DomainMergeDecision.REVIEW_UNBASELINED_LOCAL_ROW,shadow.revision
+            )
+
+        val lastRevisionKey="pull_applied_rev|$type|$remoteUuid"
+        val lastHashKey="pull_applied_hash|$type|$remoteUuid"
+        val lastRevisionRaw=cloud.state(lastRevisionKey)
+        val lastRevision=lastRevisionRaw?.toLongOrNull()
+        if(lastRevisionRaw != null && lastRevision == null)
+            return@withTransaction Result(DomainMergeDecision.BLOCK_UNTRUSTED,shadow.revision)
+        val oldSignature=old?.let {
+            "${it.businessDate}|${it.itemId}|${it.quantityGrams}|${it.priceCentsPerKg}"
+        }
+        val previousHash=cloud.state(lastHashKey)
+        val decision=DomainMergePolicy.evaluate(DomainMergeEvidence(
+            workspaceMatches=true,
+            recordIdentityIsValid=true,
+            referencedItemUuidIsMapped=true,
+            hasPendingLocalEdit=(mappedKey!=null &&
+                inbox.pendingForLocalKey(type,mappedKey)>0) ||
+                inbox.hasPendingLocalEditForCloudId(type,remoteUuid)>0,
+            localBusinessKeyExists=old!=null,
+            localBusinessKeyMapsToIncomingUuid=mappedKey!=null &&
+                cloud.cloudId(type,mappedKey)==remoteUuid,
+            incomingUuidMapsToAnotherBusinessKey=false,
+            remoteTombstone=false,
+            remoteRevision=shadow.revision,
+            lastAppliedRevision=lastRevision,
+            localContentsMatchRemote=oldSignature==remoteSignature,
+            localContentsMatchLastApplied=oldSignature != null &&
+                previousHash!=null && previousHash==fingerprint(oldSignature)
+        ))
+        if(decision !in setOf(
+            DomainMergeDecision.INSERT_NEW,
+            DomainMergeDecision.UPDATE_EXISTING,
+            DomainMergeDecision.ACK_MATCHING_EXISTING
+        )) return@withTransaction Result(decision,shadow.revision)
+        if(decision==DomainMergeDecision.INSERT_NEW) {
+            check(mappedKey==null) { "Mapped lot cannot be imported twice" }
+            val localId=records.insertAddition(
+                PurchaseAdditionEntity(
+                    businessDate=date,itemId=localItem.id,
+                    quantityGrams=qty,priceCentsPerKg=price
+                )
+            )
+            check(localId > 0L &&
+                cloud.insertIdentity(CloudIdentityEntity(
+                    type,localId.toString(),remoteUuid
+                ))>0L) { "Could not bind new purchase lot UUID" }
+            check(inbox.localKeyForCloudId(type,remoteUuid)==localId.toString())
+        } else if(decision==DomainMergeDecision.UPDATE_EXISTING) {
+            val existing=requireNotNull(old)
+            check(records.updateAddition(
+                existing.id,date,localItem.id,qty,price
+            )==1) { "Remote addition changed after verification" }
+        }
+        cloud.setState(CloudSyncStateEntity(
+            lastRevisionKey,shadow.revision.toString()
+        ))
+        cloud.setState(CloudSyncStateEntity(
+            lastHashKey,fingerprint(remoteSignature)
+        ))
+        Result(decision,shadow.revision)
+    }
+
+    /**
      * All reads, identity changes, local data changes and per-record checkpoints
      * use one Room transaction so a crash cannot half-apply a Cloud correction.
      * Returns an explicit blocked decision without changing visible data.
@@ -51,9 +171,12 @@ internal class CloudDomainMergeEngine(private val db: MarketDatabase) {
     suspend fun mergeVerifiedShadow(
         type: String, remoteUuid: String, trustedWorkspace: String
     ): Result {
-        require(type in mergeable) { "Catalog and addition-lot import are not activated" }
+        require(type in mergeable) { "Catalog import is not activated" }
         require(CloudInboxPagePolicy.uuid(remoteUuid))
         require(trustedWorkspace == CloudSyncConfig.WORKSPACE_ID)
+        if(type == "purchase_addition") {
+            return mergeAdditionShadow(remoteUuid,trustedWorkspace)
+        }
         return db.withTransaction {
             val shadow = inbox.snapshot(type, remoteUuid)
                 ?: return@withTransaction Result(DomainMergeDecision.BLOCK_UNTRUSTED, null)
