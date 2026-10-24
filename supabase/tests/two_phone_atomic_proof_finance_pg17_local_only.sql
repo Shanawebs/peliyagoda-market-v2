@@ -46,7 +46,8 @@ BEGIN
  );
  IF chall->>'purpose'<>'write' OR
    chall->>'staff_user_id'<>staff::text OR
-   chall->>'session_id'<>sess::text THEN
+   chall->>'session_id'<>sess::text OR
+   chall->>'key_fingerprint_sha256'<>repeat('a',64) THEN
   RAISE EXCEPTION 'Finance challenge not bound to signed Staff user/session';
  END IF;
 
