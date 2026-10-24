@@ -99,6 +99,7 @@ internal fun StaffSessionPairingPanel() {
                 Text("Pair Team Phone — Server Activation Required")
             }
         }
+        StaffPhoneSigningKeyPanel()
         if (status.isNotBlank()) Text(status,
             style = MaterialTheme.typography.bodySmall)
     }
@@ -222,6 +223,7 @@ internal fun OwnerSessionPairingPanel() {
                 Text("Issue Staff Invitation — Server Activation Required")
             }
         }
+        OwnerStaffSigningKeyReviewPanel(staffUserId,staffDeviceId)
         OwnerStaffWriterApprovalPanel(staffUserId, staffDeviceId)
         if (status.isNotBlank()) Text(status,
             style = MaterialTheme.typography.bodySmall)
