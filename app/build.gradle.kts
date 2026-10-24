@@ -7,7 +7,7 @@ plugins {
 
 // Single source of truth for user-visible version labels.
 // Next release: update this number only; both header and launcher follow it.
-val marketProDisplayVersion = "3.4.1"
+val marketProDisplayVersion = "3.5.0"
 
 android {
     namespace = "lk.peliyagoda.marketpro"
@@ -18,15 +18,15 @@ android {
         buildConfigField("boolean", "MARKETPRO_LOCAL_PREVIEW", "true")
         buildConfigField("String", "MARKETPRO_SUPABASE_URL", "\"https://lkoptqhodgjeuwwfihfr.supabase.co\"")
         buildConfigField("String", "MARKETPRO_SUPABASE_PUBLISHABLE_KEY", "\"sb_publishable__7F9sfydgBtHiZNPV9kNzg_hGfazjxg\"")
-        applicationId = "lk.peliyagoda.marketpro.otherexpenses.whitepopup.v341"
+        applicationId = "lk.peliyagoda.marketpro.security.foundation.v350"
         minSdk = 26
         targetSdk = 35
-        versionCode = 341
+        versionCode = 350
         versionName = marketProDisplayVersion
         // Generated from the SAME version as the APK metadata. Never hardcode
         // versions separately in AndroidManifest or a Compose text component.
         resValue("string", "marketpro_version_caption", "• v$marketProDisplayVersion")
-        resValue("string", "marketpro_launcher_name", "Market Pro Preview ✦ v$marketProDisplayVersion")
+        resValue("string", "marketpro_launcher_name", "Market Pro Security Preview ✦ v$marketProDisplayVersion")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
