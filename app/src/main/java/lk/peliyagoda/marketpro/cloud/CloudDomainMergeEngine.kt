@@ -5,6 +5,7 @@ import lk.peliyagoda.marketpro.data.CloudIdentityEntity
 import lk.peliyagoda.marketpro.data.CloudRecordKey
 import lk.peliyagoda.marketpro.data.CloudSyncStateEntity
 import lk.peliyagoda.marketpro.data.DailyCashReceivedEntity
+import lk.peliyagoda.marketpro.data.DailyOtherExpenseEntity
 import lk.peliyagoda.marketpro.data.MarketDatabase
 import lk.peliyagoda.marketpro.data.PurchaseEntity
 import lk.peliyagoda.marketpro.data.RequisitionEntity
@@ -19,7 +20,7 @@ import java.time.LocalDate
  * Not called by any Worker/UI. Cloud transport, user enrollment, catalog
  * bootstrap and server RPC v2 must be deployed & verified before integration.
  *
- * Supports purchase, requisition and daily cash only. Doesn't touch photo files,
+ * Supports purchase, requisition, daily cash and other expenses. Doesn't touch photo files,
  * delete any row, edit the catalog or enqueue a Cloud write.
  */
 internal class CloudDomainMergeEngine(private val db: MarketDatabase) {
@@ -29,7 +30,7 @@ internal class CloudDomainMergeEngine(private val db: MarketDatabase) {
 
     data class Result(val decision: DomainMergeDecision, val cloudRevision: Long?)
 
-    private val mergeable = setOf("purchase", "requisition", "daily_cash_received")
+    private val mergeable = setOf("purchase", "requisition", "daily_cash_received", "daily_other_expenses")
 
     private fun fingerprint(value: String): String {
         val bytes = MessageDigest.getInstance("SHA-256")
@@ -74,8 +75,9 @@ internal class CloudDomainMergeEngine(private val db: MarketDatabase) {
             val remoteQty: Long
             val remotePrice: Long
             val remoteKitchen: String?
+            var otherExpenses: DailyOtherExpenseEntity? = null
 
-            if (type != "daily_cash_received") {
+            if (type != "daily_cash_received" && type != "daily_other_expenses") {
                 val cloudItemId = row.getString("item_id")
                 require(CloudInboxPagePolicy.uuid(cloudItemId))
                 val localItemKey = inbox.localKeyForCloudId("item", cloudItemId)
@@ -133,6 +135,37 @@ internal class CloudDomainMergeEngine(private val db: MarketDatabase) {
                     val old = cloud.findCash(date)
                     localSignature = old?.let { "${it.businessDate}|${it.amountCents}" }
                 }
+                "daily_other_expenses" -> {
+                    // Snapshot was previously validated by CloudInboxStager.
+                    // Validate again because a local file/DB can be restored
+                    // or modified independently between staging and merging.
+                    val transport = row.getLong("transport_cents")
+                    val labor = row.getLong("labor_charge_cents")
+                    val meals = row.getLong("meals_drinks_cents")
+                    val others = row.getLong("others_cents")
+                    val remarks = row.getString("remarks")
+                    OtherExpensesShadowPolicy.validateAmounts(
+                        transport,labor,meals,others,remarks
+                    )
+                    require(row.get("remarks") is String)
+                    remoteQty = 0L
+                    remotePrice = 0L
+                    remoteKitchen = null
+                    localKey = CloudRecordKey.cash(date)
+                    otherExpenses = DailyOtherExpenseEntity(
+                        date,transport,labor,meals,others,remarks
+                    )
+                    remoteSignature = OtherExpensesShadowPolicy.signature(
+                        date,transport,labor,meals,others,remarks
+                    )
+                    val old = records.otherExpensesForDate(date)
+                    localSignature = old?.let {
+                        OtherExpensesShadowPolicy.signature(
+                            it.businessDate,it.transportCents,it.laborChargeCents,
+                            it.mealsDrinksCents,it.othersCents,it.remarks
+                        )
+                    }
+                }
                 else -> error("Unreachable merge type")
             }
 
@@ -186,6 +219,9 @@ internal class CloudDomainMergeEngine(private val db: MarketDatabase) {
                     )
                     "daily_cash_received" -> records.upsertCashReceived(
                         DailyCashReceivedEntity(date,remoteQty)
+                    )
+                    "daily_other_expenses" -> records.saveOtherExpenses(
+                        requireNotNull(otherExpenses)
                     )
                 }
             }
