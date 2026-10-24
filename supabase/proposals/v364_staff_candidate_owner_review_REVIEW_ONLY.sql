@@ -50,8 +50,10 @@ DECLARE
  v_cloud_category_id uuid;
  v_candidate_id uuid;
 BEGIN
- IF v_user IS NULL OR coalesce((auth.jwt()->>'is_anonymous')::boolean,false)
-    OR p_workspace_id IS NULL OR p_device_id IS NULL
+ IF v_user IS NULL OR coalesce((auth.jwt()->>'is_anonymous')::boolean,false) THEN
+   RAISE EXCEPTION 'Authenticated staff JWT required' USING ERRCODE='42501';
+ END IF;
+ IF p_workspace_id IS NULL OR p_device_id IS NULL
     OR p_cloud_id IS NULL OR p_entity_type NOT IN ('category','item')
     OR p_entity_type IS NULL OR p_cloud_revision IS NULL OR p_cloud_revision<1
     OR p_local_key IS NULL OR length(p_local_key) NOT BETWEEN 1 AND 200
