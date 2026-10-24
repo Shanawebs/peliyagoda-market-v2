@@ -3,6 +3,7 @@ package lk.peliyagoda.marketpro.cloud
 import android.content.Context
 import lk.peliyagoda.marketpro.BuildConfig
 import lk.peliyagoda.marketpro.data.CloudDeviceIdentity
+import lk.peliyagoda.marketpro.data.MarketDatabase
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
@@ -22,6 +23,7 @@ internal class CatalogReviewNetworkCoordinator(
     private val transport = transportOverride ?: HttpsCatalogReviewRpcTransport(actualDeviceId)
     private val staffAuth=CloudStaffAuth(app)
     private val ownerAuth=CloudOwnerAuth(app)
+    private val staffRoom=StaffRoomCandidateReader(MarketDatabase.get(app))
     private val mutex=Mutex()
     private val lastOwnerCandidates=LinkedHashMap<String,OwnerRemoteCandidate>()
 
@@ -68,20 +70,41 @@ internal class CatalogReviewNetworkCoordinator(
         }
     }
 
-    /** Only new staff evidence is uploaded; NEVER grants Cloud write permissions. */
-    suspend fun staffSubmit(inputs: StaffCandidateInputs): String {
+    /**
+     * The ONLY public Staff upload entrypoint. The caller chooses an existing
+     * local ID and Cloud UUID; the actual content ALWAYS comes from this
+     * physical phone's Room DB and a validated Cloud Inbox shadow.
+     *
+     * A second preflight catches edits while the JWT was refreshed; the final
+     * postflight detects changes during the HTTP call. Any Owner approval
+     * must independently recheck the target device's CURRENT Room fingerprint.
+     */
+    suspend fun staffSubmitFromRoom(
+        type: String, localKey: String, cloudUuid: String
+    ): String = mutex.withLock {
         requireReady()
-        val candidate=StaffCatalogCandidatePolicy.draft(inputs)
         val session=staffSession()
+        val candidate=staffRoom.prepare(type,localKey,cloudUuid,actualDeviceId)
         require(candidate.workspaceId==session.workspaceUuid &&
-            candidate.deviceId==actualDeviceId)
+            candidate.deviceId==session.deviceUuid)
+        check(staffRoom.prepare(type,localKey,cloudUuid,actualDeviceId)==candidate) {
+            "Local catalog changed while preparing Staff review upload"
+        }
         val json=JSONObject(transport.submit(session,candidate))
         require(json.optString("status")=="awaiting_owner_review" &&
             CloudInboxPagePolicy.uuid(json.getString("candidate_id")) &&
             json.getLong("cloud_revision")==candidate.cloudRevision) {
-            "Invalid server staff candidate acknowledgement"
+            "Invalid server Staff candidate acknowledgement"
         }
-        return json.getString("candidate_id")
+        // If changes occurred during the HTTP send, a pending SERVER review
+        // may exist. Fail closed and force a fresh candidate submission.
+        val after=runCatching {
+            staffRoom.prepare(type,localKey,cloudUuid,actualDeviceId)
+        }.getOrNull()
+        check(after==candidate) {
+            "Staff catalog changed during upload; do not trust earlier candidate"
+        }
+        json.getString("candidate_id")
     }
 
     /**
