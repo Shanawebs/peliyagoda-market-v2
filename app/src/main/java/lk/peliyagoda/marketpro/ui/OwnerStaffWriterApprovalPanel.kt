@@ -67,7 +67,8 @@ internal fun OwnerStaffWriterApprovalPanel(
             BuildConfig.MARKETPRO_STAFF_WRITE_APPROVAL_RPC_DEPLOYED,
             BuildConfig.MARKETPRO_TEAM_PHONE_TRANSFER_RPC_DEPLOYED,
             which
-        )
+        ) && (which != OwnerStaffDeviceAction.REVOKE_LOST_PHONE ||
+            BuildConfig.MARKETPRO_STAFF_KEY_ENROLLMENT_RPC_DEPLOYED)
 
     val pending=staged
     val chosen=action
@@ -125,7 +126,8 @@ internal fun OwnerStaffWriterApprovalPanel(
                     "PAUSE: Staff Writing Stops, But Read-Only Access Remains. " +
                     "If Phone Is Missing, Revoke The Entire Device Instead."
                 OwnerStaffDeviceAction.REVOKE_LOST_PHONE ->
-                    "REVOKE: Old Staff Phone Stops Cloud Read And Write Access. " +
+                    "REVOKE: Disable Old Staff Phone, Its Approved Signing " +
+                    "Key, Login Session Binding And Writer Lease Together. " +
                     "Already Downloaded Offline Files Cannot Be Remotely Erased."
             }
             Text(explanation,style=MaterialTheme.typography.bodyMedium)
@@ -170,7 +172,7 @@ internal fun OwnerStaffWriterApprovalPanel(
                                         reviewTarget.staffDeviceId
                                     )
                                 OwnerStaffDeviceAction.REVOKE_LOST_PHONE ->
-                                    transfer.disableOldPhone(
+                                    rpc.ownerRevokeStaffSigningKeyAndPhone(
                                         reviewTarget.staffUserId,
                                         reviewTarget.staffDeviceId
                                     )
