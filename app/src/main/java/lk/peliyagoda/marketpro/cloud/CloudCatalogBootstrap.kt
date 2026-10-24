@@ -57,12 +57,18 @@ internal class CloudCatalogBootstrap(private val db: MarketDatabase) {
         return row
     }
 
-    private suspend fun saveCheckpoint(type: String,id: String,rev: Long): Boolean {
+    private suspend fun saveCheckpoint(type: String,id: String,rev: Long) {
         val key = "catalog_pull_applied_rev|$type|$id"
         val old = cloud.state(key)
-        if (old != null && (old.toLongOrNull() ?: 0L) > rev) return false
+        // A corrupted or backwards checkpoint MUST roll back the WHOLE Room
+        // transaction, including any imported category/item and UUID mapping.
+        if (old != null) {
+            val previous = old.toLongOrNull()
+            check(previous != null && previous > 0L && previous <= rev) {
+                "Cloud catalog revision would move backwards"
+            }
+        }
         cloud.setState(CloudSyncStateEntity(key,rev.toString()))
-        return true
     }
 
     /**
@@ -112,10 +118,7 @@ internal class CloudCatalogBootstrap(private val db: MarketDatabase) {
             }
             check(inbox.localKeyForCloudId("category",cloudId)==key &&
                 cloud.cloudId("category",key)==cloudId)
-            if (!saveCheckpoint("category",cloudId,shadow.revision)) {
-                return@withTransaction Result(CatalogLinkDecision.REJECT_UNTRUSTED,
-                    serverRevision=shadow.revision)
-            }
+            saveCheckpoint("category",cloudId,shadow.revision)
             Result(decision,serverRevision=shadow.revision)
         }
     }
@@ -191,10 +194,7 @@ internal class CloudCatalogBootstrap(private val db: MarketDatabase) {
             val key=CloudRecordKey.item(id)
             check(inbox.localKeyForCloudId("item",cloudId)==key &&
                 cloud.cloudId("item",key)==cloudId)
-            if (!saveCheckpoint("item",cloudId,shadow.revision)) {
-                return@withTransaction Result(CatalogLinkDecision.REJECT_UNTRUSTED,
-                    serverRevision=shadow.revision)
-            }
+            saveCheckpoint("item",cloudId,shadow.revision)
             Result(decision,localItemId=id,serverRevision=shadow.revision)
         }
     }
