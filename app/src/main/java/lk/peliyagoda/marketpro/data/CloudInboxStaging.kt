@@ -64,5 +64,9 @@ interface CloudInboxDao {
     @Query("SELECT entityKey FROM cloud_entity_ids WHERE entityType=:type AND cloudId=:cloudId LIMIT 1")
     suspend fun localKeyForCloudId(type: String, cloudId: String): String?
 
+    /** Detect pending unsent edits by logical business key, even if no Cloud UUID was bound yet. */
+    @Query("SELECT COUNT(*) FROM cloud_sync_outbox WHERE entityType=:type AND entityKey=:key")
+    suspend fun pendingForLocalKey(type: String, key: String): Int
+
     /** This DAO intentionally has NO query to update visible financial tables. */
 }
