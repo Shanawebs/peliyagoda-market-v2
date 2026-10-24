@@ -115,7 +115,8 @@ class MarketViewModel(private val repository: MarketRepository, private val appC
         viewModelScope.launch {
             val success = runCatching {
                 withContext(Dispatchers.IO) {
-                    repository.archiveItem(id, approvalCode).also {
+                    (appContext?.let { repository.archiveItem(id, approvalCode, it) }
+                        ?: false).also {
                         if (it) enqueueIfEnabled()
                     }
                 }
