@@ -197,6 +197,7 @@ fun MarketProApp(vm: MarketViewModel) {
         var cloudStatusOpen by remember { mutableStateOf(false) }
         var ownerLoginOpen by remember { mutableStateOf(false) }
         var helpOpen by remember { mutableStateOf(false) }
+        var securityStatusOpen by remember { mutableStateOf(false) }
         var restorePinOpen by remember { mutableStateOf(false) }
         var restoreAuthorized by remember { mutableStateOf(false) }
         val restorePinGuard = remember(context) { RestorePinGuard(context.applicationContext) }
@@ -314,6 +315,9 @@ fun MarketProApp(vm: MarketViewModel) {
             }
         }
 
+        if (securityStatusOpen) {
+            SecurityAndTeamStatusDialog(onDismiss = { securityStatusOpen = false })
+        }
         if (restorePinOpen) {
             RestorePinDialog(
                 guard = restorePinGuard,
@@ -516,6 +520,20 @@ fun MarketProApp(vm: MarketViewModel) {
                                         cloudStatusOpen = true
                                     })
                                 }
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            "Security & Team Sync",
+                                            color = Color(0xFF605B88),
+                                            fontWeight = FontWeight.Bold,
+                                            style = MaterialTheme.typography.bodyLarge
+                                        )
+                                    },
+                                    onClick = {
+                                        menuOpen = false
+                                        securityStatusOpen = true
+                                    }
+                                )
                                 DropdownMenuItem(
                                     text = {
                                         Text(
