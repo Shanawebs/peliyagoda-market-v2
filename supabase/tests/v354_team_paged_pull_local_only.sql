@@ -133,7 +133,7 @@ BEGIN
     quantity_grams,price_cents_per_kg,updated_at)
   VALUES(
     ('e0000000-0000-4000-8000-' || lpad(i::text,12,'0'))::uuid,
-    w,day,'f1111111-1111-4111-8111-111111111111',
+    w,day,('f0000000-0000-4000-8000-' || lpad(i::text,12,'0'))::uuid,
     1000,10000,'2026-10-24 00:00:00+00'::timestamptz+i*interval '1 second'
   );
  END LOOP;
