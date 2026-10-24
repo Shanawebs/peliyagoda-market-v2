@@ -61,6 +61,7 @@ internal fun OwnerCatalogReviewDialog(onDismiss: () -> Unit) {
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf(false) }
     var selectedType by remember { mutableStateOf("item") }
+    var sourceTab by remember { mutableStateOf("owner_phone") }
     var search by remember { mutableStateOf("") }
     var expanded by remember { mutableStateOf<String?>(null) }
 
@@ -99,6 +100,36 @@ internal fun OwnerCatalogReviewDialog(onDismiss: () -> Unit) {
                     "Names Alone Do Not Verify Identity. Owner Server Approval " +
                     "Is Required Before Any Mapping.",
                     style=MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                    TextButton(onClick={ sourceTab="owner_phone";expanded=null }) {
+                        Text(if(sourceTab=="owner_phone") "● This Phone" else "This Phone")
+                    }
+                    TextButton(onClick={ sourceTab="staff_phone";expanded=null }) {
+                        Text(if(sourceTab=="staff_phone") "● Staff Phone" else "Staff Phone")
+                    }
+                }
+                if (sourceTab=="staff_phone") {
+                    Text(
+                        "Staff Phone Review Inbox — Not Yet Connected",
+                        style=MaterialTheme.typography.titleMedium,
+                        color=ProColors.teal,
+                        fontWeight=FontWeight.Bold
+                    )
+                    Text(
+                        "The secure Staff Phone submission and Owner-only " +
+                            "candidate review APIs are development proposals. " +
+                            "No remote phone items are available in this " +
+                            "offline APK. Your Owner Phone's items are NOT " +
+                            "substituted for Staff Phone records.",
+                        style=MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        "When activated, this view will identify Staff Device, " +
+                            "Local Item ID, Name, Category, Cloud UUID, Revision " +
+                            "and Owner Approval Status. Nothing is approved here.",
+                        style=MaterialTheme.typography.bodySmall
+                    )
+                } else {
                 Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                     TextButton(onClick={ selectedType="category";expanded=null }) {
                         Text(if(selectedType=="category") "● Categories" else "Categories")
@@ -167,6 +198,7 @@ internal fun OwnerCatalogReviewDialog(onDismiss: () -> Unit) {
                             }
                         }
                     }
+                }
                 }
                 Button(onClick={},enabled=false,modifier=Modifier.fillMaxWidth()) {
                     Text("Approve Mapping — Requires Secure Server")
