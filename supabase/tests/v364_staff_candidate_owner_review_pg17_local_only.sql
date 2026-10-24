@@ -208,6 +208,26 @@ BEGIN
  EXCEPTION WHEN unique_violation THEN denied:=true; END;
  IF NOT denied THEN RAISE EXCEPTION 'Approved candidate overwritten'; END IF;
 
+ -- Category display name and Room logical key have different casing.
+ -- The canonical Room/Cloud category key is lowercase "vegetables".
+ response:=public.marketpro_staff_submit_catalog_candidate(
+     w,staff_dev,'category',
+     'c1111111-1111-4111-8111-111111111111'::uuid,3,
+     'vegetables','Vegetables',NULL,NULL,repeat('e',64));
+ IF response->>'status'<>'awaiting_owner_review' THEN
+     RAISE EXCEPTION 'Canonical category name/key pair rejected';
+ END IF;
+ denied:=false;
+ BEGIN
+     PERFORM public.marketpro_staff_submit_catalog_candidate(
+         w,staff_dev,'category',
+         'c1111111-1111-4111-8111-111111111111'::uuid,3,
+         'Vegetables','Vegetables',NULL,NULL,repeat('f',64));
+ EXCEPTION WHEN invalid_parameter_value THEN denied:=true; END;
+ IF NOT denied THEN
+     RAISE EXCEPTION 'Noncanonical display-case category key accepted';
+ END IF;
+
  -- Approved record cannot give staff write rights to purchases.
  IF (SELECT count(*) FROM public.registered_devices WHERE enabled AND can_write)<>1 OR
     (SELECT count(*) FROM public.registered_devices WHERE id=staff_dev AND can_write)<>0 THEN
