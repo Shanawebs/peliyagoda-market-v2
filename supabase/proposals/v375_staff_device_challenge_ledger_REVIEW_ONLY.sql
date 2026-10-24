@@ -125,9 +125,9 @@ BEGIN
   'device_id',p_device_id,'session_id',v_session_id,
   'challenge_id',v_id,'nonce_hex',v_nonce,'purpose',p_purpose,
   'issued_at_millis',pg_catalog.floor(
-      pg_catalog.extract(epoch from v_time)*1000)::bigint,
+      EXTRACT(epoch from v_time)*1000)::bigint,
   'expires_at_millis',pg_catalog.floor(
-      pg_catalog.extract(epoch from v_expires)*1000)::bigint
+      EXTRACT(epoch from v_expires)*1000)::bigint
  );
 END;
 $issue$;
@@ -156,9 +156,9 @@ BEGIN
    'challenge_id',c.challenge_id,'nonce_hex',c.nonce_hex,
    'purpose',c.purpose,
    'issued_at_millis',pg_catalog.floor(
-      pg_catalog.extract(epoch from c.issued_at)*1000)::bigint,
+      EXTRACT(epoch from c.issued_at)*1000)::bigint,
    'expires_at_millis',pg_catalog.floor(
-      pg_catalog.extract(epoch from c.expires_at)*1000)::bigint,
+      EXTRACT(epoch from c.expires_at)*1000)::bigint,
    'spki_base64',pg_catalog.encode(k.spki_der,'base64')
  ) INTO v
  FROM marketpro_private.staff_device_challenges c
