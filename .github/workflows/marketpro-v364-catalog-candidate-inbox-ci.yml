@@ -81,6 +81,10 @@ jobs:
           test -f supabase/tests/v364_staff_candidate_owner_review_pg17_local_only.sql
           grep -Fq 'marketpro_owner_approve_submitted_catalog' supabase/proposals/v364_staff_candidate_owner_review_REVIEW_ONLY.sql
           grep -Fq 'REVOKE ALL ON FUNCTION public.marketpro_owner_approve_catalog_link' supabase/proposals/v364_staff_candidate_owner_review_REVIEW_ONLY.sql
+          test -f app/src/main/java/lk/peliyagoda/marketpro/cloud/StaffCatalogCandidatePolicy.kt
+          test -f app/src/test/java/lk/peliyagoda/marketpro/cloud/StaffCatalogCandidatePolicyTest.kt
+          grep -Fq 'Staff Phone Review Inbox — Not Yet Connected' app/src/main/java/lk/peliyagoda/marketpro/ui/OwnerCatalogReviewDialog.kt
+          grep -Fq 'enabled=false' app/src/main/java/lk/peliyagoda/marketpro/ui/OwnerCatalogReviewDialog.kt
           grep -Fq 'Approve Mapping — Requires Secure Server' app/src/main/java/lk/peliyagoda/marketpro/ui/OwnerCatalogReviewDialog.kt
           grep -Fq 'enabled=false' app/src/main/java/lk/peliyagoda/marketpro/ui/OwnerCatalogReviewDialog.kt
           grep -Fq 'OwnerCatalogReviewDialog' app/src/main/java/lk/peliyagoda/marketpro/ui/TeamAccessSetupDialog.kt
