@@ -21,7 +21,11 @@ data class TeamPullSession(
     val authenticatedUserId: String,
     val enrolledDeviceId: String,
     val workspaceId: String
-)
+) {
+    override fun toString(): String =
+        "TeamPullSession(user=$authenticatedUserId, device=$enrolledDeviceId, " +
+            "workspace=$workspaceId, accessToken=[REDACTED])"
+}
 
 data class TeamPullPageRequest(
     val workspaceId: String,
