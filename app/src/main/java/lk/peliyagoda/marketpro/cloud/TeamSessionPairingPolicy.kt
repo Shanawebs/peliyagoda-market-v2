@@ -65,7 +65,7 @@ internal object TeamSessionPairingPolicy {
             "Staff must use separate identity and phone"
         }
         require(label.trim().length in 1..100 &&
-            label.trim() == label && label.none { it.isISOControl() }) {
+            label.trim() == label && label.none { it.code < 32 || it.code == 127 }) {
             "A safe 1–100 character device label is required"
         }
     }
