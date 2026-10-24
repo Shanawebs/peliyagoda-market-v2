@@ -1,0 +1,87 @@
+name: Market Pro V3.7.3 - Android Staff Session Pairing Preview
+
+on:
+  push:
+    branches:
+      - feature/marketpro-v373-android-session-pairing-preview
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  immutable-production-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Legacy Owner, live dashboard, Cloud migrations cannot change
+        run: |
+          set -euo pipefail
+          git diff --exit-code 9157c265d51fcbd1fb0822d556feb6af086b7b65 HEAD -- supabase/migrations/ web/marketpro-dashboard/
+          grep -Fq '"MARKETPRO_LOCAL_PREVIEW", "true"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_TEAM_PULL_RPC_DEPLOYED", "false"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_LOGIN_ENABLED", "false"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_PAIRING_RPC_DEPLOYED", "false"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_WRITE_APPROVAL_RPC_DEPLOYED", "false"' app/build.gradle.kts
+          grep -Fq 'tools:node="remove"' app/src/main/AndroidManifest.xml
+          grep -Fq 'applicationId = "lk.peliyagoda.marketpro.security.foundation.v350"' app/build.gradle.kts
+          grep -Fq 'marketpro_owner_activate_staff_readonly' app/src/main/java/lk/peliyagoda/marketpro/cloud/TeamSessionPairingRpcClient.kt
+          grep -Fq 'marketpro_staff_accept_invitation' app/src/main/java/lk/peliyagoda/marketpro/cloud/TeamSessionPairingRpcClient.kt
+          grep -Fq 'No Cloud Write Access Granted' app/src/main/java/lk/peliyagoda/marketpro/ui/TeamSessionPairingPanel.kt
+          test -f app/src/test/java/lk/peliyagoda/marketpro/cloud/TeamSessionPairingPolicyTest.kt
+
+  android-kotlin-unit-tests:
+    runs-on: ubuntu-latest
+    needs: immutable-production-gates
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Prepare validated bundled Sinhala font
+        run: bash scripts/prepare_sinhala_font.sh
+      - name: Compile Android App and run all JVM tests
+        run: gradle --no-daemon :app:testDebugUnitTest
+      - name: Verify installer still cannot access the network
+        run: |
+          set -euo pipefail
+          grep -Fq 'android.permission.INTERNET" tools:node="remove"' app/src/main/AndroidManifest.xml
+          test -f app/build/outputs/apk/debug/app-debug.apk || true
+
+  server-session-regression:
+    runs-on: ubuntu-latest
+    needs: immutable-production-gates
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Disposable PG17 Supabase session pairing safety regression
+        run: |
+          set -euo pipefail
+          docker run -d --rm --name marketpro_v373_pg \
+             -e POSTGRES_PASSWORD=testonly -v "$PWD":/work:ro -w /work postgres:17
+          for i in $(seq 1 50); do
+            if docker exec marketpro_v373_pg pg_isready -U postgres; then break; fi
+            sleep 1
+          done
+          docker exec marketpro_v373_pg psql -X -v ON_ERROR_STOP=1 \
+            -U postgres -d postgres \
+            -f supabase/tests/v372_staff_auth_session_binding_pg17_local_only.sql
+      - name: Cleanup disposable DB
+        if: always()
+        run: docker stop marketpro_v373_pg || true
