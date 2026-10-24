@@ -63,6 +63,17 @@ fun SecurityAndTeamStatusDialog(onDismiss: () -> Unit) {
                         "configuration can block uninstall on the purchasing phone."
                 )
                 Text(
+                    "Two-Phone Rules: Purchasing staff can enter and correct " +
+                        "TODAY's entries as often as needed without owner approval. " +
+                        "Previous days are READ-ONLY for staff. Only the Owner " +
+                        "can correct previous days."
+                )
+                Text(
+                    "Sri Lanka business-day cutoff: 12:00 midnight (Asia/Colombo). " +
+                        "This rule must be verified and enforced by the Cloud server, " +
+                        "not the phone clock."
+                )
+                Text(
                     "Team phone → Owner phone download / correction: NOT ACTIVE " +
                         "in this offline UI preview. Do NOT share Owner login " +
                         "with purchasing staff."
