@@ -38,12 +38,12 @@ class TeamPullRequestPolicyTest {
     @Test fun categoriesArePulledBeforeFinancialRows() {
         assertEquals(
             listOf("category","item","requisition","purchase",
-                "purchase_addition","daily_cash_received"),
+                "purchase_addition","daily_cash_received","daily_other_expenses"),
             TeamPullRequestPolicy.orderedTypes
         )
         assertFalse("invoice_photo" in TeamPullRequestPolicy.orderedTypes)
         assertFalse("sync_operations" in TeamPullRequestPolicy.orderedTypes)
-        assertFalse("daily_other_expenses" in TeamPullRequestPolicy.orderedTypes)
+        assertTrue("daily_other_expenses" in TeamPullRequestPolicy.orderedTypes)
     }
 
     @Test(expected=IllegalArgumentException::class)
