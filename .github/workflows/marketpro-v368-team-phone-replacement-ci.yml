@@ -101,6 +101,12 @@ jobs:
           grep -Fq 'old_device_disabled' supabase/proposals/v368_owner_replace_team_phone_REVIEW_ONLY.sql
           grep -Fq 'new_device_can_write' supabase/proposals/v368_owner_replace_team_phone_REVIEW_ONLY.sql
           grep -Fq 'staff_device_transfer_audit' supabase/proposals/v368_owner_replace_team_phone_REVIEW_ONLY.sql
+          test -f app/src/main/java/lk/peliyagoda/marketpro/cloud/TeamPhoneReplacementPolicy.kt
+          test -f app/src/test/java/lk/peliyagoda/marketpro/cloud/TeamPhoneReplacementPolicyTest.kt
+          grep -Fq 'MARKETPRO_TEAM_PHONE_TRANSFER_RPC_DEPLOYED", "false"' app/build.gradle.kts
+          test -f app/src/main/java/lk/peliyagoda/marketpro/ui/TeamPhoneManagementPreview.kt
+          grep -Fq 'TeamPhoneManagementPreview()' app/src/main/java/lk/peliyagoda/marketpro/ui/TeamAccessSetupDialog.kt
+          grep -Fq 'unsynced' -i app/src/main/java/lk/peliyagoda/marketpro/ui/TeamPhoneManagementPreview.kt
           grep -Fq 'MARKETPRO_LOCAL_PREVIEW", "true"' app/build.gradle.kts
           grep -Fq 'db.withTransaction' app/src/main/java/lk/peliyagoda/marketpro/cloud/OwnerCatalogLinker.kt
           grep -Fq 'MARKETPRO_CATALOG_REVIEW_RPC_DEPLOYED' app/src/main/java/lk/peliyagoda/marketpro/cloud/OwnerCatalogLinker.kt
