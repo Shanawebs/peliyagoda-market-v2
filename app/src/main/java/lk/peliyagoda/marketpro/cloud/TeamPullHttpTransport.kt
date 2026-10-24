@@ -43,6 +43,12 @@ internal class TeamPullHttpTransport : TeamPullTransport {
         session: TeamPullSession,
         request: TeamPullPageRequest
     ): String = withContext(Dispatchers.IO) {
+        // Staff must NEVER fall back to the older direct PostgREST bearer
+        // token RPC: only the separate one-use AndroidKeystore signature
+        // channel is permitted. Owner's installed V1 pull remains unchanged.
+        if (session.authenticatedUserId != CloudSyncConfig.OWNER_USER_ID) {
+            return@withContext StaffSignedTeamPullTransport().pull(session,request)
+        }
         // The coordinator verifies physical device matching separately.
         TeamPullRequestPolicy.validate(session,request,session.enrolledDeviceId)
         check(!BuildConfig.MARKETPRO_LOCAL_PREVIEW &&
