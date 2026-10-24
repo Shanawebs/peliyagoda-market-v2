@@ -52,6 +52,7 @@ GRANT EXECUTE ON FUNCTION auth.jwt() TO authenticated,service_role;
 \i supabase/proposals/two_phone_atomic_proof_financial_write_REVIEW_ONLY.sql
 \i supabase/proposals/two_phone_owner_staff_key_enrollment_REVIEW_ONLY.sql
 \i supabase/proposals/two_phone_daily_summary_expense_reconciliation_REVIEW_ONLY.sql
+\i supabase/proposals/two_phone_signed_staff_pull_REVIEW_ONLY.sql
 
 -- Realistically shaped workspace data in a NEW throwaway database only.
 INSERT INTO auth.users(id,email,email_confirmed_at) VALUES
