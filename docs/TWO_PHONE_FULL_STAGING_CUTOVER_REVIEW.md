@@ -55,6 +55,21 @@ and subtracts them from `cash_balance_cents`. Exact decimal-cent test example:
 
 No invoice photographs are uploaded.
 
+## Single-transaction cutover proof (additional completed test)
+
+The source-accurate, **202 KB STAGING-ONLY** SQL bundle
+`supabase/release_candidates/two_phone_atomic_cutover_STAGING_ONLY.sql`
+contains ALL 19 proposals in their original dependency order, with each
+standalone BEGIN/COMMIT relocated into ONE outer transaction.
+It refuses to start without an explicit disposable-session sentinel.
+`supabase/tests/two_phone_atomic_cutover_pg17_staging_only.sql` verifies
+the **same real Owner V1 baseline and all security/cash-balance tests**
+against that atomic bundle, not just the individually replayed proposals.
+
+Node `tests/two_phone_atomic_bundle_integrity.test.mjs` ensures no source
+SQL changed or was reordered without updating the audited atomic bundle.
+PostgreSQL 17 CI has confirmed both sequential and one-transaction replay.
+
 ## GO / NO-GO before any real cutover
 
 This is only a **disposable PostgreSQL schema test, not a real Supabase project**
@@ -63,9 +78,11 @@ with real Auth JWT gateway/Edge deploy or real phones. For a safe deployment:
 - Provision a physically separate **STAGING Supabase project** intentionally:
   confirm billing/limits first. Use genuine Owner/Staff authenticated accounts,
   real JWT session revocation, PostgREST RLS and signed Edge requests.
-- **Prepare and review a single atomic cutover bundle**: the individual
-  proposals contain their own BEGIN/COMMIT and cannot be blindly run one by
-  one against production in an externally accessible half-migrated state.
+- **Review and approve the single atomic cutover bundle** already prepared
+  and tested in disposable PostgreSQL. It must NOT be deployed on Live simply
+  because a schema-only test passed. Before future staging cutover, audit its
+  inputs and versioned dependencies, then confirm transaction semantics with
+  real Supabase Auth/PostgREST and freeze writer/reader enrollments during it.
   There must be NO interval when Staff membership is possible with broad
   original public read policies, or old direct Staff RPC privileges survive.
 - All eligible public views must be `security_invoker` or inaccessible to
