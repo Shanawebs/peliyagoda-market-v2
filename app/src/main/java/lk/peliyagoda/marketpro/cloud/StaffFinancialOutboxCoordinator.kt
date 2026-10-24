@@ -190,7 +190,7 @@ internal class StaffFinancialOutboxCoordinator(
             snapshot.workspaceId==CloudSyncConfig.WORKSPACE_ID) {
             "Incoming Cloud record has the wrong workspace"
         }
-        fun revision(prefix:String):Long? {
+        suspend fun revision(prefix:String):Long? {
             val value=journal.state("$prefix|${row.entityType}|$id")
             val n=value?.toLongOrNull()
             if(value!=null)require(n!=null && n>0L)
