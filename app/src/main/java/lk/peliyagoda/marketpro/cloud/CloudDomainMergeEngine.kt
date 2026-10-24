@@ -97,8 +97,14 @@ internal class CloudDomainMergeEngine(private val db: MarketDatabase) {
                 DomainMergeDecision.CONFLICT_UUID_OR_BUSINESS_KEY,shadow.revision
             )
         }
-        if(mappedKey == null && inbox.unmappedAdditionCount(date,localItem.id)>0)
-            return@withTransaction Result(
+        if(mappedKey == null && !PurchaseAdditionImportGate.canInsertNew(
+                existingRemoteMapping=false,
+                unboundLocalLotsForDateItem=inbox.unmappedAdditionCount(
+                    date,localItem.id
+                ),
+                pendingLocalEditForRemoteUuid=
+                    inbox.hasPendingLocalEditForCloudId(type,remoteUuid)>0
+            )) return@withTransaction Result(
                 DomainMergeDecision.REVIEW_UNBASELINED_LOCAL_ROW,shadow.revision
             )
 
