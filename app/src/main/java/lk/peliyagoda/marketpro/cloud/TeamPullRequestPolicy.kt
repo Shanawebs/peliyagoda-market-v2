@@ -40,7 +40,7 @@ data class TeamPullPageRequest(
 object TeamPullRequestPolicy {
     private val allowed = listOf(
         "category", "item", "requisition", "purchase",
-        "purchase_addition", "daily_cash_received"
+        "purchase_addition", "daily_cash_received", "daily_other_expenses"
     )
     val orderedTypes: List<String> get() = allowed.toList()
 
