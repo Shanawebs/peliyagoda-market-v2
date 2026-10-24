@@ -237,6 +237,17 @@ internal class StaffFinancialOutboxCoordinator(
         }
 
         val pending=journal.pendingStaffFinancial(max)
+        if (pending.isEmpty())return@withLock DeliverySummary(0,0,0,false)
+        // Each selected financial type must first complete a fresh authenticated
+        // read page sequence. This obtains SERVER Colombo business date and
+        // remote revision/identity shadow; no phone clock authorizes a write.
+        val puller=TeamInboxDownloadCoordinator(app,sessionProvider)
+        for (type in pending.map { it.entityType }.distinct()) {
+            val result=puller.stageCloudType(type,pageSize=35,maxPages=20)
+            if(result.hasMore) {
+                return@withLock DeliverySummary(0,pending.size,pending.size,true)
+            }
+        }
         var done=0
         var held=0
         for(row in pending) {
