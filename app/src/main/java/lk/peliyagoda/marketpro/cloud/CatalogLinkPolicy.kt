@@ -16,6 +16,7 @@ data class CatalogLinkEvidence(
     val localKeyForRemoteUuid: String?,
     val proposedLocalKey: String?,
     val remoteUuidForProposedKey: String?,
+    val remoteUuidForProposedKeyMatchesIncoming: Boolean,
     val mappedLocalContentsEqual: Boolean
 )
 
@@ -46,7 +47,8 @@ object CatalogLinkPolicy {
         val mappedFromLocal = e.remoteUuidForProposedKey
         if (mappedFromRemote != null || mappedFromLocal != null) {
             if (mappedFromRemote == null || mappedFromLocal == null ||
-                mappedFromRemote != e.proposedLocalKey) {
+                mappedFromRemote != e.proposedLocalKey ||
+                !e.remoteUuidForProposedKeyMatchesIncoming) {
                 return CatalogLinkDecision.CONFLICT_UUID_MAPPING
             }
             // The caller MUST additionally compare reverse UUID == incoming
