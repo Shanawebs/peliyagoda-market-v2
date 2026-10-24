@@ -23,6 +23,9 @@ android {
         buildConfigField("boolean", "MARKETPRO_TEAM_DOMAIN_MERGE_DEPLOYED", "false")
         // Preview fields are disabled; no Owner/Staff password collection or network login.
         buildConfigField("boolean", "MARKETPRO_STAFF_LOGIN_ENABLED", "false")
+        buildConfigField("boolean", "MARKETPRO_STAFF_FINANCE_RPC_DEPLOYED", "false")
+        buildConfigField("boolean", "MARKETPRO_STAFF_DEVICE_PROOF_WRITE_ENFORCED", "false")
+        buildConfigField("boolean", "MARKETPRO_STAFF_OUTBOX_AUTO_UPLOAD", "false")
         // V3.6.5 candidate upload/Owner review RPC is still REVIEW_ONLY SQL.
         buildConfigField("boolean", "MARKETPRO_CATALOG_REVIEW_RPC_DEPLOYED", "false")
         // 3.6.8 replace/revoke APIs are still proposal SQL; never enable in preview.

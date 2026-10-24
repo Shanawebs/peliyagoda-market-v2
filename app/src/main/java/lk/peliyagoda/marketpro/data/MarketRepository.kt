@@ -48,8 +48,12 @@ class MarketRepository(private val db: MarketDatabase) {
                     updated.mealsDrinksCents, updated.othersCents, updated.remarks
                 )
             )
-            // Local only in V3.4 preview: Cloud RPC / dashboard aggregation must
-            // be extended BEFORE this type is eligible for server upload.
+            // Durable offline outbox. Delivery is disabled until the audited
+            // Staff finance RPC and per-operation device proof are deployed.
+            journal.record(
+                CloudRecordType.DAILY_OTHER_EXPENSES,
+                CloudRecordKey.otherExpense(date)
+            )
         }
     }
 
@@ -63,6 +67,10 @@ class MarketRepository(private val db: MarketDatabase) {
                     date, previous.transportCents, previous.laborChargeCents,
                     previous.mealsDrinksCents, previous.othersCents, remarks
                 )
+            )
+            journal.record(
+                CloudRecordType.DAILY_OTHER_EXPENSES,
+                CloudRecordKey.otherExpense(date)
             )
         }
     }
@@ -498,6 +506,12 @@ class MarketRepository(private val db: MarketDatabase) {
             }
             restoredCash.forEach {
                 journal.record(CloudRecordType.DAILY_CASH_RECEIVED, CloudRecordKey.cash(it.businessDate))
+            }
+            restoredOtherExpenses.forEach {
+                journal.record(
+                    CloudRecordType.DAILY_OTHER_EXPENSES,
+                    CloudRecordKey.otherExpense(it.businessDate)
+                )
             }
         }
         if (backupVersion < 4) seedCatalogOnce()

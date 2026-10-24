@@ -22,7 +22,8 @@ enum class CloudRecordType(val wireName: String) {
     REQUISITION("requisition"),
     PURCHASE("purchase"),
     PURCHASE_ADDITION("purchase_addition"),
-    DAILY_CASH_RECEIVED("daily_cash_received")
+    DAILY_CASH_RECEIVED("daily_cash_received"),
+    DAILY_OTHER_EXPENSES("daily_other_expenses")
 }
 
 enum class CloudAction { UPSERT, DELETE }
@@ -49,6 +50,7 @@ object CloudRecordKey {
     }
     fun addition(lotId: Long): String = item(lotId)
     fun cash(date: String): String = LocalDate.parse(date).toString()
+    fun otherExpense(date: String): String = LocalDate.parse(date).toString()
 }
 
 /**
@@ -113,6 +115,21 @@ interface CloudSyncDao {
     @Query("SELECT COUNT(*) FROM cloud_sync_outbox")
     suspend fun pendingCountNow(): Int
 
+    /**
+     * Staff cannot upload catalog rows or deletes via the Owner-only v1 RPC.
+     * This isolated query survives all process restarts and excludes
+     * unsupported types without hiding them or erasing journal history.
+     */
+    @Query("""
+        SELECT * FROM cloud_sync_outbox WHERE
+          entityType IN (
+            'purchase','purchase_addition','requisition',
+            'daily_cash_received','daily_other_expenses'
+          )
+        ORDER BY changedAtMs,entityType,entityKey LIMIT :limit
+    """)
+    suspend fun pendingStaffFinancial(limit: Int): List<CloudOutboxEntity>
+
     /** Strict dependency ordering: category → item → financial rows. */
     @Query("""
         SELECT * FROM cloud_sync_outbox
@@ -172,7 +189,9 @@ class CloudChangeJournal(private val dao: CloudSyncDao) {
     ) {
         require(key.isNotBlank())
         val wireType = type.wireName
-        dao.insertIdentity(CloudIdentityEntity(wireType, key, UUID.randomUUID().toString()))
+        val newlyCreatedCloudIdentity = dao.insertIdentity(
+            CloudIdentityEntity(wireType, key, UUID.randomUUID().toString())
+        ) > 0L
         // Each new financial record is tagged in the SAME Room transaction as
         // its change and pending operation. Historical restored rows cannot
         // be trusted merely because their UUID format looks valid.
@@ -187,6 +206,24 @@ class CloudChangeJournal(private val dao: CloudSyncDao) {
                 lk.peliyagoda.marketpro.cloud.FreshAttachState.originKey(wireType, key),
                 id
             ))
+        }
+        if (newlyCreatedCloudIdentity && action == CloudAction.UPSERT &&
+            dao.state("staff_outbox_verified_v1") == "true" &&
+            wireType in setOf("purchase","purchase_addition","requisition",
+                "daily_cash_received","daily_other_expenses")
+        ) {
+            val cloudUuid = dao.cloudId(wireType,key)
+            // This origin marker is NOT permission. Server independently
+            // checks Staff approved device, active session and today's date.
+            if (cloudUuid != null &&
+                dao.state("staff_fresh_origin|$wireType|$cloudUuid") == null &&
+                dao.state("pull_applied_rev|$wireType|$cloudUuid") == null &&
+                dao.state("staff_last_ack_rev|$wireType|$cloudUuid") == null
+            ) {
+                dao.setState(CloudSyncStateEntity(
+                    "staff_fresh_origin|$wireType|$cloudUuid",cloudUuid
+                ))
+            }
         }
         dao.putPending(
             CloudOutboxEntity(
