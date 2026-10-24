@@ -61,6 +61,7 @@ DECLARE
  v_staff uuid:=auth.uid();
  v_challenge jsonb;
  v_hash text;
+ v_approved_fingerprint text;
 BEGIN
  IF v_staff IS NULL OR p_workspace_id IS NULL OR p_device_id IS NULL
  OR p_operation_id IS NULL OR p_entity_id IS NULL
@@ -90,8 +91,21 @@ BEGIN
  INSERT INTO marketpro_private.staff_finance_challenge_requests(
    challenge_id,request_sha256
  ) VALUES((v_challenge->>'challenge_id')::uuid,v_hash);
- -- Commitment remains SERVER-ONLY, not a user-controlled authorization.
- RETURN v_challenge;
+ -- The phone may sign ONLY if its local AndroidKeyStore SPKI fingerprint
+ -- is identical to the still Owner-approved public key in the private DB.
+ -- This value is advisory for local matching; SQL/Edge independently
+ -- recheck the actual approved SPKI on submit.
+ SELECT k.fingerprint_sha256 INTO v_approved_fingerprint
+ FROM marketpro_private.staff_device_public_keys k
+ WHERE k.workspace_id=p_workspace_id AND k.staff_user_id=v_staff
+   AND k.device_id=p_device_id AND k.approved AND k.revoked_at IS NULL;
+ IF v_approved_fingerprint IS NULL THEN
+    RAISE EXCEPTION 'Staff phone signing key is not approved'
+       USING ERRCODE='42501';
+ END IF;
+ RETURN v_challenge || pg_catalog.jsonb_build_object(
+   'key_fingerprint_sha256',v_approved_fingerprint
+ );
 END;
 $issue_finance$;
 REVOKE ALL ON FUNCTION public.marketpro_staff_issue_finance_challenge(
