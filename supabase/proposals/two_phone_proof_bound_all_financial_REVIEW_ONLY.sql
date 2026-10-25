@@ -432,7 +432,7 @@ REVOKE ALL ON FUNCTION public.marketpro_service_commit_signed_financial(
  uuid,uuid,uuid,uuid,uuid,uuid,text,uuid,text,bigint,jsonb)
  FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.marketpro_service_commit_signed_financial(
- uuid,uuid,uuid,uuid,uuid,uuid,uuid,text,uuid,text,bigint,jsonb) TO service_role;
+ uuid,uuid,uuid,uuid,uuid,uuid,text,uuid,text,bigint,jsonb) TO service_role;
 
 -- New direct-RPC bypasses forbidden even if earlier review-only migrations
 -- were applied. The signed purchase V2 RPC remains service-only as before.
