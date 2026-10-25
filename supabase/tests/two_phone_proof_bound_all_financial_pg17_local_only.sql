@@ -86,12 +86,12 @@ BEGIN
   denied:=false;
   BEGIN
    PERFORM public.marketpro_service_commit_signed_financial(
-      (issued->>'challenge_id')::uuid,u,sid,w,phone,op,'daily_cash_received',obj,
+      (issued->>'challenge_id')::uuid,u,sid,w,phone,op,
+      CASE WHEN typ='daily_cash_received' THEN 'requisition'
+           ELSE 'daily_cash_received' END,obj,
       'create',NULL,p);
   EXCEPTION WHEN SQLSTATE '42501' THEN denied:=true; END;
-  -- For daily_cash_received type, same type was sent: the amount tamper above
-  -- is already definitive. Others must deny a type transplant.
-  IF typ<>'daily_cash_received' AND NOT denied THEN
+  IF NOT denied THEN
    RAISE EXCEPTION 'Signature type confusion for %',typ; END IF;
 
   reply:=public.marketpro_service_commit_signed_financial(
