@@ -1,0 +1,104 @@
+name: Market Pro — Gmail Dot Alias / Owner-Staff Real Local GoTrue Security QA
+
+on:
+  push:
+    branches:
+      - feature/marketpro-staging-gmail-dot-alias-auth-qa
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-and-staging-freeze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: No Android app, Hosted staging DB, project identity or live migrations touched
+        run: |
+          set -euo pipefail
+          git diff --exit-code 6fb13c8226f92c6b4cd130a3665eea26bdc2f3a0 HEAD -- \
+            app/ supabase/ web/marketpro-dashboard/
+          grep -Fq '"MARKETPRO_LOCAL_PREVIEW", "true"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_OUTBOX_AUTO_UPLOAD", "false"' app/build.gradle.kts
+          grep -Fq 'const LOCAL="http://127.0.0.1:54321"' \
+            tests/local_supabase_owner_staff_totp_auth_e2e.mjs
+          grep -Fq 'assert.equal(origin,LOCAL' \
+            tests/local_supabase_owner_staff_totp_auth_e2e.mjs
+          if grep -Fq 'mywin7070' tests/local_supabase_owner_staff_totp_auth_e2e.mjs; then
+            echo "Real Gmail addresses must never appear in public CI Auth fixtures"
+            exit 1
+          fi
+      - name: Verify synthetic dotted alias actually canonicalizes to same Gmail mailbox
+        run: |
+          node --input-type=module - <<'JS'
+          import assert from 'node:assert/strict';
+          const undotted='marketproqa1ab2cd34@gmail.com';
+          const dotted='marketpro.qa1ab2cd34@gmail.com';
+          assert.equal(undotted.replaceAll('.',''),dotted.replaceAll('.',''));
+          assert.notEqual(undotted,dotted);
+          console.log('PASS: dot test pairs represent one Google inbox; identity separation requires real Supabase Auth test');
+          JS
+
+  real-local-gotrue-gmail-dot-owner-staff:
+    needs: production-and-staging-freeze
+    runs-on: ubuntu-latest
+    timeout-minutes: 42
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - uses: supabase/setup-cli@v1
+        with: {version: latest}
+      - name: Build disposable LOCAL Supabase Auth with no SMTP/outbound identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/marketpro-gmail-alias-qa-$GITHUB_RUN_ID/supabase"
+          cat > "$RUNNER_TEMP/marketpro-gmail-alias-qa-$GITHUB_RUN_ID/supabase/config.toml" <<'TOML'
+          project_id = "marketpro-disposable-gmail-dot-qa"
+          [db]
+          major_version = 17
+          [auth.email]
+          enable_confirmations = false
+          [auth.mfa.totp]
+          enroll_enabled = true
+          verify_enabled = true
+          TOML
+      - name: Start local Auth/Postgres sandbox, never link to hosted Supabase
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/marketpro-gmail-alias-qa-$GITHUB_RUN_ID"
+          supabase start -x studio,storage-api,imgproxy,realtime,edge-runtime
+      - name: Test REAL LOCAL TOTP/AAL2 plus synthetic Gmail alias unique logins and no cross-password
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/marketpro-gmail-alias-qa-$GITHUB_RUN_ID"
+          status_json="$(supabase status -o json)"
+          anon_key="$(printf '%s' "$status_json" | jq -er '.ANON_KEY // .PUBLISHABLE_KEY // .anon_key')"
+          MARKETPRO_LOCAL_SUPABASE_URL="http://127.0.0.1:54321" \
+          MARKETPRO_LOCAL_SUPABASE_KEY="$anon_key" \
+            node "$GITHUB_WORKSPACE/tests/local_supabase_owner_staff_totp_auth_e2e.mjs"
+      - name: Destroy local sandbox
+        if: always()
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP/marketpro-gmail-alias-qa-$GITHUB_RUN_ID" || exit 0
+          supabase stop --no-backup || true
+
+  no-live-staff-write-regressions:
+    needs: production-and-staging-freeze
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Signed finance worker and staging deployment fail closed
+        run: |
+          node --test tests/two_phone_signed_all_worker_contract.test.mjs
+          python3 -m unittest discover -s tests -p test_staging_isolation.py -v
