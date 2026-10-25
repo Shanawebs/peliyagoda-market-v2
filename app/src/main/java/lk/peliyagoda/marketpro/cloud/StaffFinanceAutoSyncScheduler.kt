@@ -27,13 +27,17 @@ internal object StaffFinanceAutoSyncScheduler {
     private const val IMMEDIATE="marketpro_staff_finance_immediate_v2"
     private const val PERIODIC="marketpro_staff_finance_periodic_v2"
 
-    private fun enabled():Boolean=StaffOutboxUploadPolicy.releaseReady(
-        BuildConfig.MARKETPRO_LOCAL_PREVIEW,
-        BuildConfig.MARKETPRO_STAFF_LOGIN_ENABLED,
-        BuildConfig.MARKETPRO_TEAM_PULL_RPC_DEPLOYED,
-        BuildConfig.MARKETPRO_STAFF_FINANCE_RPC_DEPLOYED,
-        BuildConfig.MARKETPRO_STAFF_DEVICE_PROOF_WRITE_ENFORCED,
-        BuildConfig.MARKETPRO_STAFF_OUTBOX_AUTO_UPLOAD
+    internal fun enabled():Boolean=StaffSignedFinanceRoutingPolicy.ready(
+        preview=BuildConfig.MARKETPRO_LOCAL_PREVIEW,
+        staffLogin=BuildConfig.MARKETPRO_STAFF_LOGIN_ENABLED,
+        staffPull=BuildConfig.MARKETPRO_TEAM_PULL_RPC_DEPLOYED,
+        pairing=BuildConfig.MARKETPRO_STAFF_PAIRING_RPC_DEPLOYED,
+        ownerMfa=BuildConfig.MARKETPRO_OWNER_TOTP_MFA_AUTH_DEPLOYED,
+        keyEnrollment=BuildConfig.MARKETPRO_STAFF_KEY_ENROLLMENT_DEPLOYED,
+        writerApproval=BuildConfig.MARKETPRO_STAFF_WRITE_APPROVAL_RPC_DEPLOYED,
+        financeRpc=BuildConfig.MARKETPRO_STAFF_FINANCE_RPC_DEPLOYED,
+        serverProof=BuildConfig.MARKETPRO_STAFF_DEVICE_PROOF_WRITE_ENFORCED,
+        autoUpload=BuildConfig.MARKETPRO_STAFF_OUTBOX_AUTO_UPLOAD
     )
 
     private fun constraints():Constraints=Constraints.Builder()
@@ -67,8 +71,13 @@ internal class StaffFinanceAutoSyncWorker(
     app:Context,params:WorkerParameters
 ):CoroutineWorker(app,params) {
     override suspend fun doWork():Result=try {
-        val report=StaffFinancialOutboxCoordinator(applicationContext)
-            .deliverBatch(max=20)
+        // Even an old queued Worker must fail CLOSED after a build/config
+        // downgrade or missing Owner-approved enrollment prerequisite.
+        if(!StaffFinanceAutoSyncScheduler.enabled()) return Result.success()
+        val report=StaffFinancialOutboxCoordinator(
+            context=applicationContext,
+            transport=SignedAllStaffFinancialWriteTransport()
+        ).deliverBatch(max=20)
         when {
             // Old-day offline edits and other row conflicts stay visible
             // as pending/review; do not loop forever in background.
