@@ -24,7 +24,7 @@ from uuid import UUID
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CLOUD = PROJECT_ROOT / "app/src/main/java/lk/peliyagoda/marketpro/cloud"
 GRADLE = PROJECT_ROOT / "app/build.gradle.kts"
-PROD_REF_RE = re.compile(r'https://([a-z]{20})\.supabase\.co')
+PROD_REF_RE = re.compile(r'https://([a-z0-9]{20})\.supabase\.co')
 PROD_OWNER_RE = re.compile(r'const val OWNER_USER_ID\s*=\s*"([a-f0-9-]{36})"')
 PROD_WORKSPACE_RE = re.compile(r'const val WORKSPACE_ID\s*=\s*"([a-f0-9-]{36})"')
 APP_ID_RE = re.compile(r'applicationId\s*=\s*"([^"]+)"')
@@ -40,7 +40,7 @@ FLAGS = (
     "MARKETPRO_STAFF_OUTBOX_AUTO_UPLOAD",
 )
 UUID_RE = re.compile(r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$")
-PROJECT_REF_RE = re.compile(r"^[a-z]{20}$")
+PROJECT_REF_RE = re.compile(r"^[a-z0-9]{20}$")
 PKG_RE = re.compile(r"^lk\.peliyagoda\.marketpro\.[a-z][a-z0-9_.]{3,80}$")
 
 def require_uuid(value: object, what: str) -> str:
@@ -73,7 +73,7 @@ def validate_manifest(obj: object, baseline: dict)->dict:
         raise ValueError("Manifest requires exactly project_ref, supabase_url, owner_user_id, workspace_id, application_id; no secrets")
     ref=obj["project_ref"]
     if not isinstance(ref,str) or not PROJECT_REF_RE.fullmatch(ref):
-        raise ValueError("Staging project_ref must be 20 lowercase ASCII letters")
+        raise ValueError("Staging project_ref must be 20 lowercase ASCII letters or digits")
     if ref==baseline["prod_ref"]:
         raise ValueError("Staging must NOT point at the existing Market Pro Supabase project")
     url=obj["supabase_url"]
