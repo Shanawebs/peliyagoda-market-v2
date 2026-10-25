@@ -23,6 +23,7 @@ android {
         buildConfigField("boolean", "MARKETPRO_TEAM_DOMAIN_MERGE_DEPLOYED", "false")
         // Preview fields are disabled; no Owner/Staff password collection or network login.
         buildConfigField("boolean", "MARKETPRO_STAFF_LOGIN_ENABLED", "false")
+        buildConfigField("boolean", "MARKETPRO_STAFF_KEY_ENROLLMENT_DEPLOYED", "false")
         buildConfigField("boolean", "MARKETPRO_STAFF_FINANCE_RPC_DEPLOYED", "false")
         buildConfigField("boolean", "MARKETPRO_STAFF_DEVICE_PROOF_WRITE_ENFORCED", "false")
         buildConfigField("boolean", "MARKETPRO_STAFF_OUTBOX_AUTO_UPLOAD", "false")
