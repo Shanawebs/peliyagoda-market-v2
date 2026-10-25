@@ -1,0 +1,69 @@
+name: Market Pro — Hosted Staging Applied Schema Safety Review
+
+on:
+  push:
+    branches:
+      - feature/marketpro-hosted-staging-schema-guardrails
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  no-production-app-modification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: No edits to production app, database migrations, Auth or Dashboard
+        run: |
+          set -euo pipefail
+          git diff --exit-code e434f00df731afc1f9eddd92427965c1ddc00e2a HEAD --             app/ supabase/migrations/ supabase/functions/ supabase/proposals/             supabase/config.toml web/marketpro-dashboard/
+          grep -Fq '"MARKETPRO_LOCAL_PREVIEW", "true"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_OUTBOX_AUTO_UPLOAD", "false"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_DEVICE_PROOF_WRITE_ENFORCED", "false"' app/build.gradle.kts
+
+  staged-sql-fail-closed:
+    needs: no-production-app-modification
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure no Staff/Auth grant or edge function goes live
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          a=Path('supabase/staging/20261025170015_disable_legacy_owner_writer_rpc.sql').read_text()
+          b=Path('supabase/staging/20261025170101_expenses_schema_owner_read_only.sql').read_text()
+          c=Path('supabase/staging/verify_hosted_staging_guardrails_READ_ONLY.sql').read_text()
+          assert 'REVOKE EXECUTE ON FUNCTION public.marketpro_apply_change' in a
+          assert 'FROM PUBLIC, anon, authenticated' in a
+          assert 'CREATE TABLE public.daily_other_expenses' in b
+          assert 'ENABLE ROW LEVEL SECURITY' in b
+          assert 'REVOKE ALL ON public.daily_other_expenses FROM PUBLIC,anon,authenticated' in b
+          assert 'CREATE POLICY staging_only_owner_expense_read' in b
+          assert "AND m.role='owner'" in b
+          assert 'CREATE FUNCTION' not in b.upper()
+          assert 'GRANT EXECUTE' not in b.upper()
+          assert 'GRANT INSERT' not in b.upper()
+          assert 'GRANT UPDATE' not in b.upper()
+          assert 'has_function_privilege' in c
+          assert 'CREATE' not in c.upper() and 'DROP' not in c.upper()
+          print('PASS: Staging SQL safe storage, RLS owner only, legacy RPC quarantined')
+          PY
+
+  staging-origin-and-signed-worker-regressions:
+    needs: no-production-app-modification
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Staging deployment remains blocked and signed Worker still disabled
+        run: |
+          python3 -m unittest discover -s tests -p test_staging_isolation.py -v
+          node --test tests/two_phone_signed_all_worker_contract.test.mjs
