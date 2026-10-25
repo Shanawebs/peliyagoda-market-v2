@@ -8,7 +8,7 @@ export const FINANCIAL_TYPES=Object.freeze([
   "requisition","purchase_addition","daily_cash_received","daily_other_expenses"
 ]);
 const VERSION="marketpro-device-proof-financial-v3";
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const HEX64=/^[0-9a-f]{64}$/;
 
 export function financeV3Transcript(material,nowMs=Date.now()) {
