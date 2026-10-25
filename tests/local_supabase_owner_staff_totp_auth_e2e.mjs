@@ -164,6 +164,65 @@ const staffUser=success(await call("/auth/v1/user","GET",undefined,
 assert.equal(staffUser.id,staffJwt.sub);
 assert.equal(staffUser.email,staffEmail);
 
+// Gmail ignores dots before @gmail.com; third-party Auth may or may not
+// canonicalize that mailbox. Establish the actual GoTrue outcome, WITHOUT
+// touching real user mailboxes, remote project, production Auth or SMTP.
+// These random .gmail.com usernames are never used beyond disposable GoTrue.
+const localSuffix="marketproqa"+randomBytes(8).toString("hex");
+const aliasOwner=localSuffix+"@gmail.com";
+const aliasStaff="marketpro.qa"+localSuffix.slice("marketpro".length)+"@gmail.com";
+assert.equal(aliasOwner.replace(/\./g,""),aliasStaff.replace(/\./g,""),
+  "Test alias pair does not map to the SAME Gmail mailbox");
+const aliasOwnerPassword=password();
+const aliasStaffPassword=password();
+const ownerAliasSignup=success(await call("/auth/v1/signup","POST",{
+  email:aliasOwner,password:aliasOwnerPassword
+}),"local synthetic undotted Gmail signup");
+assert.equal(ownerAliasSignup.user?.email,aliasOwner);
+const staffAliasSignup=success(await call("/auth/v1/signup","POST",{
+  email:aliasStaff,password:aliasStaffPassword
+}),"local synthetic dotted Gmail signup");
+assert.equal(staffAliasSignup.user?.email,aliasStaff);
+assert.ok(uuid.test(ownerAliasSignup.user.id));
+assert.ok(uuid.test(staffAliasSignup.user.id));
+assert.notEqual(ownerAliasSignup.user.id,staffAliasSignup.user.id,
+  "GoTrue DID NOT separate dotted and undotted Gmail-like login identities");
+const undottedLogin=validToken(success(await call(
+  "/auth/v1/token?grant_type=password","POST",{
+    email:aliasOwner,password:aliasOwnerPassword
+  }),"local undotted Gmail password session"),"alias-owner");
+const dottedLogin=validToken(success(await call(
+  "/auth/v1/token?grant_type=password","POST",{
+    email:aliasStaff,password:aliasStaffPassword
+  }),"local dotted Gmail password session"),"alias-staff");
+const undottedClaims=claims(undottedLogin.access_token);
+const dottedClaims=claims(dottedLogin.access_token);
+assert.equal(undottedClaims.sub,ownerAliasSignup.user.id);
+assert.equal(dottedClaims.sub,staffAliasSignup.user.id);
+assert.notEqual(undottedClaims.sub,dottedClaims.sub);
+assert.notEqual(undottedClaims.session_id,dottedClaims.session_id);
+assert.equal(undottedClaims.aal,"aal1");
+assert.equal(dottedClaims.aal,"aal1");
+const swappedOwner=await call("/auth/v1/token?grant_type=password","POST",{
+  email:aliasOwner,password:aliasStaffPassword
+});
+const swappedStaff=await call("/auth/v1/token?grant_type=password","POST",{
+  email:aliasStaff,password:aliasOwnerPassword
+});
+assert.equal(swappedOwner.status,400,"Staff password must NOT open Owner user");
+assert.equal(swappedStaff.status,400,"Owner password must NOT open Staff user");
+const realUndotted=success(await call("/auth/v1/user","GET",
+  undefined,undottedLogin.access_token),"local synthetic undotted identity");
+const realDotted=success(await call("/auth/v1/user","GET",
+  undefined,dottedLogin.access_token),"local synthetic dotted identity");
+assert.equal(realUndotted.id,ownerAliasSignup.user.id);
+assert.equal(realDotted.id,staffAliasSignup.user.id);
+// Critically, unique GoTrue subjects do NOT imply Gmail mailbox recovery
+// independence; Google's dot aliases still share one real mailbox.
+console.log("PASS: synthetic dotted/undotted Gmail aliases have DISTINCT local GoTrue identities");
+console.log("PASS: distinct passwords, login sessions and JWT subjects; cross-account password is rejected");
+console.log("LIMITATION: both aliases share Gmail inbox/password recovery; STAGING TEST ONLY");
+
 console.log("PASS: real LOCAL Owner signup/login, Authenticator enrollment,");
 console.log("PASS: TOTP challenge/verify, Owner AAL2 and fresh totp AMR,");
 console.log("PASS: encrypted-token-compatible refresh stays AAL2,");
