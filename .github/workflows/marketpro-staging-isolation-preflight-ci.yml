@@ -1,0 +1,72 @@
+name: Market Pro — Hosted Staging Isolation / NO Prod Cutover
+
+on:
+  push:
+    branches:
+      - feature/marketpro-staging-environment-isolation-preflight
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-freeze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Verify no production app, migrations, invoices, Dashboard or deploy flags changed
+        run: |
+          set -euo pipefail
+          git diff --exit-code 193fbd0dd37e122aaa200042879c74bbce497609 HEAD -- \
+            app/ supabase/ web/marketpro-dashboard/ \
+            .github/workflows/marketpro-isolated-local-supabase-owner-mfa-e2e.yml
+          test ! -f .github/workflows/deploy_marketpro_staging.yml
+          grep -Fq '"MARKETPRO_LOCAL_PREVIEW", "true"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_OUTBOX_AUTO_UPLOAD", "false"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_DEVICE_PROOF_WRITE_ENFORCED", "false"' app/build.gradle.kts
+
+  staging-isolation-unit-tests:
+    needs: production-freeze
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test 6 independent staging identity/URL security cases
+        run: python3 -m unittest discover -s tests -p test_staging_isolation.py -v
+      - name: Demonstrate staging review is FAIL CLOSED against production-bound Android
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/stage-proposal.json" <<'STAGE'
+          {
+            "project_ref": "zzzzzzzzzzzzzzzzzzzz",
+            "supabase_url": "https://zzzzzzzzzzzzzzzzzzzz.supabase.co",
+            "owner_user_id": "33333333-3333-4333-8333-333333333333",
+            "workspace_id": "11111111-1111-4111-8111-111111111111",
+            "application_id": "lk.peliyagoda.marketpro.staging.isolated"
+          }
+          STAGE
+          python3 scripts/verify_staging_isolation.py \
+            "$RUNNER_TEMP/stage-proposal.json" --mode audit \
+            > "$RUNNER_TEMP/audit.json"
+          python3 -c 'import json,sys; a=json.load(open(sys.argv[1])); assert not a["staging_safe_to_deploy"]; assert a["blocked_reason_count"]>=5; print("PASS: Android staged network deployment remains BLOCKED until safe separate build", a["blocked_reason_count"], "issues")' "$RUNNER_TEMP/audit.json"
+          set +e
+          python3 scripts/verify_staging_isolation.py "$RUNNER_TEMP/stage-proposal.json" --mode enforce \
+            > "$RUNNER_TEMP/enforcement.json"
+          result="$?"
+          set -e
+          test "$result" -eq 2
+          echo 'PASS: staging enforce command cannot accidentally deploy existing project'
+
+  signed-finance-still-disabled:
+    needs: production-freeze
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Signed five-type financial proof routing and no live finance flags
+        run: node --test tests/two_phone_signed_all_worker_contract.test.mjs
