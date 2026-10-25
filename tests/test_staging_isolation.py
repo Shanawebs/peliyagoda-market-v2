@@ -91,7 +91,7 @@ class StagingIsolationTests(unittest.TestCase):
         self.assertTrue(any("production-host-ref" in x for x in report["blockers"]))
         self.assertTrue(any("production-owner-id" in x for x in report["blockers"]))
         self.assertTrue(any("production-workspace-id" in x for x in report["blockers"]))
-        self.assertTrue(any("staging applicationId" in x for x in report["blockers"]))
+        self.assertTrue(any("STAGING applicationId" in x for x in report["blockers"]))
 
     def test_audit_outputs_blockers_but_enforce_fails_closed(self):
         with tempfile.TemporaryDirectory() as d:
