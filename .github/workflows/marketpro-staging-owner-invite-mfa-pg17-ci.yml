@@ -1,0 +1,49 @@
+name: Market Pro Staging — MFA-gated Owner / Staff Invitation PG17
+
+on:
+  push:
+    branches:
+      - feature/marketpro-staging-owner-invite-session-guard
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-freeze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Preserve working Android and Production Supabase
+        run: |
+          set -euo pipefail
+          git diff --exit-code 711556c3cd0c4d84dca2aa966eac6c1b945c3d65 HEAD -- app/ supabase/migrations/ supabase/functions/ supabase/proposals/ web/marketpro-dashboard/
+          grep -Fq '"MARKETPRO_LOCAL_PREVIEW", "true"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_LOGIN_ENABLED", "false"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_OUTBOX_AUTO_UPLOAD", "false"' app/build.gradle.kts
+          grep -Fq 'android.permission.INTERNET" tools:node="remove"' app/src/main/AndroidManifest.xml
+
+  owner-session-invitation-pg17:
+    needs: production-freeze
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start throwaway PostgreSQL 17
+        run: |
+          set -euo pipefail
+          docker run -d --rm --name marketpro_stage_invite_pg             -e POSTGRES_PASSWORD=testonly -v "$PWD":/work:ro -w /work postgres:17
+          for i in $(seq 1 45); do
+            if docker exec marketpro_stage_invite_pg pg_isready -U postgres; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Test signed Auth session, Owner fresh TOTP, registered Owner device check and invitation lifecycle
+        run: |
+          set -euo pipefail
+          docker exec marketpro_stage_invite_pg psql -X -v ON_ERROR_STOP=1             -U postgres -d postgres             -f supabase/tests/staging_qa_mfa_guarded_invite_pg17_local_only.sql
+      - name: Tear down disposable PostgreSQL
+        if: always()
+        run: docker stop marketpro_stage_invite_pg || true
