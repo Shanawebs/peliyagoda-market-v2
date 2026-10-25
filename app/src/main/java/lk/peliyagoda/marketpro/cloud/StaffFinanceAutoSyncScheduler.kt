@@ -70,7 +70,8 @@ internal object StaffFinanceAutoSyncScheduler {
 internal class StaffFinanceAutoSyncWorker(
     app:Context,params:WorkerParameters
 ):CoroutineWorker(app,params) {
-    override suspend fun doWork():Result=try {
+    override suspend fun doWork():Result {
+        return try {
         // Even an old queued Worker must fail CLOSED after a build/config
         // downgrade or missing Owner-approved enrollment prerequisite.
         if(!StaffFinanceAutoSyncScheduler.enabled()) return Result.success()
@@ -94,5 +95,6 @@ internal class StaffFinanceAutoSyncWorker(
         // Invalid Auth, revoked phone, UTC clock problems or invalid payload.
         // Leave the ledger untouched until an explicit user decision.
         Result.failure()
+    }
     }
 }
