@@ -1,0 +1,103 @@
+name: Market Pro — Five-Entity Signed Staff Financial AutoSync (REVIEW ONLY)
+on:
+  push:
+    branches:
+      - feature/marketpro-signed-five-finance-worker-review
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  no-live-changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Preserve live Owner Room/Photos, dashboard, release configuration and migration history
+        run: |
+          set -euo pipefail
+          git diff --exit-code 63db348eeb64efc01b7734da36d090723f587bb1 HEAD -- \
+            app/build.gradle.kts app/src/main/AndroidManifest.xml \
+            app/src/main/java/lk/peliyagoda/marketpro/data/MarketDatabase.kt \
+            supabase/migrations/ web/marketpro-dashboard/
+          grep -Fq '"MARKETPRO_LOCAL_PREVIEW", "true"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_OUTBOX_AUTO_UPLOAD", "false"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_DEVICE_PROOF_WRITE_ENFORCED", "false"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_OWNER_TOTP_MFA_AUTH_DEPLOYED", "false"' app/build.gradle.kts
+          grep -Fq 'android.permission.INTERNET" tools:node="remove"' app/src/main/AndroidManifest.xml
+
+  signed-server-contract:
+    needs: no-live-changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Standard UUID regression, signed five-way routing and P256 cryptography
+        run: |
+          node --test \
+            tests/two_phone_signed_all_worker_contract.test.mjs \
+            tests/two_phone_staff_key_enrollment_crypto.test.mjs \
+            tests/two_phone_proof_bound_all_finance_crypto.test.mjs \
+            tests/two_phone_proof_bound_purchase_crypto.test.mjs
+
+  pg17-atomic-finances:
+    needs: no-live-changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 24
+    steps:
+      - uses: actions/checkout@v4
+      - name: Disposable PostgreSQL 17, full five financial entities, same-day corrections and MFA
+        run: |
+          set -euo pipefail
+          docker run -d --rm --name marketpro_staff_finance_pg \
+            -e POSTGRES_PASSWORD=testonly -v "$PWD":/work:ro -w /work postgres:17
+          for i in $(seq 1 50); do
+            if docker exec marketpro_staff_finance_pg pg_isready -U postgres; then break; fi
+            sleep 1
+          done
+          docker exec marketpro_staff_finance_pg psql -X -v ON_ERROR_STOP=1 \
+            -U postgres -d postgres \
+            -f supabase/tests/two_phone_owner_key_mfa_stepup_pg17_local_only.sql
+      - name: Destroy disposable database
+        if: always()
+        run: docker stop marketpro_staff_finance_pg || true
+
+  deno-signed-edges:
+    needs: no-live-changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 13
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with: {deno-version: v2.x}
+      - name: Typecheck both signed finance Edge endpoints and Staff key authentication
+        run: |
+          deno check supabase/functions/marketpro-staff-signed-purchase/index.ts \
+            supabase/functions/marketpro-staff-signed-financial/index.ts \
+            supabase/functions/marketpro-staff-key-enrollment/index.ts
+
+  android-jvm-and-worker:
+    needs: no-live-changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - name: Android SDK 35
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      - uses: gradle/actions/setup-gradle@v4
+        with: {gradle-version: '8.11.1'}
+      - name: Prepare Sinhala font
+        run: bash scripts/prepare_sinhala_font.sh
+      - name: Compile WorkManager + exact five-way signed transport and run all Android unit tests
+        run: gradle --no-daemon :app:testDebugUnitTest

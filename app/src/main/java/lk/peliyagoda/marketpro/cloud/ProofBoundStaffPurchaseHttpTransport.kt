@@ -39,12 +39,15 @@ internal class ProofBoundStaffPurchaseHttpTransport:
             "Signed purchase server backend has not been audited and deployed"
         }
         require(body.toString().length<=4096)
-        require(session.accessToken.length in 20..8192)
+        require(session.accessToken.length in 20..8192 &&
+            !session.accessToken.contains('\r') &&
+            !session.accessToken.contains('\n'))
         val root=URL(BuildConfig.MARKETPRO_SUPABASE_URL)
         require(root.protocol=="https"&&
             root.host=="lkoptqhodgjeuwwfihfr.supabase.co" &&
             (root.port==-1||root.port==443)&&
-            (root.path.isBlank()||root.path=="/"))
+            (root.path.isBlank()||root.path=="/")&&
+            root.query==null && root.ref==null && root.userInfo==null)
         val url=URL(root,endpoint)
         val connection=(url.openConnection() as HttpURLConnection).apply {
             requestMethod="POST"
