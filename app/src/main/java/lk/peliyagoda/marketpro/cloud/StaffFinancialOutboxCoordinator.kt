@@ -84,14 +84,7 @@ internal class StaffFinancialOutboxCoordinator(
     )
 
     private fun releaseReady():Boolean =
-        StaffOutboxUploadPolicy.releaseReady(
-            preview=BuildConfig.MARKETPRO_LOCAL_PREVIEW,
-            staffLogin=BuildConfig.MARKETPRO_STAFF_LOGIN_ENABLED,
-            staffPull=BuildConfig.MARKETPRO_TEAM_PULL_RPC_DEPLOYED,
-            financeRpcs=BuildConfig.MARKETPRO_STAFF_FINANCE_RPC_DEPLOYED,
-            deviceProofEnforced=BuildConfig.MARKETPRO_STAFF_DEVICE_PROOF_WRITE_ENFORCED,
-            staffOutboxEnabled=BuildConfig.MARKETPRO_STAFF_OUTBOX_AUTO_UPLOAD
-        )
+        StaffFinanceAutoSyncScheduler.enabled()
 
     private fun split(key:String,expected:Int):List<String> {
         val parts=key.split("|")
