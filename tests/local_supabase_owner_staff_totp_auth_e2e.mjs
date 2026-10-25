@@ -170,7 +170,7 @@ assert.equal(staffUser.email,staffEmail);
 // These random .gmail.com usernames are never used beyond disposable GoTrue.
 const localSuffix="marketproqa"+randomBytes(8).toString("hex");
 const aliasOwner=localSuffix+"@gmail.com";
-const aliasStaff="marketpro.qa"+localSuffix.slice("marketpro".length)+"@gmail.com";
+const aliasStaff="marketpro."+localSuffix.slice("marketpro".length)+"@gmail.com";
 assert.equal(aliasOwner.replace(/\./g,""),aliasStaff.replace(/\./g,""),
   "Test alias pair does not map to the SAME Gmail mailbox");
 const aliasOwnerPassword=password();
