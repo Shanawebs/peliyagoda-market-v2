@@ -33,7 +33,9 @@ internal class TeamSessionPairingRpcClient(context: Context) {
             "marketpro_staff_accept_invitation",
             "marketpro_owner_activate_staff_readonly",
             "marketpro_owner_enable_staff_writer",
-            "marketpro_owner_disable_staff_writer"
+            "marketpro_owner_disable_staff_writer",
+            "marketpro_owner_review_staff_key",
+            "marketpro_owner_approve_staff_key"
         )
     }
 
@@ -50,6 +52,13 @@ internal class TeamSessionPairingRpcClient(context: Context) {
         requirePairingDeployed()
         check(BuildConfig.MARKETPRO_STAFF_WRITE_APPROVAL_RPC_DEPLOYED) {
             "Staff write approval has not passed live security cutover"
+        }
+    }
+
+    private fun requireKeyEnrollmentDeployed() {
+        requirePairingDeployed()
+        check(BuildConfig.MARKETPRO_STAFF_KEY_ENROLLMENT_DEPLOYED) {
+            "Staff public key approval is disabled pending production audit"
         }
     }
 
@@ -221,6 +230,62 @@ internal class TeamSessionPairingRpcClient(context: Context) {
             result.getString("staff_device_id"),staffDeviceId
         )
         require(result.getBoolean("legacy_owner_writer_unchanged"))
+        true
+    }
+
+    /**
+     * The Owner may review only a pending, cryptographically proven Staff
+     * public key fingerprint. Does not grant staff write permissions.
+     */
+    suspend fun ownerReviewStaffPublicKey(
+        staffUserId:String
+    ):OwnerPublicKeyCandidate = withContext(Dispatchers.IO) {
+        requireKeyEnrollmentDeployed()
+        require(TeamSessionPairingPolicy.validUuid(staffUserId) &&
+            staffUserId!=CloudSyncConfig.OWNER_USER_ID)
+        val r=post("marketpro_owner_review_staff_key",
+            ownerPayload().put("p_staff_user_id",staffUserId),ownerJwt())
+        val candidate=OwnerPublicKeyCandidate(
+            r.getString("workspace_id"),r.getString("staff_user_id"),
+            r.getString("device_id"),r.getString("candidate_challenge_id"),
+            r.getString("fingerprint_sha256")
+        )
+        require(candidate.workspaceId==CloudSyncConfig.WORKSPACE_ID &&
+            candidate.staffUserId==staffUserId &&
+            r.getBoolean("owner_review_required") &&
+            !r.getBoolean("writer_approved"))
+        candidate
+    }
+
+    /**
+     * Explicit Owner step. The typed fingerprint MUST be read from the
+     * physical Staff phone, not automatically copied from Cloud response.
+     * No writer lease is granted by public-key approval.
+     */
+    suspend fun ownerApproveStaffPublicKey(
+        expected:OwnerPublicKeyCandidate,
+        typedStaffPhoneFingerprint:String,
+        ownerPhysicallyCompared:Boolean,
+        confirmation:String
+    ):Boolean = withContext(Dispatchers.IO) {
+        requireKeyEnrollmentDeployed()
+        val fresh=ownerReviewStaffPublicKey(expected.staffUserId)
+        require(OwnerPublicKeyApprovalPolicy.confirm(
+            expected,fresh,typedStaffPhoneFingerprint,confirmation,
+            ownerPhysicallyCompared
+        )) { "Fingerprints, phones or key candidates do not match" }
+        val result=post("marketpro_owner_approve_staff_key",
+            ownerPayload()
+                .put("p_staff_user_id",expected.staffUserId)
+                .put("p_staff_device_id",expected.staffDeviceId)
+                .put("p_challenge_id",expected.challengeId)
+                .put("p_expected_fingerprint",typedStaffPhoneFingerprint)
+                .put("p_confirmation",confirmation),ownerJwt())
+        require(result.getBoolean("key_approved") &&
+            !result.getBoolean("writer_approved") &&
+            result.getBoolean("requires_separate_owner_writer_approval") &&
+            result.getString("device_id")==expected.staffDeviceId &&
+            result.getString("fingerprint_sha256")==typedStaffPhoneFingerprint)
         true
     }
 
