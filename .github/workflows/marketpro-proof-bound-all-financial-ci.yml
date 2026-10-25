@@ -1,0 +1,99 @@
+name: Market Pro - Complete Signed Staff Financial Security Review
+
+on:
+  push:
+    branches:
+      - feature/marketpro-proof-bound-all-financial-review
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  freeze-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Protect current Owner APK, live SQL migrations and Dashboard
+        run: |
+          set -euo pipefail
+          git diff --exit-code 530857e443997bbd5e872f57a3f99ca8ce41b205 HEAD -- app/build.gradle.kts app/src/main/AndroidManifest.xml supabase/migrations/ web/marketpro-dashboard/
+          grep -Fq '"MARKETPRO_LOCAL_PREVIEW", "true"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_DEVICE_PROOF_WRITE_ENFORCED", "false"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_OUTBOX_AUTO_UPLOAD", "false"' app/build.gradle.kts
+          grep -Fq 'android.permission.INTERNET" tools:node="remove"' app/src/main/AndroidManifest.xml
+          grep -Fq 'REVIEW ONLY' supabase/proposals/two_phone_proof_bound_all_financial_REVIEW_ONLY.sql
+
+  all-ecdsa-p256:
+    runs-on: ubuntu-latest
+    needs: freeze-live
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Cryptographic Android DER v1/v2/v3 cross-record tampering verification
+        run: node --test tests/v375_device_proof_crypto.test.mjs tests/two_phone_proof_bound_purchase_crypto.test.mjs tests/two_phone_proof_bound_all_finance_crypto.test.mjs
+
+  all-atomic-finance-pg17:
+    runs-on: ubuntu-latest
+    needs: freeze-live
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prove one-time signatures and transaction idempotency in disposable PG17
+        run: |
+          set -euo pipefail
+          docker run -d --rm --name marketpro_finance_v3 \
+            -e POSTGRES_PASSWORD=testonly -v "$PWD":/work:ro -w /work postgres:17
+          for i in $(seq 1 50); do
+            if docker exec marketpro_finance_v3 pg_isready -U postgres; then break; fi
+            sleep 1
+          done
+          docker exec marketpro_finance_v3 psql -X -v ON_ERROR_STOP=1 \
+            -U postgres -d postgres \
+            -f supabase/tests/two_phone_proof_bound_all_financial_pg17_local_only.sql
+      - name: Remove disposable test database
+        if: always()
+        run: docker stop marketpro_finance_v3 || true
+
+  edge-auth-deno:
+    runs-on: ubuntu-latest
+    needs: freeze-live
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Typecheck signed v3 four-financial-types Edge Function
+        run: deno check supabase/functions/marketpro-staff-signed-financial/index.ts
+
+  android-jvm:
+    runs-on: ubuntu-latest
+    needs: freeze-live
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Android SDK 35
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Prepare Sinhala font
+        run: bash scripts/prepare_sinhala_font.sh
+      - name: Build and test signed financial Android code
+        run: gradle --no-daemon :app:testDebugUnitTest

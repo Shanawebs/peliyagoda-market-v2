@@ -90,6 +90,24 @@ internal class StaffDeviceProofKeyStore {
      * transcript. The nonexportable key is the same Owner-approved SPKI.
      * This method is never reachable while preview network flags are OFF.
      */
+    /** Nonexportable Android Keystore v3 signature for 4 financial types. */
+    fun signFinancial(challenge:StaffSignedFinancialChallenge):SignedProof {
+        val now=System.currentTimeMillis()
+        val transcript=StaffSignedFinancialProofPolicy.transcript(challenge,now)
+        val (private,pub)=existingOrCreate()
+        val signature=Signature.getInstance("SHA256withECDSA").run {
+            initSign(private)
+            update(transcript)
+            sign()
+        }
+        val hardware=KeyFactory.getInstance(private.algorithm,KEY_PROVIDER)
+            .getKeySpec(private,KeyInfo::class.java).isInsideSecureHardware
+        return SignedProof(PublicKeyInfo(
+            Base64.getUrlEncoder().withoutPadding().encodeToString(pub.encoded),
+            StaffDeviceProofPolicy.fingerprint(pub),hardware
+        ),Base64.getUrlEncoder().withoutPadding().encodeToString(signature))
+    }
+
     fun signPurchase(challenge:StaffSignedPurchaseChallenge):SignedProof {
         val now=System.currentTimeMillis()
         val bytes=StaffSignedPurchaseProofPolicy.transcript(challenge,now)
