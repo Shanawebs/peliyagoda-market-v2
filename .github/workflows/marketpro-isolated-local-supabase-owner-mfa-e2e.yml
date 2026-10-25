@@ -1,0 +1,96 @@
+name: Market Pro — Isolated LOCAL Supabase Owner/Staff Real MFA E2E
+
+on:
+  push:
+    branches:
+      - feature/marketpro-isolated-local-supabase-mfa-e2e
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  no-prod-contact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: No production app, financial migrations, Dashboard or deployment workflows changed
+        run: |
+          set -euo pipefail
+          git diff --exit-code 555f97ac4c540c2345ec4afe343853f244ab766b HEAD -- \
+            app/build.gradle.kts app/src/main/AndroidManifest.xml \
+            app/src/main/java/lk/peliyagoda/marketpro/ \
+            supabase/migrations/ supabase/config.toml \
+            web/marketpro-dashboard/ 
+          test ! -f .github/workflows/deploy_marketpro_staging.yml
+          grep -Fq 'const LOCAL="http://127.0.0.1:54321"' \
+            tests/local_supabase_owner_staff_totp_auth_e2e.mjs
+          grep -Fq 'assert.equal(origin,LOCAL' \
+            tests/local_supabase_owner_staff_totp_auth_e2e.mjs
+
+  real-local-gotrue-owner-staff-mfa:
+    needs: no-prod-contact
+    runs-on: ubuntu-latest
+    timeout-minutes: 42
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - uses: supabase/setup-cli@v1
+        with: {version: latest}
+      - name: Create FRESH unlinked LOCAL Supabase sandbox with test-only signup
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/marketpro-auth-ci-$GITHUB_RUN_ID"
+          mkdir -p "$dir/supabase"
+          cat > "$dir/supabase/config.toml" <<'LOCAL_TOML'
+          # ABSOLUTELY LOCAL. Never link to a hosted project or share secrets.
+          project_id = "marketpro-disposable-owner-staff-auth-ci"
+          [db]
+          major_version = 17
+          [auth.email]
+          enable_confirmations = false
+          [auth.mfa.totp]
+          enroll_enabled = true
+          verify_enabled = true
+          LOCAL_TOML
+      - name: Start disposable PostgreSQL/Auth/REST Supabase CLI stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/marketpro-auth-ci-$GITHUB_RUN_ID"
+          # Never run supabase link, db push, secrets set or migrations
+          # against a hosted project. CLI starts only local Docker services.
+          supabase start -x studio,storage-api,imgproxy,realtime,edge-runtime
+      - name: Exercise REAL local GoTrue TOTP enroll/challenge/verify, AAL2 refresh and Staff AAL1
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/marketpro-auth-ci-$GITHUB_RUN_ID"
+          status_json="$(supabase status -o json)"
+          anon_key="$(printf '%s' "$status_json" | jq -er '.ANON_KEY // .PUBLISHABLE_KEY // .anon_key')"
+          test -n "$anon_key"
+          MARKETPRO_LOCAL_SUPABASE_URL="http://127.0.0.1:54321" \
+          MARKETPRO_LOCAL_SUPABASE_KEY="$anon_key" \
+            node "$GITHUB_WORKSPACE/tests/local_supabase_owner_staff_totp_auth_e2e.mjs"
+      - name: Stop and delete disposable Supabase sandbox
+        if: always()
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP/marketpro-auth-ci-$GITHUB_RUN_ID" || exit 0
+          supabase stop --no-backup || true
+
+  finance-frozen-review:
+    needs: no-prod-contact
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Reverify signed Staff Financial V2/V3 routing and production-safe flags
+        run: |
+          node --test tests/two_phone_signed_all_worker_contract.test.mjs
