@@ -1,0 +1,97 @@
+name: Market Pro — Owner Fresh MFA Key Approval UI Security
+
+on:
+  push:
+    branches:
+      - feature/marketpro-owner-mfa-key-approval-ui
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-freeze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Keep production financial data migrations dashboard, app flags and network OFF
+        run: |
+          set -euo pipefail
+          git diff --exit-code 6a06cd859ab402651019942dfeda6b6f5baa4a98 HEAD -- app/build.gradle.kts app/src/main/AndroidManifest.xml supabase/migrations/ web/marketpro-dashboard/
+          grep -Fq '"MARKETPRO_LOCAL_PREVIEW", "true"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_KEY_ENROLLMENT_DEPLOYED", "false"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_DEVICE_PROOF_WRITE_ENFORCED", "false"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_OUTBOX_AUTO_UPLOAD", "false"' app/build.gradle.kts
+          grep -Fq 'android.permission.INTERNET" tools:node="remove"' app/src/main/AndroidManifest.xml
+
+  pg17-owner-mfa:
+    needs: production-freeze
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Disposable PostgreSQL 17 Owner MFA and Staff key proof integration
+        run: |
+          set -euo pipefail
+          docker run -d --rm --name marketpro_owner_mfa_pg \
+            -e POSTGRES_PASSWORD=testonly -v "$PWD":/work:ro -w /work postgres:17
+          for i in $(seq 1 50); do
+            if docker exec marketpro_owner_mfa_pg pg_isready -U postgres; then break; fi
+            sleep 1
+          done
+          docker exec marketpro_owner_mfa_pg psql -X -v ON_ERROR_STOP=1 \
+            -U postgres -d postgres \
+            -f supabase/tests/two_phone_owner_key_mfa_stepup_pg17_local_only.sql
+      - name: Destroy disposable DB
+        if: always()
+        run: docker stop marketpro_owner_mfa_pg || true
+
+  crypto-ecdsa-and-owner-screen:
+    needs: production-freeze
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Real Android P-256 DER signature plus physical phone fingerprint tests
+        run: |
+          node --test tests/two_phone_staff_key_enrollment_crypto.test.mjs \
+             tests/two_phone_proof_bound_all_finance_crypto.test.mjs
+
+  deno-edge:
+    needs: production-freeze
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with: {deno-version: v2.x}
+      - name: Typecheck verified Staff key enrollment Edge
+        run: deno check supabase/functions/marketpro-staff-key-enrollment/index.ts
+
+  android-owner-ui-junit:
+    needs: production-freeze
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Android SDK 35
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      - uses: gradle/actions/setup-gradle@v4
+        with: {gradle-version: '8.11.1'}
+      - name: Prepare Sinhala font
+        run: bash scripts/prepare_sinhala_font.sh
+      - name: Compile integrated Android Owner/Staff fingerprint UI and all Kotlin tests
+        run: gradle --no-daemon :app:testDebugUnitTest

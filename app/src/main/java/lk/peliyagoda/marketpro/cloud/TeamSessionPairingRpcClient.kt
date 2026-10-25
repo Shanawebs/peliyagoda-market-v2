@@ -35,7 +35,7 @@ internal class TeamSessionPairingRpcClient(context: Context) {
             "marketpro_owner_enable_staff_writer",
             "marketpro_owner_disable_staff_writer",
             "marketpro_owner_review_staff_key",
-            "marketpro_owner_approve_staff_key"
+            "marketpro_owner_approve_staff_key_mfa"
         )
     }
 
@@ -274,7 +274,7 @@ internal class TeamSessionPairingRpcClient(context: Context) {
             expected,fresh,typedStaffPhoneFingerprint,confirmation,
             ownerPhysicallyCompared
         )) { "Fingerprints, phones or key candidates do not match" }
-        val result=post("marketpro_owner_approve_staff_key",
+        val result=post("marketpro_owner_approve_staff_key_mfa",
             ownerPayload()
                 .put("p_staff_user_id",expected.staffUserId)
                 .put("p_staff_device_id",expected.staffDeviceId)
@@ -282,6 +282,8 @@ internal class TeamSessionPairingRpcClient(context: Context) {
                 .put("p_expected_fingerprint",typedStaffPhoneFingerprint)
                 .put("p_confirmation",confirmation),ownerJwt())
         require(result.getBoolean("key_approved") &&
+            result.getBoolean("owner_mfa_verified") &&
+            result.getBoolean("key_approval_only") &&
             !result.getBoolean("writer_approved") &&
             result.getBoolean("requires_separate_owner_writer_approval") &&
             result.getString("device_id")==expected.staffDeviceId &&

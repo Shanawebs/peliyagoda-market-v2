@@ -101,6 +101,7 @@ internal fun StaffSessionPairingPanel() {
         }
         if (status.isNotBlank()) Text(status,
             style = MaterialTheme.typography.bodySmall)
+        StaffPublicKeyEnrollmentPanel()
     }
 }
 
@@ -222,6 +223,7 @@ internal fun OwnerSessionPairingPanel() {
                 Text("Issue Staff Invitation — Server Activation Required")
             }
         }
+        OwnerStaffPublicKeyApprovalPanel(staffUserId)
         OwnerStaffWriterApprovalPanel(staffUserId, staffDeviceId)
         if (status.isNotBlank()) Text(status,
             style = MaterialTheme.typography.bodySmall)
