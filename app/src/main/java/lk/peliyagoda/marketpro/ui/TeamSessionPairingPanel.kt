@@ -223,6 +223,7 @@ internal fun OwnerSessionPairingPanel() {
                 Text("Issue Staff Invitation — Server Activation Required")
             }
         }
+        OwnerTotpMfaPanel()
         OwnerStaffPublicKeyApprovalPanel(staffUserId)
         OwnerStaffWriterApprovalPanel(staffUserId, staffDeviceId)
         if (status.isNotBlank()) Text(status,
