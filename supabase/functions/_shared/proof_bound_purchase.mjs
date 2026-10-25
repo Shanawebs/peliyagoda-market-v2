@@ -5,7 +5,7 @@ import {
   canonicalStaffProofTranscript,base64UrlBytes,derP256ToRaw64
 } from "./device_proof.mjs";
 
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const HEX64=/^[0-9a-f]{64}$/;
 const VERSION="marketpro-device-proof-purchase-v2";
 
