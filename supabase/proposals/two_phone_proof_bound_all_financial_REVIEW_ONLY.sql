@@ -274,8 +274,7 @@ BEGIN
      v_labor NOT BETWEEN 0 AND 9999999999 OR
      v_meals NOT BETWEEN 0 AND 9999999999 OR
      v_others NOT BETWEEN 0 AND 9999999999 OR
-     char_length(v_remarks)>500 OR
-     position(chr(0) IN v_remarks)>0 THEN
+     char_length(v_remarks)>500 THEN
    RAISE EXCEPTION 'Invalid expense amounts/remarks' USING ERRCODE='22023'; END IF;
  END IF;
 
