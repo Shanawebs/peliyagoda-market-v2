@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; connect-src https://qqiheexpbuzohllugxrk.supabase.co; script-src 'unsafe-inline'; style-src 'unsafe-inline'; form-action 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<title>Market Pro — Staging Auth Setup Only</title>
+<style>
+:root{color-scheme:light;font-family:system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;background:#eff5f2;color:#18382b}
+*{box-sizing:border-box}body{margin:0;padding:18px 12px 44px}
+main{max-width:560px;margin:0 auto}
+header{text-align:center;padding:20px 0}
+h1{font-size:1.65rem;letter-spacing:-.04em;margin:0 0 7px}
+h2{font-size:1.13rem;margin:0 0 8px}
+p{line-height:1.55;margin:0 0 11px}
+.small{font-size:.86rem;line-height:1.5}
+.muted{color:#527464}
+.card{background:#fff;border:1px solid #d3e3da;border-radius:21px;padding:19px;margin-bottom:14px;box-shadow:0 2px 8px #23382a0a}
+.pill{display:inline-block;background:#174d35;color:white;border-radius:99px;padding:6px 12px;font-size:.76rem;font-weight:800;letter-spacing:.06em}
+label{display:block;font-size:.9rem;font-weight:700;margin:15px 0 5px}
+input{font:inherit;width:100%;border:1.5px solid #a3bcad;border-radius:11px;padding:12px 13px;background:white;color:#122e22;outline-offset:3px}
+button{cursor:pointer;appearance:none;border:0;border-radius:12px;background:#16573b;color:white;font:inherit;font-weight:750;padding:13px;width:100%;margin-top:14px}
+button.secondary{background:#e7f0eb;color:#16573b;border:1px solid #c5dfcf}
+button:disabled{opacity:.6;cursor:not-allowed}
+em{font-style:normal;font-weight:700}
+#result{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.55;padding:14px;border-radius:13px;margin-top:14px;background:#f3f7f4;font-size:.89rem}
+#result[data-state=error]{background:#fff0ef;color:#8a1e16}
+#result[data-state=success]{background:#e9f7ec;color:#145b2c}
+#result[data-state=warning]{background:#fff8e6;color:#76520d}
+code{font-size:.9em;overflow-wrap:anywhere}
+ul{padding-left:23px;line-height:1.65}
+footer{padding:12px;text-align:center;color:#55776b;font-size:.8rem}
+</style>
+</head>
+<body><main>
+<header>
+<span class="pill">STAGING ONLY • NOT PRODUCTION</span>
+<h1>Market Pro — Test Account Setup</h1>
+<p class="muted small">Owner + Purchasing Staff • Independent Supabase Auth IDs</p>
+</header>
+<section class="card">
+<h2>🔐 Check the destination</h2>
+<p class="small">This page sends your email and password <em>directly</em> via HTTPS only to this separate test project:</p>
+<code>qqiheexpbuzohllugxrk.supabase.co</code>
+<p class="small muted" style="margin-top:10px">Production Market Pro and your existing Owner app are not linked here. This page does not create Staff permissions or finance access.</p>
+</section>
+<section class="card">
+<h2>1. Create your Staging Auth account</h2>
+<p class="small">Create the Owner test account first. After email verification, create the Staff test account separately, using a <em>different password</em>. Do not use your production passwords.</p>
+<form id="auth-form" autocomplete="off">
+<label for="email">Account email</label>
+<input id="email" type="email" inputmode="email" spellcheck="false" autocomplete="off" placeholder="Enter the Owner OR Staff test email" required>
+<label for="password">New test password / existing test password</label>
+<input id="password" type="password" autocomplete="new-password" minlength="12" placeholder="12 or more characters" required>
+<button id="signup" type="submit">Create Account + Send Verification Email</button>
+<button id="signin" class="secondary" type="button">Sign In + Check Email Verification</button>
+<button id="clear" class="secondary" type="button">Clear Fields</button>
+</form>
+<div id="result" role="status" aria-live="polite">No account requests sent yet. Passwords are never stored by this page.</div>
+</section>
+<section class="card">
+<h2>2. Verify your email</h2>
+<p class="small">Supabase sends a confirmation link to the inbox. Click it, then return to this page and tap <em>Sign In + Check Email Verification</em>. If the confirmation page redirects to an invalid localhost address, check the Account status again here: verification may already have succeeded.</p>
+<p class="small muted">For a proper confirmation redirect, the project's Auth → URL Configuration → Site URL should point to your own approved HTTPS page. This local file does not set or alter that hosted configuration.</p>
+</section>
+<section class="card">
+<h2>3. Keep the Owner and Staff separate</h2>
+<ul class="small">
+<li>Gmail ignores dots: dotted and undotted test addresses share <em>one inbox and password recovery channel</em>.</li>
+<li>Separate Supabase Auth UUIDs and separate passwords do not guarantee independent email recovery.</li>
+<li>Only use these aliases for QA under your control. Actual Purchasing Team members need their own mailbox.</li>
+<li>A verified email alone grants <em>no Market Pro workspace access</em>. The Owner-role/staff-role assignment and Owner TOTP device approval happen in a later reviewed stage.</li>
+</ul>
+</section>
+<footer>Standalone local HTML • No analytics • No cookies • No password/token storage • No service-role key</footer>
+</main>
+<script>
+"use strict";
+(()=>{
+  const ORIGIN="https://qqiheexpbuzohllugxrk.supabase.co";
+  const PUBLISHABLE="sb_publishable_1c7T0dHILKzKeY-xb2e-lA_uRWLF3oF";
+  const mail=document.getElementById("email");
+  const pwd=document.getElementById("password");
+  const result=document.getElementById("result");
+  const signup=document.getElementById("signup");
+  const signin=document.getElementById("signin");
+  function msg(text,state="warning"){result.textContent=text;result.dataset.state=state;}
+  function working(state){signup.disabled=state;signin.disabled=state;}
+  function email(){const e=mail.value.trim().toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))throw Error("Enter a valid email address.");return e;}
+  function password(){const p=pwd.value;if(p.length<12)throw Error("Use at least 12 characters. Do not reuse a production password.");return p;}
+  async function request(path,body,token){
+    if(!/^\/auth\/v1\/(?:signup|token\?grant_type=password|user)$/.test(path))throw Error("Blocked unexpected Auth path.");
+    const headers={apikey:PUBLISHABLE,Accept:"application/json"};
+    if(body!==undefined)headers["Content-Type"]="application/json";
+    if(token)headers.Authorization="Bearer "+token;
+    const reply=await fetch(ORIGIN+path,{
+      method:body===undefined?"GET":"POST",
+      headers,redirect:"error",referrerPolicy:"no-referrer",cache:"no-store",
+      signal:AbortSignal.timeout(18000),
+      ...(body===undefined?{}:{body:JSON.stringify(body)})
+    });
+    let response={};try{response=await reply.json()}catch{}
+    if(!reply.ok)throw Error(
+      "Supabase Auth rejected the request (HTTP "+reply.status+"). "
+      +(typeof response.msg==="string"?response.msg:
+        typeof response.error_description==="string"?response.error_description:
+        typeof response.message==="string"?response.message:"Check your details or Auth email limits.")
+    );
+    return response;
+  }
+  async function run(mode){
+    if(working.busy)return;
+    let p;
+    try{
+      const e=email();p=password();
+      working.busy=true;working(true);msg("Contacting the separate Staging Auth service...");
+      if(mode==="signup"){
+        const d=await request("/auth/v1/signup",{email:e,password:p});
+        // Auth may return a user even when email confirmation is still pending.
+        if(!d.user?.id)throw Error("Supabase did not confirm whether signup was accepted.");
+        msg("Registration submitted for: "+e+
+          "\n\nCheck your mailbox for Supabase verification email. "+
+          "No Market Pro Owner/Staff permissions have been assigned. "+
+          "After verification, return and use Sign In + Check Email Verification.",
+          "success");
+      }else{
+        const d=await request("/auth/v1/token?grant_type=password",{email:e,password:p});
+        if(typeof d.access_token!=="string" || !d.access_token.length)
+          throw Error("No valid login session returned.");
+        // Token stays in an ephemeral lexical variable, never browser storage.
+        const user=await request("/auth/v1/user",undefined,d.access_token);
+        if(!user.id || !user.email || user.email.toLowerCase()!==e)
+          throw Error("Logged-in Auth user does not match the entered email.");
+        if(!user.email_confirmed_at){
+          msg("Password accepted, but Supabase has NOT confirmed this email yet. "+
+            "Check the verification email before any workspace pairing.","warning");
+        }else{
+          msg("✅ Email verified on STAGING only.\n"+
+            "Auth email: "+user.email+"\n"+
+            "Staging Auth User UUID: "+user.id+
+            "\n\nKeep this UUID for separate Owner/Staff enrollment. "+
+            "This does not create any financial access.","success");
+        }
+      }
+    }catch(err){
+      const detail=err instanceof Error?err.message:"Auth request failed.";
+      msg(detail,"error");
+    }finally{
+      // Do not store passwords, access/refresh tokens or Auth results anywhere.
+      pwd.value="";p=undefined;working.busy=false;working(false);
+    }
+  }
+  document.getElementById("auth-form").addEventListener("submit",e=>{e.preventDefault();void run("signup");});
+  signin.addEventListener("click",()=>void run("signin"));
+  document.getElementById("clear").addEventListener("click",()=>{
+    mail.value="";pwd.value="";msg("Fields cleared. Nothing stored by this page.");
+  });
+})();
+</script>
+</body></html>

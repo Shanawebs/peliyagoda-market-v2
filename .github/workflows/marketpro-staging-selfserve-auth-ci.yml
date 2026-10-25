@@ -1,0 +1,49 @@
+name: Market Pro — Isolated Staging Signup Verification (review only)
+
+on:
+  push:
+    branches:
+      - feature/marketpro-staging-self-serve-auth-portal-review
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-freeze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Verify original Android and both hosted databases unchanged
+        run: |
+          set -euo pipefail
+          git diff --exit-code 2fe845a8e39a079a2eba7652f7ff119da466b11b HEAD -- app/ supabase/ web/marketpro-dashboard/
+          grep -Fq '"MARKETPRO_LOCAL_PREVIEW", "true"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_OUTBOX_AUTO_UPLOAD", "false"' app/build.gradle.kts
+          grep -Fq 'https://qqiheexpbuzohllugxrk.supabase.co' tools/staging-auth/marketpro-staging-auth-setup.html
+
+  auth-page-contract-tests:
+    needs: production-freeze
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Test fixed Staging Auth endpoint and password disposal with simulated page
+        run: node --test tests/staging_auth_portal_contract.test.mjs
+
+  existing-team-security:
+    needs: production-freeze
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Staff financial cryptographic route and release isolation
+        run: |
+          node --test tests/two_phone_signed_all_worker_contract.test.mjs
+          python3 -m unittest discover -s tests -p test_staging_isolation.py -v
