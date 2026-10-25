@@ -53,6 +53,9 @@ jobs:
           major_version = 17
           [auth.email]
           enable_confirmations = false
+          [auth.mfa.totp]
+          enroll_enabled = true
+          verify_enabled = true
           LOCAL_TOML
       - name: Start disposable PostgreSQL/Auth/REST Supabase CLI stack
         shell: bash
