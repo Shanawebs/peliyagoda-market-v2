@@ -19,6 +19,8 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * This is a DEV-only sign-in client. No business records or photos are sent.
@@ -43,6 +45,7 @@ class CloudOwnerAuth(private val app: Context) {
     private data class AuthTokens(val email: String, val accessToken: String, val refreshToken: String)
 
     private val prefs = app.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    private val authMutex = Mutex()
 
     private fun aesKey(): SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -141,7 +144,7 @@ class CloudOwnerAuth(private val app: Context) {
         Unit
     }
 
-    suspend fun signIn(emailInput: String, password: String): Account = withContext(Dispatchers.IO) {
+    suspend fun signIn(emailInput: String, password: String): Account = withContext(Dispatchers.IO) { authMutex.withLock {
         val email = normalizedEmail(emailInput)
         require(validEmail(email) && password.isNotBlank()) { "Enter your email and password." }
         val response = request(
@@ -154,10 +157,10 @@ class CloudOwnerAuth(private val app: Context) {
         check(normalizedEmail(profile.getString("email")) == email) { "Account email mismatch." }
         remember(tokens)
         Account(email, profile.getString("id"))
-    }
+    } }
 
-    suspend fun currentAccount(): Account? = withContext(Dispatchers.IO) {
-        val old = saved() ?: return@withContext null
+    suspend fun currentAccount(): Account? = withContext(Dispatchers.IO) { authMutex.withLock {
+        val old = saved() ?: return@withLock null
         val first = runCatching { request("/auth/v1/user", "GET", accessToken = old.accessToken) }
         var profile = first.getOrNull()
         if (profile == null) {
@@ -179,7 +182,7 @@ class CloudOwnerAuth(private val app: Context) {
         )
         check(account.email == old.email) { "Saved account did not match authenticated identity." }
         account
-    }
+    } }
 
     /**
      * Return only a validated Supabase Auth token for the one enrolled DEV owner.
@@ -193,7 +196,154 @@ class CloudOwnerAuth(private val app: Context) {
         saved()?.accessToken ?: error("Encrypted Cloud Owner session unavailable")
     }
 
-    suspend fun signOut() = withContext(Dispatchers.IO) {
+    /** Supabase Auth TOTP does not grant any business permission itself.
+     * These calls are fully dormant in the current offline APK.
+     */
+    data class TotpFactor(val id:String,val friendlyName:String)
+    data class TotpEnrollment(val factorId:String,val manualSecret:String) {
+        // The TOTP seed may only live in Compose state until verification/cancel.
+        override fun toString()="TotpEnrollment([REDACTED])"
+    }
+
+    private fun requireOwnerTotpEnabled() {
+        check(OwnerTotpMfaPolicy.canCallAuth(
+            BuildConfig.MARKETPRO_LOCAL_PREVIEW,
+            BuildConfig.MARKETPRO_OWNER_TOTP_MFA_AUTH_DEPLOYED,
+            BuildConfig.MARKETPRO_STAFF_LOGIN_ENABLED,
+            BuildConfig.MARKETPRO_STAFF_PAIRING_RPC_DEPLOYED
+        )) { "Owner Authenticator MFA is disabled in this offline Security Preview" }
+    }
+
+    private fun storedVerifiedOwner(expectedUserId:String):AuthTokens {
+        val tokens=saved() ?: error("Owner must log in before Authenticator verification")
+        val owner=request("/auth/v1/user","GET",accessToken=tokens.accessToken)
+        check(owner.getString("id")==expectedUserId &&
+            normalizedEmail(owner.getString("email"))==tokens.email) {
+            "Owner Auth session belongs to another account"
+        }
+        return tokens
+    }
+
+    /** Only factors with status=verified are allowed for subsequent MFA. */
+    suspend fun verifiedOwnerTotpFactors(
+        expectedUserId:String
+    ):List<TotpFactor> = withContext(Dispatchers.IO) {
+        authMutex.withLock {
+            requireOwnerTotpEnabled()
+            val old=storedVerifiedOwner(expectedUserId)
+            val profile=request("/auth/v1/user","GET",accessToken=old.accessToken)
+            val factors=profile.optJSONArray("factors")
+                ?:return@withLock emptyList()
+            val verified=mutableListOf<TotpFactor>()
+            for(i in 0 until factors.length()){
+                val factor=factors.optJSONObject(i)?:continue
+                val id=factor.optString("id")
+                if(OwnerTotpMfaPolicy.verifiedTotpFactor(
+                    factor.optString("factor_type"),
+                    factor.optString("status"),id
+                ))verified.add(TotpFactor(id,
+                    factor.optString("friendly_name","Authenticator")))
+            }
+            verified
+        }
+    }
+
+    /** Supabase Auth returns the TOTP seed ONCE; never persist, log or copy it.
+     * Show the seed only on the Owner setup screen for manual Authenticator entry.
+     */
+    suspend fun beginOwnerTotpEnrollment(
+        expectedUserId:String
+    ):TotpEnrollment = withContext(Dispatchers.IO) {
+        authMutex.withLock {
+            requireOwnerTotpEnabled()
+            val old=storedVerifiedOwner(expectedUserId)
+            val response=request("/auth/v1/factors","POST",
+                JSONObject().put("factor_type","totp")
+                    .put("friendly_name","Market Pro Owner")
+                    .put("issuer","Market Pro"),
+                accessToken=old.accessToken)
+            val id=response.getString("id")
+            val secret=response.getJSONObject("totp").getString("secret")
+            require(OwnerTotpMfaPolicy.validFactorId(id) &&
+                OwnerTotpMfaPolicy.validManualSecret(secret)) {
+                "Supabase did not return a valid Owner Authenticator seed"
+            }
+            TotpEnrollment(id,secret)
+        }
+    }
+
+    /** Independent Auth API challenge, never supplied/controlled by the APK. */
+    suspend fun beginOwnerTotpChallenge(
+        expectedUserId:String,factorId:String
+    ):String = withContext(Dispatchers.IO) {
+        authMutex.withLock {
+            requireOwnerTotpEnabled()
+            require(OwnerTotpMfaPolicy.validFactorId(factorId))
+            val owner=storedVerifiedOwner(expectedUserId)
+            val response=request("/auth/v1/factors/"+factorId+"/challenge",
+                "POST",JSONObject(),accessToken=owner.accessToken)
+            val challenge=response.getString("id")
+            require(OwnerTotpMfaPolicy.validFactorId(challenge))
+            challenge
+        }
+    }
+
+    /** The OTP is transient. Supabase Auth verifies it, returns a NEW
+     * AAL2 JWT/refresh pair and only then do we atomically replace the encrypted
+     * Owner credentials. The financial SQL independently verifies fresh AMR.
+     */
+    suspend fun verifyOwnerTotpAndUpgradeSession(
+        expectedUserId:String,factorId:String,challengeId:String,otp:String
+    ):Boolean = withContext(Dispatchers.IO) {
+        authMutex.withLock {
+            requireOwnerTotpEnabled()
+            require(OwnerTotpMfaPolicy.validFactorId(factorId) &&
+                OwnerTotpMfaPolicy.validFactorId(challengeId) &&
+                OwnerTotpMfaPolicy.validOtp(otp))
+            val before=storedVerifiedOwner(expectedUserId)
+            val response=request("/auth/v1/factors/"+factorId+"/verify",
+                "POST",JSONObject()
+                    .put("challenge_id",challengeId)
+                    .put("code",otp),accessToken=before.accessToken)
+            val newAccess=response.getString("access_token")
+            val newRefresh=response.getString("refresh_token")
+            require(newAccess.length in 20..8192 &&
+                newRefresh.length in 10..8192)
+            // Decode ONLY as a defense-in-depth LOCAL sanity check. This is
+            // NOT cryptographic JWT verification. Auth /user and database
+            // SQL remain the independent authoritative verification points.
+            val jwtParts=newAccess.split('.')
+            require(jwtParts.size==3)
+            val claims=JSONObject(String(
+                Base64.decode(jwtParts[1],Base64.URL_SAFE or Base64.NO_WRAP
+                    or Base64.NO_PADDING),StandardCharsets.UTF_8))
+            require(claims.optString("sub")==expectedUserId &&
+                claims.optString("aal")=="aal2" &&
+                OwnerTotpMfaPolicy.validFactorId(
+                    claims.optString("session_id"))) {
+                "Supabase did not return an Owner AAL2 session"
+            }
+            val methods=claims.optJSONArray("amr")
+                ?:error("No MFA proof in upgraded JWT")
+            var hasTotp=false
+            for(i in 0 until methods.length()){
+                val method=methods.optJSONObject(i)?:continue
+                if(method.optString("method")=="totp" &&
+                    method.optLong("timestamp",0)>0L)hasTotp=true
+            }
+            require(hasTotp){"No TOTP authentication in verified Owner session"}
+            val profile=request("/auth/v1/user","GET",accessToken=newAccess)
+            require(profile.getString("id")==expectedUserId &&
+                normalizedEmail(profile.getString("email"))==before.email)
+            require(saved()?.accessToken==before.accessToken) {
+                "Owner Auth session changed during MFA; sign in again"
+            }
+            remember(AuthTokens(before.email,newAccess,newRefresh))
+            true
+        }
+    }
+
+    suspend fun signOut() = withContext(Dispatchers.IO) { authMutex.withLock {
         val old = saved()
         try {
             if (old != null) request("/auth/v1/logout", "POST", accessToken = old.accessToken)
@@ -203,5 +353,5 @@ class CloudOwnerAuth(private val app: Context) {
         } finally {
             prefs.edit().remove(KEY).commit()
         }
-    }
+    } }
 }
