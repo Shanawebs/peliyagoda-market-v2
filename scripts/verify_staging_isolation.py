@@ -41,7 +41,7 @@ FLAGS = (
 )
 UUID_RE = re.compile(r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$")
 PROJECT_REF_RE = re.compile(r"^[a-z0-9]{20}$")
-PKG_RE = re.compile(r"^lk\.peliyagoda\.marketpro\.[a-z][a-z0-9_.]{3,80}$")
+PKG_RE = re.compile(r"^lk\.peliyagoda\.marketpro(?:\.[a-z][a-z0-9_]{1,30}){2,5}$")
 
 def require_uuid(value: object, what: str) -> str:
     if not isinstance(value,str) or not UUID_RE.fullmatch(value):
