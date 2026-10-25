@@ -3,6 +3,11 @@
 \set ON_ERROR_STOP on
 \i supabase/tests/two_phone_proof_bound_purchase_pg17_local_only.sql
 \i supabase/proposals/two_phone_proof_bound_all_financial_REVIEW_ONLY.sql
+-- Each prior fixture already verified its own financial rows. This is a
+-- THROWAWAY PG17 database, not Supabase: isolate v3 create/unique-key tests
+-- from older fixture's cash/expense/requisition business dates.
+TRUNCATE public.requisitions,public.purchase_additions,
+         public.daily_cash_received,public.daily_other_expenses;
 -- Prior suite ended by disabling Staff lease. Test-only reset.
 UPDATE marketpro_private.staff_write_leases
  SET enabled=true,revoked_at=NULL
