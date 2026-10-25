@@ -33,6 +33,7 @@ class CloudOwnerAuth(private val app: Context) {
         private const val PREFS = "marketpro_cloud_owner_auth"
         private const val KEY = "encrypted_session"
         private const val ALIAS = "marketpro_cloud_owner_auth_aes_v1"
+        private val sharedAuthMutex = Mutex()
 
         fun normalizedEmail(input: String): String = input.trim().lowercase(Locale.ROOT)
         fun validEmail(input: String): Boolean {
@@ -45,7 +46,7 @@ class CloudOwnerAuth(private val app: Context) {
     private data class AuthTokens(val email: String, val accessToken: String, val refreshToken: String)
 
     private val prefs = app.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-    private val authMutex = Mutex()
+    private val authMutex = sharedAuthMutex
 
     private fun aesKey(): SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
