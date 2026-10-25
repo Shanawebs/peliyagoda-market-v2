@@ -273,6 +273,33 @@ class CloudOwnerAuth(private val app: Context) {
         }
     }
 
+    /** Cancel only a pending UNVERIFIED factor. Never delete a verified
+     * Authenticator or a backup MFA factor in the ordinary setup workflow.
+     */
+    suspend fun cancelPendingOwnerTotpEnrollment(
+        expectedUserId:String,factorId:String
+    ):Boolean = withContext(Dispatchers.IO) {
+        authMutex.withLock {
+            requireOwnerTotpEnabled()
+            require(OwnerTotpMfaPolicy.validFactorId(factorId))
+            val old=storedVerifiedOwner(expectedUserId)
+            val profile=request("/auth/v1/user","GET",accessToken=old.accessToken)
+            val factors=profile.optJSONArray("factors")
+                ?:error("Cannot verify pending Owner factor")
+            var pending=false
+            for(i in 0 until factors.length()) {
+                val item=factors.optJSONObject(i)?:continue
+                if(item.optString("id")==factorId &&
+                    item.optString("factor_type")=="totp" &&
+                    item.optString("status")=="unverified")pending=true
+            }
+            check(pending){"Only an unverified setup key may be cancelled"}
+            request("/auth/v1/factors/"+factorId,"DELETE",
+                accessToken=old.accessToken)
+            true
+        }
+    }
+
     /** Independent Auth API challenge, never supplied/controlled by the APK. */
     suspend fun beginOwnerTotpChallenge(
         expectedUserId:String,factorId:String
