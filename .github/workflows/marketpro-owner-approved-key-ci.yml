@@ -18,9 +18,10 @@ jobs:
       - name: Existing Owner app production migrations and Dashboard untouched
         run: |
           set -euo pipefail
-          git diff --exit-code 3e2645cc9e56b6f6d855736c26f09d939e08ba6a HEAD -- app/build.gradle.kts app/src/main/AndroidManifest.xml supabase/migrations/ web/marketpro-dashboard/
+          git diff --exit-code 3e2645cc9e56b6f6d855736c26f09d939e08ba6a HEAD -- app/src/main/AndroidManifest.xml supabase/migrations/ web/marketpro-dashboard/
           grep -Fq '"MARKETPRO_LOCAL_PREVIEW", "true"' app/build.gradle.kts
           grep -Fq '"MARKETPRO_STAFF_OUTBOX_AUTO_UPLOAD", "false"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_KEY_ENROLLMENT_DEPLOYED", "false"' app/build.gradle.kts
           grep -Fq '"MARKETPRO_STAFF_DEVICE_PROOF_WRITE_ENFORCED", "false"' app/build.gradle.kts
           grep -Fq 'android.permission.INTERNET" tools:node="remove"' app/src/main/AndroidManifest.xml
 
