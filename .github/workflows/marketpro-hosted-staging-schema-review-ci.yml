@@ -51,7 +51,10 @@ jobs:
           assert 'GRANT INSERT' not in b.upper()
           assert 'GRANT UPDATE' not in b.upper()
           assert 'has_function_privilege' in c
-          assert 'CREATE' not in c.upper() and 'DROP' not in c.upper()
+          import re
+          sql='\n'.join(line for line in c.splitlines()
+            if not line.lstrip().startswith('--'))
+          assert re.search(r'\b(?:CREATE|ALTER|DROP|TRUNCATE)\b',sql,re.I) is None
           print('PASS: Staging SQL safe storage, RLS owner only, legacy RPC quarantined')
           PY
 
