@@ -40,7 +40,7 @@ jobs:
             sleep 1
           done
           exit 1
-      - name: Test signed Auth session, Owner fresh TOTP, phone proof and invitation lifecycle
+      - name: Test signed Auth session, Owner fresh TOTP, registered Owner device check and invitation lifecycle
         run: |
           set -euo pipefail
           docker exec marketpro_stage_invite_pg psql -X -v ON_ERROR_STOP=1             -U postgres -d postgres             -f supabase/tests/staging_qa_mfa_guarded_invite_pg17_local_only.sql
