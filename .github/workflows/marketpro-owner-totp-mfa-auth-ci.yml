@@ -1,0 +1,98 @@
+name: Market Pro — Owner Supabase Auth TOTP/AAL2 Integration Security
+
+on:
+  push:
+    branches:
+      - feature/marketpro-owner-totp-mfa-auth-review
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  freeze-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: No production SQL, dashboard, internet manifest or active Staff sync
+        run: |
+          set -euo pipefail
+          git diff --exit-code 1b7bdadac18c5fa2399a679500eaa2bb8340592f HEAD -- app/src/main/AndroidManifest.xml supabase/migrations/ web/marketpro-dashboard/
+          grep -Fq '"MARKETPRO_LOCAL_PREVIEW", "true"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_OWNER_TOTP_MFA_AUTH_DEPLOYED", "false"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_KEY_ENROLLMENT_DEPLOYED", "false"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_DEVICE_PROOF_WRITE_ENFORCED", "false"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_OUTBOX_AUTO_UPLOAD", "false"' app/build.gradle.kts
+          grep -Fq 'android.permission.INTERNET" tools:node="remove"' app/src/main/AndroidManifest.xml
+          git diff --exit-code 1b7bdadac18c5fa2399a679500eaa2bb8340592f HEAD -- app/src/main/java/lk/peliyagoda/marketpro/cloud/StaffFinanceAutoSyncScheduler.kt
+          test ! -e supabase/migrations/20261025_owner_totp_mfa.sql
+
+  auth-and-key-sql:
+    runs-on: ubuntu-latest
+    needs: freeze-live
+    timeout-minutes: 23
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise Owner AAL2 TOTP server guard and Staff key rotation PG17
+        run: |
+          set -euo pipefail
+          docker run -d --rm --name marketpro_totp_pg \
+            -e POSTGRES_PASSWORD=testonly -v "$PWD":/work:ro -w /work postgres:17
+          for i in $(seq 1 50); do
+            if docker exec marketpro_totp_pg pg_isready -U postgres; then break; fi
+            sleep 1
+          done
+          docker exec marketpro_totp_pg psql -X -v ON_ERROR_STOP=1 \
+            -U postgres -d postgres \
+            -f supabase/tests/two_phone_owner_key_mfa_stepup_pg17_local_only.sql
+      - name: Remove ephemeral database
+        if: always()
+        run: docker stop marketpro_totp_pg || true
+
+  node-ecdsa:
+    runs-on: ubuntu-latest
+    needs: freeze-live
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Check signed Staff keys remain bound after Owner MFA scope
+        run: node --test tests/two_phone_staff_key_enrollment_crypto.test.mjs tests/two_phone_proof_bound_all_finance_crypto.test.mjs
+
+  deno-auth:
+    runs-on: ubuntu-latest
+    needs: freeze-live
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with: {deno-version: v2.x}
+      - name: Staff Auth Edge TOTP security unaffected
+        run: deno check supabase/functions/marketpro-staff-key-enrollment/index.ts
+
+  android-owner-mfa:
+    runs-on: ubuntu-latest
+    needs: freeze-live
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Android SDK 35
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      - uses: gradle/actions/setup-gradle@v4
+        with: {gradle-version: '8.11.1'}
+      - name: Prepare Sinhala fonts
+        run: bash scripts/prepare_sinhala_font.sh
+      - name: Compile real Owner TOTP Auth client, updated token path and Compose MFA UI
+        run: gradle --no-daemon :app:testDebugUnitTest
