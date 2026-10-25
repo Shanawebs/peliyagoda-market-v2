@@ -9,6 +9,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -16,6 +17,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.view.WindowManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -52,6 +57,22 @@ internal fun OwnerTotpMfaPanel() {
     var busy by remember {mutableStateOf(false)}
     var status by remember {mutableStateOf("")}
     val factor=setup?.factorId ?: verifiedFactors.firstOrNull()?.id
+
+    // Prevent revealing the setup seed in screenshots and Recent Apps previews.
+    // Restore a prior FLAG_SECURE state on leaving this short-lived setup step.
+    val activity=generateSequence(context as Context) {
+        (it as? ContextWrapper)?.baseContext
+    }.filterIsInstance<Activity>().firstOrNull()
+    val window=activity?.window
+    val setupVisible=setup!=null && enabled
+    DisposableEffect(window,setupVisible){
+        val flag=WindowManager.LayoutParams.FLAG_SECURE
+        val prior=window!=null && (window.attributes.flags and flag)!=0
+        if(setupVisible) window?.addFlags(flag)
+        onDispose {
+            if(setupVisible && !prior)window?.clearFlags(flag)
+        }
+    }
 
     Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
         Text("Owner — Authenticator Security (MFA)",
@@ -118,10 +139,27 @@ internal fun OwnerTotpMfaPanel() {
                     "private, never screenshot or share it. " +
                     "It disappears from this screen after verification.",
                     style=MaterialTheme.typography.bodySmall)
-                TextButton(onClick={setup=null;code="";
-                    status="Setup secret hidden. Pending unverified factor " +
-                        "may need cleanup if setup is abandoned."},enabled=!busy){
-                    Text("Hide Setup Secret")
+                TextButton(onClick={
+                    val stale=setup
+                    setup=null
+                    code=""
+                    status=""
+                    busy=true
+                    scope.launch {
+                        try {
+                            if(stale!=null && client.cancelPendingOwnerTotpEnrollment(
+                                CloudSyncConfig.OWNER_USER_ID,stale.factorId)) {
+                                status="Unverified Authenticator setup cancelled. " +
+                                    "No Staff permissions changed."
+                            }
+                        }catch(_:Exception) {
+                            status="Setup secret hidden, but cancellation is " +
+                                "not confirmed by Supabase Auth. " +
+                                "Check pending factors before creating more."
+                        }finally{busy=false}
+                    }
+                },enabled=!busy){
+                    Text("Cancel Pending Authenticator Setup")
                 }
             }
             if(factor!=null) {
