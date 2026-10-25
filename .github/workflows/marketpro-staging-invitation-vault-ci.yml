@@ -1,0 +1,38 @@
+name: Market Pro Staging — Private Staff Invitation Vault Security
+
+on:
+  push:
+    branches:
+      - feature/marketpro-staging-pending-invite-vault
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-and-preview-freeze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Confirm Production Android, data, Dashboard and server proposals unchanged
+        run: |
+          set -euo pipefail
+          git diff --exit-code d8ca848d4739d93c0863068cc0107eb6e5a5c457 HEAD -- app/ supabase/migrations/ supabase/proposals/ supabase/functions/ web/marketpro-dashboard/
+          grep -Fq '"MARKETPRO_LOCAL_PREVIEW", "true"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_LOGIN_ENABLED", "false"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_OUTBOX_AUTO_UPLOAD", "false"' app/build.gradle.kts
+          grep -Fq 'android.permission.INTERNET" tools:node="remove"' app/src/main/AndroidManifest.xml
+
+  isolated-invitation-vault-contract:
+    needs: production-and-preview-freeze
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check staging-only migration / no exposed Staff RPC / read-only verification
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s tests -p test_staging_invitation_vault_contract.py -v
+          python3 -m unittest discover -s tests -p test_staging_isolation.py -v
