@@ -5,7 +5,7 @@
 import {withSupabase} from "npm:@supabase/server@1.9.1";
 import {verifySignedPurchase} from "../_shared/proof_bound_purchase.mjs";
 
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const B64URL=/^[A-Za-z0-9_-]{12,256}$/;
 const deny=()=>Response.json({ok:false,error:"Signed purchase rejected"},
  {status:403,headers:{"Cache-Control":"no-store"}});
