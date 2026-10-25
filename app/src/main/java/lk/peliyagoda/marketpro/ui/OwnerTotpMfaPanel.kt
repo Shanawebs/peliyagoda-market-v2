@@ -186,7 +186,9 @@ internal fun OwnerTotpMfaPanel() {
                                 CloudSyncConfig.OWNER_USER_ID,
                                 selected,challenge,otp)
                             setup=null
-                            verifiedFactors=emptyList()
+                            if(upgraded) verifiedFactors=listOf(
+                                CloudOwnerAuth.TotpFactor(
+                                    selected,"Market Pro Owner Authenticator"))
                             status=if(upgraded)
                                 "Supabase Auth verified your TOTP and securely " +
                                     "saved a new AAL2 Owner session. " +
