@@ -72,6 +72,32 @@ internal class StaffDeviceProofKeyStore {
         return created.private to created.public
     }
 
+    /** Sign the ONE-TIME fingerprint and key-possession challenge itself.
+     * Always compare the server's fingerprint to our actual AndroidKeystore
+     * public key bytes before signing. Never upload private-key material.
+     */
+    fun signEnrollment(challenge:StaffKeyEnrollmentChallenge):SignedProof {
+        val now=System.currentTimeMillis()
+        val (private,pub)=existingOrCreate()
+        val fingerprint=StaffDeviceProofPolicy.fingerprint(pub)
+        require(challenge.fingerprintSha256==fingerprint) {
+            "Server key fingerprint does not match this Staff phone"
+        }
+        val message=StaffKeyEnrollmentProofPolicy.transcript(challenge,now)
+        val signature=Signature.getInstance("SHA256withECDSA").run {
+            initSign(private);update(message);sign()
+        }
+        val hw=KeyFactory.getInstance(private.algorithm,KEY_PROVIDER)
+            .getKeySpec(private,KeyInfo::class.java).isInsideSecureHardware
+        return SignedProof(
+            PublicKeyInfo(
+                Base64.getUrlEncoder().withoutPadding().encodeToString(pub.encoded),
+                fingerprint,hw
+            ),
+            Base64.getUrlEncoder().withoutPadding().encodeToString(signature)
+        )
+    }
+
     /** No private-key bytes are ever serialized or placed in preferences. */
     fun publicInfo(): PublicKeyInfo {
         val (private, pub) = existingOrCreate()
