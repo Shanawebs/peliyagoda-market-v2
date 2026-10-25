@@ -85,6 +85,32 @@ internal class StaffDeviceProofKeyStore {
         )
     }
 
+    /**
+     * Sign a single exact purchase transaction, not the old generic v1
+     * transcript. The nonexportable key is the same Owner-approved SPKI.
+     * This method is never reachable while preview network flags are OFF.
+     */
+    fun signPurchase(challenge:StaffSignedPurchaseChallenge):SignedProof {
+        val now=System.currentTimeMillis()
+        val bytes=StaffSignedPurchaseProofPolicy.transcript(challenge,now)
+        val (private,pub)=existingOrCreate()
+        val signature=Signature.getInstance("SHA256withECDSA").run {
+            initSign(private)
+            update(bytes)
+            sign()
+        }
+        val keyInfo=KeyFactory.getInstance(private.algorithm,KEY_PROVIDER)
+            .getKeySpec(private,KeyInfo::class.java)
+        return SignedProof(
+            PublicKeyInfo(
+                Base64.getUrlEncoder().withoutPadding().encodeToString(pub.encoded),
+                StaffDeviceProofPolicy.fingerprint(pub),
+                keyInfo.isInsideSecureHardware
+            ),
+            Base64.getUrlEncoder().withoutPadding().encodeToString(signature)
+        )
+    }
+
     fun sign(challenge: StaffDeviceChallenge): SignedProof {
         val now = System.currentTimeMillis()
         val bytes = StaffDeviceProofPolicy.transcript(challenge,now)
