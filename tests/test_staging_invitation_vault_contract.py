@@ -47,22 +47,22 @@ class StagingInvitationVaultContract(unittest.TestCase):
         self.assertIn("REVOKE ALL ON marketpro_private.pending_team_enrollments", self.m)
         self.assertIn("FROM PUBLIC,anon,authenticated", self.m)
         self.assertIn("ENABLE ROW LEVEL SECURITY", self.m)
-        self.assertNotRegex(self.m, r"(?im)^\\s*GRANT\\s+")
-        self.assertNotRegex(self.m, r"(?im)^\\s*CREATE\\s+(?:OR REPLACE\\s+)?FUNCTION\\s+")
-        self.assertNotRegex(self.m, r"(?im)^\\s*INSERT\\s+INTO\\s+")
-        self.assertNotRegex(self.m, r"(?im)^\\s*CREATE\\s+POLICY\\s+")
+        self.assertNotRegex(self.m, r"(?im)^\s*GRANT\s+")
+        self.assertNotRegex(self.m, r"(?im)^\s*CREATE\s+(?:OR REPLACE\s+)?FUNCTION\s+")
+        self.assertNotRegex(self.m, r"(?im)^\s*INSERT\s+INTO\s+")
+        self.assertNotRegex(self.m, r"(?im)^\s*CREATE\s+POLICY\s+")
 
     def test_verifier_remains_read_only(self):
         query = "\n".join(x for x in self.check.splitlines()
                           if not x.lstrip().startswith("--"))
         self.assertTrue(query.lstrip().startswith("SELECT"))
-        self.assertNotRegex(query, r"(?im)^\\s*(?:CREATE|ALTER|DROP|INSERT|UPDATE|DELETE|GRANT|REVOKE)\\s+")
+        self.assertNotRegex(query, r"(?im)^\s*(?:CREATE|ALTER|DROP|INSERT|UPDATE|DELETE|GRANT|REVOKE)\s+")
         self.assertIn("no_phone_paired", query)
         self.assertIn("future_staff_direct_rest_still_blocked", query)
 
     def test_documentation_declares_no_activation(self):
         self.assertIn("No invitation row", self.doc)
-        self.assertIn("not a Staff", "not a Staff")  # contract anchor, no network
+        self.assertIn("No Staff App installation", self.doc)
         self.assertIn("DO NOT", self.doc)
 
 if __name__ == "__main__":
