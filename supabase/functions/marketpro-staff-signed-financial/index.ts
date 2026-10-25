@@ -6,7 +6,7 @@ import {
  FINANCIAL_TYPES,verifySignedFinancialV3
 } from "../_shared/proof_bound_finance.mjs";
 
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const B64URL=/^[A-Za-z0-9_-]{12,256}$/;
 const headers={"Cache-Control":"no-store"};
 const denied=()=>Response.json({ok:false,error:"Financial signature rejected"},
