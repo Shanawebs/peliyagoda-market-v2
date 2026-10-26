@@ -195,3 +195,36 @@ test("invalid payload fields, unauthorized identity and stale TOTP do not call R
   assert.equal(calls.length,0);
   assert.equal(MAX_BODY_CHARS,4096);
 });
+
+
+test("Owner fresh AAL2 Edge status probe is read-only and never calls any RPC",async()=>{
+  const {ctx,calls}=fixture();
+  const reply=await handleOwnerBootstrapIntent(ctx,{
+    intent:"status",workspace_id:WS
+  },{nowMs:T});
+  assert.deepEqual(reply,{
+    ok:true,check:"qa_owner_aal2_edge_authenticated",
+    db_calls_made:false,device_registration_performed:false,
+    staff_access_granted:false,purchase_sync_started:false
+  });
+  assert.equal(calls.length,0);
+});
+
+test("AAL1, stale TOTP, other users, and malformed probe rejected without RPC",async()=>{
+  const {ctx,calls}=fixture();
+  const status={intent:"status",workspace_id:WS};
+  const cases=[
+    [{...ctx,jwtClaims:{...ctx.jwtClaims,aal:"aal1"}},status],
+    [{...ctx,jwtClaims:{...ctx.jwtClaims,amr:[{method:"totp",timestamp:Math.floor(T/1000)-310}]}},status],
+    [{...ctx,userClaims:{...ctx.userClaims,id:"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"},
+      jwtClaims:{...ctx.jwtClaims,sub:"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"}},status],
+    [ctx,{...status,staff_user_id:"b805598b-421f-447b-aa4c-ffb66f721338"}],
+    [ctx,{...status,workspace_id:"ffffffff-ffff-4fff-8fff-ffffffffffff"}],
+    [ctx,{...status,intent:"issue"}]
+  ];
+  for(const [who,what] of cases){
+    const result=await handleOwnerBootstrapIntent(who,what,{nowMs:T});
+    assert.equal(result.ok,false);
+  }
+  assert.equal(calls.length,0);
+});
