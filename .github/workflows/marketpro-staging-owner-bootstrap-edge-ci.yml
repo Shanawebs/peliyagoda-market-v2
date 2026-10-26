@@ -1,0 +1,64 @@
+name: Market Pro Staging — Owner Bootstrap Edge Auth/Crypto (review only)
+
+on:
+  push:
+    branches:
+      - feature/marketpro-staging-owner-bootstrap-edge-review
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-freeze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Keep Production code, server DDL and Android untouched
+        run: |
+          set -euo pipefail
+          BASE=69359690acc4eaf66a3cdf5d489e347530fcf4aa
+          git diff --exit-code "$BASE" HEAD -- app/ supabase/migrations/ supabase/proposals/ web/marketpro-dashboard/ supabase/functions/marketpro-staff-device-proof/ supabase/functions/marketpro-staff-key-enrollment/
+          unexpected=$(git diff --name-only "$BASE" HEAD -- supabase/staging/ | grep -v '^supabase/staging/verify_qa_owner_edge_locked_READ_ONLY.sql$' || true)
+          test -z "$unexpected" || { echo "Unsafe SQL modification: $unexpected"; exit 1; }
+          python3 -c 'from pathlib import Path; p=Path("supabase/staging/verify_qa_owner_edge_locked_READ_ONLY.sql"); b="\n".join(x for x in p.read_text().splitlines() if not x.lstrip().startswith("--")).strip(); assert b.split()[0].upper()=="SELECT"; assert b.endswith(";") and b.count(";")==1'
+          grep -Fq '"MARKETPRO_LOCAL_PREVIEW", "true"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_LOGIN_ENABLED", "false"' app/build.gradle.kts
+          grep -Fq 'android.permission.INTERNET" tools:node="remove"' app/src/main/AndroidManifest.xml
+
+  owner-edge-crypto:
+    needs: production-freeze
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Owner intent checks, actual P-256 proof and Staff regressions
+        run: |
+          set -euo pipefail
+          node --test tests/staging_owner_bootstrap_edge_integration.test.mjs
+          node --test tests/staging_owner_bootstrap_key_crypto.test.mjs
+          node --test tests/two_phone_staff_key_enrollment_crypto.test.mjs
+          node --test tests/v375_device_proof_crypto.test.mjs
+      - name: Require Auth and pinned dependencies
+        run: |
+          set -euo pipefail
+          grep -Fq 'withSupabase({auth:"user"}' supabase/functions/marketpro-qa-owner-bootstrap/index.ts
+          grep -Fq 'npm:@supabase/server@1.9.2' supabase/functions/marketpro-qa-owner-bootstrap/index.ts
+
+  deno-types:
+    needs: production-freeze
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Typecheck the exact deployed Source entrypoint
+        run: deno check supabase/functions/marketpro-qa-owner-bootstrap/index.ts
