@@ -109,7 +109,7 @@ class MainActivity : Activity() {
         setContentView(scroll)
 
         root.addView(text("Market Pro",27f,true,green))
-        root.addView(text("STAGING • Owner Security v0.4.0",17f,true,green))
+        root.addView(text("STAGING • Owner Security v0.4.1",17f,true,green))
         val note=text(
             "වෙනම ආරක්ෂක පරීක්ෂණ App එකක්.\n" +
             "Staging Auth Login පමණයි. No Purchase Sync • No Staff Access.\n" +
@@ -211,13 +211,13 @@ class MainActivity : Activity() {
             "වෙනත් Test එකක් සඳහා නැවත Login කරන්න.",
             13f,false,Color.DKGRAY
         ))
-        remoteProofButton=button(root,"Verify Phone Signature With Server") {
+        remoteProofButton=button(root,"Diagnose Phone Signature With Server") {
             readyForProbe=false
             work({auth.proveRemoteOwnerKey(lab)})
         }
         remoteProofButton.isEnabled=false
 
-        root.addView(text("Test v0.4.0 • Separate App ID • No Cloud Data Writes",
+        root.addView(text("Test v0.4.1 • Separate App ID • No Cloud Data Writes",
             12f,false,Color.GRAY).apply {
             setPadding(0,dp(20),0,0)
         })
