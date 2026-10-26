@@ -91,8 +91,8 @@ BEGIN
   'workspace_id',w,'owner_user_id',p_owner,'session_id',p_session,
   'device_id',p_device,'challenge_id',new_id,'nonce_hex',nonce,
   'fingerprint_sha256',fp,
-  'issued_at_millis',pg_catalog.floor(pg_catalog.extract(epoch from now_at)*1000)::bigint,
-  'expires_at_millis',pg_catalog.floor(pg_catalog.extract(epoch from now_at+interval '60 seconds')*1000)::bigint,
+  'issued_at_millis',pg_catalog.floor(extract(epoch from now_at)*1000)::bigint,
+  'expires_at_millis',pg_catalog.floor(extract(epoch from now_at+interval '60 seconds')*1000)::bigint,
   'phone_activated',false,'staff_access_granted',false
  );
 END;$issue$;
@@ -111,8 +111,8 @@ BEGIN
   'workspace_id',c.workspace_id,'owner_user_id',c.owner_user_id,
   'session_id',c.session_id,'device_id',c.device_id,'challenge_id',c.challenge_id,
   'nonce_hex',c.nonce_hex,'fingerprint_sha256',c.fingerprint_sha256,
-  'issued_at_millis',pg_catalog.floor(pg_catalog.extract(epoch from c.issued_at)*1000)::bigint,
-  'expires_at_millis',pg_catalog.floor(pg_catalog.extract(epoch from c.expires_at)*1000)::bigint,
+  'issued_at_millis',pg_catalog.floor(extract(epoch from c.issued_at)*1000)::bigint,
+  'expires_at_millis',pg_catalog.floor(extract(epoch from c.expires_at)*1000)::bigint,
   'spki_base64',replace(pg_catalog.encode(c.spki_der,'base64'),E'\n','')
  ) INTO result FROM marketpro_private.qa_owner_remote_proof_trials c
  JOIN auth.sessions s ON s.id=c.session_id AND s.user_id=c.owner_user_id
