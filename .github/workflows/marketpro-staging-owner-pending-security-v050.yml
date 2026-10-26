@@ -1,0 +1,68 @@
+name: Market Pro Staging — Owner Pending Registration PG17 Security v0.5
+
+on:
+  push:
+    branches:
+      - feature/marketpro-staging-owner-pending-proposal-v050
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-frozen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Production, Owner Test App and Edge source frozen
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=6a8c4c73a428c42c9d6377a4535fe3bc741c2078
+          git diff --exit-code "$BASE" HEAD -- app/ stagingOwner/ web/marketpro-dashboard/ supabase/functions/ supabase/migrations/ supabase/proposals/
+          changed=$(git diff --name-only "$BASE" HEAD -- supabase/staging/ | grep -v '^supabase/staging/staging_qa_owner_pending_service_only_v050.sql$' || true)
+          test -z "$changed" || { echo "Unexpected modified hosted staging SQL: $changed"; exit 1; }
+          python3 - <<'PY'
+          from pathlib import Path
+          sql=Path("supabase/staging/staging_qa_owner_pending_service_only_v050.sql").read_text()
+          assert "qa_owner_pending_gate" in sql
+          assert "enabled boolean NOT NULL DEFAULT false" in sql
+          assert "status text NOT NULL DEFAULT 'pending' CHECK(status='pending')" in sql
+          assert "enabled boolean NOT NULL DEFAULT false CHECK(enabled=false)" in sql
+          assert "can_write boolean NOT NULL DEFAULT false CHECK(can_write=false)" in sql
+          assert "TO service_role" in sql
+          assert "GRANT EXECUTE" in sql
+          assert "TO authenticated;" not in sql and "TO anon;" not in sql
+          assert "lkoptqhodgjeuwwfihfr" not in sql
+          assert sql.rstrip().endswith("COMMIT;")
+          PY
+
+  pg17-pending-policy:
+    needs: production-frozen
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start isolated disposable PostgreSQL 17
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm -d --name marketpro_qa_pending_pg17 \
+            -e POSTGRES_PASSWORD=disposable-only -v "$PWD":/work:ro \
+            -w /work postgres:17
+          for i in $(seq 1 40); do
+            if docker exec marketpro_qa_pending_pg17 pg_isready -U postgres; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Real database security and idempotency/replay testing
+        shell: bash
+        run: |
+          docker exec marketpro_qa_pending_pg17 psql -X -v ON_ERROR_STOP=1 \
+            -U postgres -d postgres -f supabase/tests/staging_qa_owner_pending_pg17_v050.sql
+      - name: Tear down ephemeral testing DB
+        if: always()
+        run: docker stop marketpro_qa_pending_pg17 || true
