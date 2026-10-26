@@ -173,9 +173,9 @@ test("server receipt cannot claim phone activated or writing enabled",async()=>{
 test("invalid payload fields, unauthorized identity and stale TOTP do not call RPCs",async()=>{
   const illegal=[
     {...verifyBody(),p_owner:OWNER},
-    {...issueBody(),service_role:"secret"},
-    {...issueBody(),workspace_id:"ffffffff-ffff-4fff-8fff-ffffffffffff"},
-    {...issueBody(),spki_base64url:"a"},
+    {...issueBody,service_role:"secret"},
+    {...issueBody,workspace_id:"ffffffff-ffff-4fff-8fff-ffffffffffff"},
+    {...issueBody,spki_base64url:"a"},
     {...verifyBody(),signature_der_base64url:"---"},
     {...verifyBody(),challenge_id:"broken"},
     {...verifyBody(),intent:"delete"},
