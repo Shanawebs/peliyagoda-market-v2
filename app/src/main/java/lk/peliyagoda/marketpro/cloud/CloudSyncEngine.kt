@@ -27,8 +27,8 @@ import kotlinx.coroutines.sync.withLock
  * The server independently checks JWT identity, role and registered device on each RPC.
  */
 object CloudSyncConfig {
-    const val WORKSPACE_ID = "e46b90c5-ed6a-4952-82e9-8582fac06d89"
-    const val OWNER_USER_ID = "bf49c22f-f245-4d3c-987e-c5ec081d7cad"
+    val WORKSPACE_ID = BuildConfig.MARKETPRO_WORKSPACE_ID
+    val OWNER_USER_ID = BuildConfig.MARKETPRO_OWNER_USER_ID
     const val ENABLED = "enrolled"
     const val LAST_SUCCESS = "last_success_utc"
     const val LAST_ERROR = "last_error"
@@ -41,7 +41,7 @@ internal class CloudRestClient {
 
     private fun send(path: String, bearer: String, body: JSONObject? = null): String {
         val url = URL(origin + path)
-        require(url.protocol == "https" && url.host == "lkoptqhodgjeuwwfihfr.supabase.co")
+        require(url.protocol == "https" && url.host == BuildConfig.MARKETPRO_SUPABASE_HOST)
         val connection = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = if (body == null) "GET" else "POST"
             instanceFollowRedirects = false
