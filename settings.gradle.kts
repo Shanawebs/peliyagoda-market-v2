@@ -14,3 +14,5 @@ dependencyResolutionManagement {
 }
 rootProject.name = "PeliyagodaMarketV2"
 include(":app")
+// Fully separate Android test APK. Existing app configuration is untouched.
+include(":stagingOwner")
