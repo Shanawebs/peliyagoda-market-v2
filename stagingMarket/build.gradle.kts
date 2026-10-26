@@ -15,7 +15,8 @@ android {
 
     defaultConfig {
         // Only PUBLIC Supabase identifiers; never put service-role credentials in an APK.
-        buildConfigField("boolean", "MARKETPRO_LOCAL_PREVIEW", "true")
+        // Integrated Staging may test Owner Auth; all Staff/financial writer gates below remain OFF.
+        buildConfigField("boolean", "MARKETPRO_LOCAL_PREVIEW", "false")
         // Remains FALSE until server v2, staff enrollment and two-phone QA are approved.
         buildConfigField("boolean", "MARKETPRO_TEAM_PULL_RPC_DEPLOYED", "false")
         // Explicitly blocked until verified, complete staged pull and
