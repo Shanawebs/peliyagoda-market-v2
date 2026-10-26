@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Intentionally NO INTERNET and NO ACCESS_NETWORK_STATE permissions.
-         This standalone Staging Keystore lab CANNOT upload anything. -->
+    <!-- Internet is needed for hard-pinned staging Auth endpoints only.
+         No purchasing, device enrollment, Edge or financial API calls. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:allowBackup="false"
         android:fullBackupContent="false"
-        android:label="Market Pro · Staging Key Test"
+        android:label="Market Pro · Staging Owner Auth"
         android:usesCleartextTraffic="false"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity
