@@ -14,6 +14,7 @@ import java.security.Signature
 import java.security.spec.ECGenParameterSpec
 import java.util.UUID
 import android.util.Base64
+import android.os.SystemClock
 import org.json.JSONObject
 
 /** Separate Staging-only EC P-256 key. Private key never leaves AndroidKeyStore. */
@@ -107,7 +108,7 @@ internal class OwnerKeystoreLab {
     internal class ProofValidation(val safeCode: String) : IllegalArgumentException()
 
     /** Sign server-generated values only; real database activation is absent. */
-    fun signStagingServerChallenge(c: JSONObject): String {
+    fun signStagingServerChallenge(c: JSONObject, issueRequestStartElapsedMs: Long): String {
         val (privateKey, publicKey) = pair()
         if (c.optString("proof_version") != OwnerProofTranscript.VERSION)
             throw ProofValidation("P5_VERSION")
@@ -127,18 +128,27 @@ internal class OwnerKeystoreLab {
             issuedAtMillis = c.getLong("issued_at_millis"),
             expiresAtMillis = c.getLong("expires_at_millis")
         )
-        val now = System.currentTimeMillis()
         val bytes = try {
-            material.bytes(now)
+            // Android wall-clock may be behind UTC by seconds. Anchor to the
+            // database-issued challenge time plus monotonic time elapsed
+            // SINCE BEFORE the issuance request, including network latency.
+            // Never alter the challenge timestamps signed by the Keystore.
+            val serverAnchoredNow = ServerChallengeClock.signingTimeMillis(
+                material.issuedAtMillis, material.expiresAtMillis,
+                issueRequestStartElapsedMs, SystemClock.elapsedRealtime()
+            )
+            material.bytes(serverAnchoredNow)
         } catch (e: IllegalArgumentException) {
             val code = when (e.message) {
                 "Invalid local test UUID" -> "P5_UUID_FORMAT"
                 "Invalid local test nonce or fingerprint" -> "P5_HEX_FORMAT"
                 "Invalid challenge window" -> "P5_INVALID_TIME_WINDOW"
                 "Challenge is too long" -> "P5_EXCESSIVE_TTL"
-                "Expired or future local challenge" ->
-                    if (now < material.issuedAtMillis) "P5_PHONE_CLOCK_BEHIND"
-                    else "P5_PHONE_CLOCK_AHEAD_OR_EXPIRED"
+                "P5_CHALLENGE_ELAPSED" -> "P5_CHALLENGE_ELAPSED"
+                "P5_INVALID_MONOTONIC_CLOCK" -> "P5_INVALID_MONOTONIC_CLOCK"
+                "P5_EXCESSIVE_TTL" -> "P5_EXCESSIVE_TTL"
+                "P5_INVALID_TIME_WINDOW" -> "P5_INVALID_TIME_WINDOW"
+                "Expired or future local challenge" -> "P5_CHALLENGE_TIME_REJECTED"
                 else -> "P5_INVALID_TRANSCRIPT"
             }
             throw ProofValidation(code)
