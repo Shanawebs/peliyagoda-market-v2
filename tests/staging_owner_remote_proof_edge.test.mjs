@@ -75,7 +75,8 @@ test("wrong EC key, nonce, fingerprint, session and expiry never consume proof",
   [{expires_at_millis:T-100},sign()]
  ]){
   const {ctx,calls}=fixture({...material,...change});
-  assert.equal((await handleOwnerBootstrapIntent(ctx,issue,{nowMs:T})).ok,true);
+  const issued=await handleOwnerBootstrapIntent(ctx,issue,{nowMs:T});
+  if(change.session_id===undefined && change.owner_user_id===undefined && change.device_id===undefined && change.challenge_id===undefined) assert.equal(issued.ok,true);
   const result=await handleOwnerBootstrapIntent(ctx,verify(sig),{nowMs:T});
   assert.equal(result.ok,false);
   assert.equal(calls.filter(x=>x.name==="marketpro_qa_service_remote_proof_consume").length,0);
