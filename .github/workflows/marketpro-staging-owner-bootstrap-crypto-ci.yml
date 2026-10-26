@@ -35,6 +35,7 @@ jobs:
           node-version: '22'
       - name: Verify Android P-256 signature and reject spoof/replay
         run: |
+          python3 -m unittest discover -s tests -p test_staging_owner_bootstrap_contract.py -v
           node --test tests/staging_owner_bootstrap_key_crypto.test.mjs
           node --test tests/two_phone_staff_key_enrollment_crypto.test.mjs
           node --test tests/v375_device_proof_crypto.test.mjs
