@@ -46,6 +46,23 @@ export async function handleOwnerBootstrapIntent(
   if(!caller || !isPlainRecord(payload) ||
     payload.workspace_id!==STAGING_WORKSPACE) return denied;
 
+  // Read-only AAL2 smoke probe for the isolated Android test APK.
+  // NO RPC, device key, invitation, membership or financial state changes.
+  // A signed JWT with recently completed TOTP is mandatory; this check is
+  // intentionally confined to the ONE verified QA Owner identity.
+  if(payload.intent==="status" &&
+    hasOnlyKeys(payload,["intent","workspace_id"]) &&
+    caller.owner==="98c3b101-d452-4b6b-902c-0b1a31fc340c") {
+    return {
+      ok:true,
+      check:"qa_owner_aal2_edge_authenticated",
+      db_calls_made:false,
+      device_registration_performed:false,
+      staff_access_granted:false,
+      purchase_sync_started:false
+    };
+  }
+
   if(payload.intent==="issue" &&
     hasOnlyKeys(payload,["intent","workspace_id","device_id","spki_base64url"]) &&
     UUID.test(payload.device_id) && typeof payload.spki_base64url==="string" &&
