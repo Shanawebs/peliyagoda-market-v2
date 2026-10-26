@@ -161,7 +161,7 @@ class MainActivity : Activity() {
                 output.text="Staging Owner Password ඇතුළත් කරන්න."
             }else{
                 // Password is only held within this immediate request; no
-                // saved state, SharedPreferences, database or background task.
+                // saved state, persistent storage, database or background queue.
                 work({auth.signIn(pwd)}) {
                     awaitingMfa=true
                 }
