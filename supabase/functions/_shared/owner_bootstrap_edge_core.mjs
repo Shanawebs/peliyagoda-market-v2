@@ -1,5 +1,5 @@
 // Market Pro TWO-PHONE staging: auth-gated Owner P-256 bootstrap service core.
-// REVIEW ONLY — no hosted Edge deployment, no enabled rollout gate.
+// STAGING-hosted Edge code. Gate and client RPC grants remain OFF.
 // Server receives PUBLIC SPKI and DER signature, never Android's private key.
 // All identity/session fields are derived from VERIFIED JWT, never request JSON.
 import {verifyOwnerBootstrapKeyPossession, OWNER_BOOTSTRAP_VERSION} from "./owner_bootstrap_key_proof.mjs";
