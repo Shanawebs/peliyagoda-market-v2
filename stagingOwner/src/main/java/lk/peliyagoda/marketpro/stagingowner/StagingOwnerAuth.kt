@@ -195,8 +195,8 @@ internal class StagingOwnerAuth {
                 response.optBoolean("purchase_sync_started",true) != false) {
                 throw AuthException("EDGE safety response invalid. Test incomplete.")
             }
-            return "PASS ✓ Edge Server accepted verified Owner AAL2.\\n" +
-                "Read-only test • No DB calls • No device registration.\\n" +
+            return "PASS ✓ Edge Server accepted verified Owner AAL2.\n" +
+                "Read-only test • No DB calls • No device registration.\n" +
                 "No Staff Access • No Purchase Sync."
         } catch(e:AuthException) {
             throw e
