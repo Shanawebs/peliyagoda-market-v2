@@ -8,11 +8,11 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "lk.peliyagoda.marketpro.staging.remoteproof"
+        applicationId = "lk.peliyagoda.marketpro.staging.remoteproofdiag"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "0.4.0"
+        versionCode = 5
+        versionName = "0.4.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

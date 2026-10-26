@@ -6,7 +6,7 @@
     <application
         android:allowBackup="false"
         android:fullBackupContent="false"
-        android:label="Market Pro · Staging Signature"
+        android:label="Market Pro · Staging Diagnostic"
         android:usesCleartextTraffic="false"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity

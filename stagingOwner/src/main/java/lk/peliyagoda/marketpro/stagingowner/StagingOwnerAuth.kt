@@ -218,63 +218,90 @@ internal class StagingOwnerAuth {
      * then immediately clears it even on failure.
      */
     fun proveRemoteOwnerKey(lab: OwnerKeystoreLab): String {
-        val token = aal2TestToken
-            ?: throw AuthException("මුලින් Staging Owner MFA Verify කරන්න.")
+        // Safe stage only. Never include bearer, nonce, SPKI, OTP, signature or
+        // private key in an error string, screenshot, log or exception.
+        var stage = "P1_SESSION"
         try {
+            val token = aal2TestToken
+                ?: throw AuthException("MFA session missing. Log in again.")
             val age = System.currentTimeMillis() - aal2VerifiedAtMs
-            if (age < 0 || age > 120_000) {
-                throw AuthException("MFA Session expired. නැවත Login කරන්න.")
-            }
+            if (age < 0 || age > 120_000)
+                throw AuthException("MFA session expired. Log in again.")
             val chunks = token.split(".")
-            if (chunks.size != 3) throw AuthException("Invalid Auth session.")
-            val claims=JSONObject(String(Base64.decode(
-                chunks[1],Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
-            ),Charsets.UTF_8))
-            if(claims.optString("aal")!="aal2" ||
-                claims.optString("sub")!=OWNER_ID ||
-                !ID_FORMAT.matches(claims.optString("session_id"))) {
+            if (chunks.size != 3)
+                throw AuthException("Invalid Auth session.")
+            val claims = JSONObject(String(Base64.decode(
+                chunks[1], Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
+            ), Charsets.UTF_8))
+            if (claims.optString("aal") != "aal2" ||
+                claims.optString("sub") != OWNER_ID ||
+                !ID_FORMAT.matches(claims.optString("session_id")))
                 throw AuthException("Owner AAL2 verification required.")
-            }
+
+            stage = "P2_PUBLIC_KEY"
             val deviceId = UUID.randomUUID().toString()
-            val request=JSONObject()
-                .put("intent","proof_issue")
-                .put("workspace_id","af77cb66-76b2-492a-a460-06132f468713")
-                .put("device_id",deviceId)
-                .put("spki_base64url",lab.publicSpkiBase64Url())
-            val issued=postOwnerProof(token,request)
-            val challenge=issued.optJSONObject("challenge")
+            val publicSpki = lab.publicSpkiBase64Url()
+            val request = JSONObject()
+                .put("intent", "proof_issue")
+                .put("workspace_id", "af77cb66-76b2-492a-a460-06132f468713")
+                .put("device_id", deviceId)
+                .put("spki_base64url", publicSpki)
+
+            stage = "P3_ISSUE_SERVER"
+            val issued = postOwnerProof(token, request)
+
+            stage = "P4_CHECK_CHALLENGE"
+            val challenge = issued.optJSONObject("challenge")
                 ?: throw AuthException("Server challenge missing.")
-            if(issued.optBoolean("ok")!=true ||
-                issued.optBoolean("phone_activated",true)!=false ||
-                challenge.optString("owner_user_id")!=OWNER_ID ||
-                challenge.optString("session_id")!=claims.optString("session_id") ||
-                challenge.optString("device_id")!=deviceId ||
-                challenge.optString("workspace_id")!="af77cb66-76b2-492a-a460-06132f468713") {
-                throw AuthException("Server challenge identity mismatch.")
-            }
+            if (issued.optBoolean("ok") != true ||
+                issued.optBoolean("phone_activated", true) != false ||
+                challenge.optString("owner_user_id") != OWNER_ID ||
+                challenge.optString("session_id") != claims.optString("session_id") ||
+                challenge.optString("device_id") != deviceId ||
+                challenge.optString("workspace_id") != "af77cb66-76b2-492a-a460-06132f468713")
+                throw AuthException("Challenge Owner/session/device mismatch.")
+            if (challenge.optString("proof_version") != OwnerProofTranscript.VERSION ||
+                challenge.optString("nonce_hex").length != 64 ||
+                challenge.optString("fingerprint_sha256").length != 64 ||
+                challenge.optString("challenge_id").isBlank() ||
+                !challenge.has("issued_at_millis") ||
+                !challenge.has("expires_at_millis"))
+                throw AuthException("Server challenge format invalid.")
+
+            stage = "P5_PHONE_SIGN"
             val signature = lab.signStagingServerChallenge(challenge)
+
+            stage = "P6_VERIFY_SERVER"
             val verifyRequest = JSONObject()
-                .put("intent","proof_verify")
-                .put("workspace_id","af77cb66-76b2-492a-a460-06132f468713")
-                .put("challenge_id",challenge.getString("challenge_id"))
-                .put("signature_der_base64url",signature)
-            val outcome=postOwnerProof(token,verifyRequest)
-            if(outcome.optBoolean("ok")!=true ||
-               outcome.optBoolean("remote_p256_proof_verified")!=true ||
-               outcome.optBoolean("nonce_consumed_once")!=true ||
-               outcome.optBoolean("device_registered",true)!=false ||
-               outcome.optBoolean("staff_access",true)!=false ||
-               outcome.optBoolean("financial_writes",true)!=false)
-                throw AuthException("Server signature receipt failed.")
-            return "PASS ✓ Server verified REAL Phone P-256 Signature.\\n" +
-                   "One-time challenge consumed.\\n" +
-                   "No phone registered • No Staff Access • No Purchase Sync."
-        } catch(e:AuthException) {
-            throw e
+                .put("intent", "proof_verify")
+                .put("workspace_id", "af77cb66-76b2-492a-a460-06132f468713")
+                .put("challenge_id", challenge.getString("challenge_id"))
+                .put("signature_der_base64url", signature)
+            val outcome = postOwnerProof(token, verifyRequest)
+
+            stage = "P7_CHECK_RECEIPT"
+            if (outcome.optBoolean("ok") != true ||
+                outcome.optBoolean("remote_p256_proof_verified") != true ||
+                outcome.optBoolean("nonce_consumed_once") != true ||
+                outcome.optBoolean("device_registered", true) != false ||
+                outcome.optBoolean("staff_access", true) != false ||
+                outcome.optBoolean("financial_writes", true) != false)
+                throw AuthException("Server safety receipt mismatch.")
+            return "PASS ✓ Server verified REAL Phone P-256 Signature.\n" +
+                "One-time challenge consumed.\n" +
+                "No phone registered • No Staff Access • No Purchase Sync."
+        } catch (e: AuthException) {
+            throw AuthException("FAIL [" + stage + "] — " + (e.message ?: "Denied."))
+        } catch (_: org.json.JSONException) {
+            throw AuthException("FAIL [" + stage + "] — Invalid JSON response.")
+        } catch (_: java.security.GeneralSecurityException) {
+            throw AuthException("FAIL [" + stage + "] — Android Keystore error.")
+        } catch (_: IllegalArgumentException) {
+            throw AuthException("FAIL [" + stage + "] — Challenge/time validation rejected.")
         } catch (_: Exception) {
-            throw AuthException("Phone Signature Test failed. No device registered.")
+            throw AuthException("FAIL [" + stage + "] — Unexpected local test error.")
         } finally {
-            clear()
+            clear() // Ephemeral AAL2 bearer ALWAYS discarded.
         }
     }
 
