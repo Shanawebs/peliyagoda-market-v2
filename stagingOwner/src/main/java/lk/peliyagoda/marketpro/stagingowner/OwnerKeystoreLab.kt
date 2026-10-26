@@ -13,6 +13,8 @@ import java.security.SecureRandom
 import java.security.Signature
 import java.security.spec.ECGenParameterSpec
 import java.util.UUID
+import android.util.Base64
+import org.json.JSONObject
 
 /** Separate Staging-only EC P-256 key. Private key never leaves AndroidKeyStore. */
 internal class OwnerKeystoreLab {
@@ -88,6 +90,47 @@ internal class OwnerKeystoreLab {
             changed[changed.lastIndex] = (changed.last().toInt() xor 1).toByte()
             initVerify(public);update(changed);verify(signed)
         }
+    }
+
+    /** Public key can leave the phone; the nonexportable signing key cannot. */
+    fun publicSpkiBase64Url(): String {
+        val (_, publicKey) = pair()
+        return Base64.encodeToString(
+            publicKey.encoded, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
+        )
+    }
+
+    /** Sign server-generated values only. This does NOT register a phone. */
+    fun signStagingServerChallenge(c: JSONObject): String {
+        val (privateKey, publicKey) = pair()
+        require(c.optString("proof_version") == OwnerProofTranscript.VERSION) {
+            "Wrong server challenge version"
+        }
+        require(c.optString("fingerprint_sha256") == fingerprint(publicKey)) {
+            "Server public key does not match this phone"
+        }
+        require(c.optBoolean("phone_activated", true) == false) {
+            "Unexpected phone activation response"
+        }
+        val material = OwnerProofTranscript(
+            workspaceId = c.getString("workspace_id"),
+            ownerUserId = c.getString("owner_user_id"),
+            deviceId = c.getString("device_id"),
+            sessionId = c.getString("session_id"),
+            challengeId = c.getString("challenge_id"),
+            nonceHex = c.getString("nonce_hex"),
+            fingerprintSha256 = c.getString("fingerprint_sha256"),
+            issuedAtMillis = c.getLong("issued_at_millis"),
+            expiresAtMillis = c.getLong("expires_at_millis")
+        )
+        val signature = Signature.getInstance("SHA256withECDSA").run {
+            initSign(privateKey)
+            update(material.bytes(System.currentTimeMillis()))
+            sign()
+        }
+        return Base64.encodeToString(
+            signature, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
+        )
     }
 
     private fun fingerprint(public: PublicKey):String =
