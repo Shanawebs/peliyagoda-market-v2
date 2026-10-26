@@ -40,7 +40,7 @@ internal class FreshCatalogReader {
         check(table == "categories" || table == "items")
         val endpoint = "/rest/v1/$table?select=$projection&workspace_id=eq.$workspace&limit=500"
         val url = URL(origin + endpoint)
-        require(url.protocol == "https" && url.host == "lkoptqhodgjeuwwfihfr.supabase.co")
+        require(url.protocol == "https" && url.host == BuildConfig.MARKETPRO_SUPABASE_HOST)
         val connection = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             instanceFollowRedirects = false

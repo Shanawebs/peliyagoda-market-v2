@@ -17,7 +17,7 @@ internal interface TeamPullTransport {
 
 internal class TeamPullHttpTransport : TeamPullTransport {
     companion object {
-        private const val HOST = "lkoptqhodgjeuwwfihfr.supabase.co"
+        private val HOST = BuildConfig.MARKETPRO_SUPABASE_HOST
         private const val MAX_BYTES = 262144
     }
 

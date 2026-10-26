@@ -22,7 +22,7 @@ internal class OwnerTeamPhoneTransferClient(context: Context) {
     private val owner=CloudOwnerAuth(app)
     private val ownerDeviceId=CloudDeviceIdentity.get(app)
     private companion object {
-        const val HOST="lkoptqhodgjeuwwfihfr.supabase.co"
+        val HOST=BuildConfig.MARKETPRO_SUPABASE_HOST
         const val MAX_RESPONSE=16384
         val RPCS=setOf(
             "marketpro_owner_disable_team_phone",

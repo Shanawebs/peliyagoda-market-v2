@@ -23,7 +23,7 @@ internal class HttpsStaffCatalogApprovalTransport(
     private val expectedDeviceId: String
 ) : StaffCatalogApprovalTransport {
     private companion object {
-        const val HOST = "lkoptqhodgjeuwwfihfr.supabase.co"
+        val HOST=BuildConfig.MARKETPRO_SUPABASE_HOST
         const val RPC = "marketpro_device_catalog_link_approval"
         const val MAX_BODY = 8192
     }

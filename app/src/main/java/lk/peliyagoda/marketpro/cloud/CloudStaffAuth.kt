@@ -40,7 +40,7 @@ internal class CloudStaffAuth(context: Context) {
     companion object {
         private const val KEY = "encrypted_staff_tokens_v1"
         private const val ALIAS = "marketpro_staff_aes256_gcm_v1"
-        private const val HOST = "lkoptqhodgjeuwwfihfr.supabase.co"
+        private val HOST = BuildConfig.MARKETPRO_SUPABASE_HOST
         private const val RESPONSE_BYTES = 32768
     }
 

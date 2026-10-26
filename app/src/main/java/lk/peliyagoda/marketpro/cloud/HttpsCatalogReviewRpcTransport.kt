@@ -30,7 +30,7 @@ internal class HttpsCatalogReviewRpcTransport(
     private val actualDeviceUuid: String
 ) : CatalogReviewRpcTransport {
     companion object {
-        private const val HOST = "lkoptqhodgjeuwwfihfr.supabase.co"
+        private val HOST=BuildConfig.MARKETPRO_SUPABASE_HOST
         private const val MAX_RESPONSE_BYTES = 262144
         private val ALLOWED_RPC = setOf(
             "marketpro_staff_submit_catalog_candidate",

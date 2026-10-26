@@ -14,6 +14,11 @@ internal object OwnerTotpMfaPolicy {
         UUID.fromString(value).toString().equals(value,true)
     }.getOrDefault(false)
     fun validManualSecret(value:String)=secret.matches(value)
+    // Owner's own Supabase Auth MFA is independent of Staff pairing/role.
+    // Separating the UI gate does NOT grant Staff login, device keys or writers.
+    fun canCallOwnerAuth(preview:Boolean, ownerMfaDeployed:Boolean):Boolean =
+        !preview && ownerMfaDeployed
+
     fun canCallAuth(preview:Boolean, ownerMfaDeployed:Boolean,
                     staffLogin:Boolean, pairingDeployed:Boolean):Boolean =
         !preview && ownerMfaDeployed && staffLogin && pairingDeployed

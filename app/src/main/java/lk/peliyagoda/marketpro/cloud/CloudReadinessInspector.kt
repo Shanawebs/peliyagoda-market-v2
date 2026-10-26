@@ -70,7 +70,7 @@ class CloudReadinessInspector(private val context: Context) {
     ): Pair<String, String?> {
         val url = URL(origin + "/rest/v1/" + endpoint)
         require(url.protocol == "https" &&
-            url.host == "lkoptqhodgjeuwwfihfr.supabase.co") {
+            url.host == BuildConfig.MARKETPRO_SUPABASE_HOST) {
             "Cloud endpoint not recognized"
         }
         val connection = (url.openConnection() as HttpURLConnection).apply {
