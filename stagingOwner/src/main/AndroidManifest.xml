@@ -6,7 +6,7 @@
     <application
         android:allowBackup="false"
         android:fullBackupContent="false"
-        android:label="Market Pro · Staging P5 Test"
+        android:label="Market Pro · Staging Clock Fix"
         android:usesCleartextTraffic="false"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity
