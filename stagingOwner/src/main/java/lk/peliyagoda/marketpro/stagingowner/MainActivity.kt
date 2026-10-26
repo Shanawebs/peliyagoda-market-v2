@@ -25,10 +25,12 @@ class MainActivity : Activity() {
     private lateinit var output: TextView
     private lateinit var loginButton: Button
     private lateinit var verifyButton: Button
+    private lateinit var probeButton: Button
     private lateinit var passwordInput: EditText
     private lateinit var codeInput: EditText
     @Volatile private var busy = false
     private var awaitingMfa = false
+    private var readyForProbe = false
     private val green = Color.rgb(13, 85, 58)
 
     private fun dp(n:Int)= (resources.displayMetrics.density*n).toInt()
@@ -69,7 +71,8 @@ class MainActivity : Activity() {
         busy=true
         loginButton.isEnabled=false
         verifyButton.isEnabled=false
-        output.text="Staging Auth server සමඟ ආරක්ෂිතව සම්බන්ධ වෙමින්..."
+        probeButton.isEnabled=false
+        output.text="Staging Server සමඟ ආරක්ෂිතව සම්බන්ධ වෙමින්..."
         Thread {
             val response=try { Pair(true,task()) }
             catch (e:StagingOwnerAuth.AuthException) {
@@ -83,6 +86,7 @@ class MainActivity : Activity() {
                 if(response.first)success()
                 loginButton.isEnabled=true
                 verifyButton.isEnabled=awaitingMfa
+                probeButton.isEnabled=readyForProbe
             }
         }.start()
     }
@@ -102,7 +106,7 @@ class MainActivity : Activity() {
         setContentView(scroll)
 
         root.addView(text("Market Pro",27f,true,green))
-        root.addView(text("STAGING • Owner Security v0.2.0",17f,true,green))
+        root.addView(text("STAGING • Owner Security v0.3.0",17f,true,green))
         val note=text(
             "වෙනම ආරක්ෂක පරීක්ෂණ App එකක්.\n" +
             "Staging Auth Login පමණයි. No Purchase Sync • No Staff Access.\n" +
@@ -155,6 +159,7 @@ class MainActivity : Activity() {
         loginButton=button(root,"Login to Staging (Password)") {
             window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
             awaitingMfa=false
+            readyForProbe=false
             val pwd=passwordInput.text.toString()
             passwordInput.text.clear()
             if(pwd.isBlank()) {
@@ -175,15 +180,31 @@ class MainActivity : Activity() {
             val code=codeInput.text.toString()
             codeInput.text.clear()
             work({auth.verify(code)}) {
-                // No token, password or code remains stored by the app.
-                // Unlock screenshots only for the status-only result.
+                // Temporary AAL2 bearer stays in memory for ONE read-only
+                // Edge probe; password/code are already cleared.
+                // Result contains no secret; screenshots can be shared.
                 window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
                 awaitingMfa=false
+                readyForProbe=true
             }
         }
         verifyButton.isEnabled=false
 
-        root.addView(text("Test v0.2.0 • Separate App ID • No Cloud Data Writes",
+        root.addView(text("3 • Secure Server Connection",20f,true,green).apply {
+            setPadding(0,dp(26),0,dp(8))
+        })
+        root.addView(text(
+            "AAL2 login එකෙන් පසුව Staging Edge API එකට සම්බන්ධ වෙනවා. " +
+            "මෙය Phone Register කිරීමක් නොවේ.",
+            14f,false,Color.DKGRAY
+        ))
+        probeButton=button(root,"Check Secure Server (Read Only)") {
+            readyForProbe=false
+            work({auth.checkEdgeAal2()})
+        }
+        probeButton.isEnabled=false
+
+        root.addView(text("Test v0.3.0 • Separate App ID • No Cloud Data Writes",
             12f,false,Color.GRAY).apply {
             setPadding(0,dp(20),0,0)
         })

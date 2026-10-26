@@ -16,7 +16,8 @@ import java.util.UUID
  * - Staging HTTPS origin and Owner UUID are hard-pinned; no production fallback.
  * - Publishable key only. NEVER bundle a service-role/secret key.
  * - Password, 6-digit TOTP, and ephemeral JWTs are never persisted/logged.
- * - No financial, PostgREST, device pairing or Edge RPC requests.
+ * - No financial, PostgREST, device pairing or Edge write RPC requests.
+ * - One explicit Owner-only read-only AAL2 Edge status endpoint is allowed.
  * - AAL2 is asserted only after a server-issued challenge + verify, and
  *   additionally confirmed by the signed-session /auth/v1/user endpoint.
  */
@@ -32,10 +33,14 @@ internal class StagingOwnerAuth {
 
     private var aal1: String? = null
     private var factor: String? = null
+    private var aal2TestToken: String? = null
+    private var aal2VerifiedAtMs: Long = 0L
 
     fun clear() {
         aal1 = null
         factor = null
+        aal2TestToken = null
+        aal2VerifiedAtMs = 0L
     }
 
     fun signIn(password: String): String {
@@ -117,11 +122,93 @@ internal class StagingOwnerAuth {
         if (confirmedUser.optString("id") != OWNER_ID)
             throw AuthException("Supabase Auth session confirmation අසාර්ථකයි.")
 
-        // Never cache live tokens, even for an otherwise successful test.
-        clear()
+        // Keep the upgraded bearer in VOLATILE MEMORY for one immediately
+        // subsequent read-only Edge test (max 120 seconds). Never persist it.
+        aal1 = null
+        factor = null
+        aal2TestToken = upgraded
+        aal2VerifiedAtMs = System.currentTimeMillis()
         return "PASS ✓ Staging Owner Login + TOTP MFA (AAL2).\n" +
             "Supabase Auth user confirmation passed.\n" +
             "NO device enrolled • NO purchase sync • NO Staff access."
+    }
+
+    /**
+     * Read-only Edge JWT smoke probe, using the already-verified Owner AAL2
+     * JWT once. This function never requests a nonce, new key or enrollment.
+     * An HTTP 403 is NOT a pass: the server must return a strict 200 proof.
+     */
+    fun checkEdgeAal2(): String {
+        val token = aal2TestToken
+            ?: throw AuthException("මුලින් Owner MFA Verify කරන්න.")
+        val age = System.currentTimeMillis() - aal2VerifiedAtMs
+        if (age < 0 || age > 120_000) {
+            clear()
+            throw AuthException("MFA Test Session එක කල් ඉකුත්. නැවත Login කරන්න.")
+        }
+        val url = URL(ORIGIN + "/functions/v1/marketpro-qa-owner-bootstrap")
+        val conn = url.openConnection() as HttpURLConnection
+        try {
+            check(url.protocol == "https" &&
+                url.host == "qqiheexpbuzohllugxrk.supabase.co")
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 10_000
+            conn.readTimeout = 12_000
+            conn.instanceFollowRedirects = false
+            conn.setRequestProperty("apikey", API_KEY)
+            conn.setRequestProperty("Authorization", "Bearer $token")
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("Accept", "application/json")
+            conn.doOutput = true
+            val body=JSONObject()
+                .put("intent","status")
+                .put("workspace_id","af77cb66-76b2-492a-a460-06132f468713")
+            conn.outputStream.use { stream ->
+                stream.write(body.toString().toByteArray(Charsets.UTF_8))
+            }
+            val status = conn.responseCode
+            if(status != 200) {
+                throw AuthException(when(status) {
+                    401,403 -> "EDGE DENIED ($status) — Owner JWT / fresh MFA පරීක්ෂා කරන්න."
+                    404 -> "EDGE NOT FOUND — Staging API සම්බන්ධතාවය පරීක්ෂා කරන්න."
+                    429 -> "EDGE RATE LIMITED — පසුව නැවත පරීක්ෂා කරන්න."
+                    else -> "EDGE SERVER RESPONSE ($status) — Test incomplete."
+                })
+            }
+            val bodyBytes = conn.inputStream.use { input ->
+                val out=ByteArrayOutputStream()
+                val chunk=ByteArray(512)
+                while(true) {
+                    val n=input.read(chunk)
+                    if(n<0) break
+                    if(out.size()+n>4096) throw AuthException("EDGE response too large.")
+                    out.write(chunk,0,n)
+                }
+                out.toByteArray()
+            }
+            val response=JSONObject(String(bodyBytes,Charsets.UTF_8))
+            if(response.optBoolean("ok") != true ||
+                response.optString("check") != "qa_owner_aal2_edge_authenticated" ||
+                response.optBoolean("db_calls_made",true) != false ||
+                response.optBoolean("device_registration_performed",true) != false ||
+                response.optBoolean("staff_access_granted",true) != false ||
+                response.optBoolean("purchase_sync_started",true) != false) {
+                throw AuthException("EDGE safety response invalid. Test incomplete.")
+            }
+            return "PASS ✓ Edge Server accepted verified Owner AAL2.\n" +
+                "Read-only test • No DB calls • No device registration.\n" +
+                "No Staff Access • No Purchase Sync."
+        } catch(e:AuthException) {
+            throw e
+        } catch(_:IOException) {
+            throw AuthException("Staging Edge network error. Test incomplete.")
+        } catch(_:Exception) {
+            throw AuthException("Staging Edge response invalid. Test incomplete.")
+        } finally {
+            // Even on network errors or denial, discard the JWT immediately.
+            clear()
+            conn.disconnect()
+        }
     }
 
     /** No factor enrollment or modification; only preverified TOTP factors. */
