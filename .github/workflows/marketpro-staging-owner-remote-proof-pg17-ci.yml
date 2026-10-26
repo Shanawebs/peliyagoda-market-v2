@@ -1,0 +1,64 @@
+name: Market Pro Staging — Owner Remote P256 Challenge PG17
+
+on:
+  push:
+    branches:
+      - feature/marketpro-staging-owner-remote-proof-v040
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  freeze-production:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Preserve Production Android / Dashboard / SQL
+        run: |
+          set -euo pipefail
+          BASE=314f760cb1e568626abbbc9505e5151e535b280b
+          git diff --exit-code "$BASE" HEAD -- app/ supabase/migrations/ supabase/proposals/ web/marketpro-dashboard/
+          wrong=$(git diff --name-only "$BASE" HEAD -- supabase/staging | grep -v '^supabase/staging/staging_qa_owner_remote_proof_only.sql$' || true)
+          test -z "$wrong" || { echo "Unexpected server SQL: $wrong"; exit 1; }
+          grep -Fq '"MARKETPRO_LOCAL_PREVIEW", "true"' app/build.gradle.kts
+
+  owner-p256-crypto:
+    needs: freeze-production
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test live EC signatures, nonce and JWT failures
+        run: |
+          node --test tests/staging_owner_remote_proof_edge.test.mjs
+          node --test tests/staging_owner_bootstrap_edge_integration.test.mjs
+          node --test tests/staging_owner_bootstrap_key_crypto.test.mjs
+
+  pg17-one-use-proof:
+    needs: freeze-production
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Disposable PostgreSQL 17 with no hosted connection
+        run: |
+          docker run -d --rm --name marketpro_stage_proof_pg \
+            -e POSTGRES_PASSWORD=testonly -v "$PWD":/work:ro -w /work postgres:17
+          for i in $(seq 1 40); do
+            if docker exec marketpro_stage_proof_pg pg_isready -U postgres; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Verify private RPC ACL, 60-second nonce and atomic replay denial
+        run: |
+          docker exec marketpro_stage_proof_pg psql -X -v ON_ERROR_STOP=1 \
+            -U postgres -d postgres -f supabase/tests/staging_qa_owner_remote_proof_pg17_only.sql
+      - name: Tear down
+        if: always()
+        run: docker stop marketpro_stage_proof_pg || true
