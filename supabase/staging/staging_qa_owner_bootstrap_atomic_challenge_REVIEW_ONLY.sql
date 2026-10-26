@@ -100,7 +100,7 @@ BEGIN
   IF NOT FOUND
      OR p_device IS NULL OR p_spki_base64 IS NULL
      OR (length(p_spki_base64) NOT BETWEEN 85 AND 800)
-     OR p_spki_base64 !~ '^[A-Za-z0-9+/]+={0,2}
+     OR p_spki_base64 !~ '^[A-Za-z0-9+/]+={0,2}$'
   THEN RAISE EXCEPTION 'Owner bootstrap authorization denied'
      USING ERRCODE='42501'; END IF;
 
