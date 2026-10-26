@@ -180,8 +180,9 @@ class MainActivity : Activity() {
             val code=codeInput.text.toString()
             codeInput.text.clear()
             work({auth.verify(code)}) {
-                // No token, password or code remains stored by the app.
-                // Unlock screenshots only for the status-only result.
+                // Temporary AAL2 bearer stays in memory for ONE read-only
+                // Edge probe; password/code are already cleared.
+                // Result contains no secret; screenshots can be shared.
                 window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
                 awaitingMfa=false
                 readyForProbe=true
