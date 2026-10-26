@@ -1,0 +1,89 @@
+name: Market Pro One Full-App Two-Phone Staging Foundation
+
+on:
+  push:
+    branches:
+      - feature/marketpro-one-apk-two-phone-staging-mvp
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: marketpro-one-full-app-staging
+  cancel-in-progress: true
+
+jobs:
+  isolated-full-app:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Assert Staging is truly separate and all business writers remain OFF
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'include(":stagingMarket")' settings.gradle.kts
+          grep -Fq 'applicationId = "lk.peliyagoda.marketpro.staging.fullapp"' stagingMarket/build.gradle.kts
+          grep -Fq '"MARKETPRO_SUPABASE_HOST", "\"qqiheexpbuzohllugxrk.supabase.co\""' stagingMarket/build.gradle.kts
+          grep -Fq '"MARKETPRO_WORKSPACE_ID", "\"af77cb66-76b2-492a-a460-06132f468713\""' stagingMarket/build.gradle.kts
+          grep -Fq '"MARKETPRO_OWNER_USER_ID", "\"98c3b101-d452-4b6b-902c-0b1a31fc340c\""' stagingMarket/build.gradle.kts
+          grep -Fq '"MARKETPRO_LOCAL_PREVIEW", "true"' stagingMarket/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_LOGIN_ENABLED", "false"' stagingMarket/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_OUTBOX_AUTO_UPLOAD", "false"' stagingMarket/build.gradle.kts
+          grep -Fq 'android.permission.INTERNET" tools:node="remove"' app/src/main/AndroidManifest.xml
+          grep -Fq 'android.permission.INTERNET"' stagingMarket/src/main/AndroidManifest.xml
+          ! grep -Rq 'lkoptqhodgjeuwwfihfr.supabase.co' app/src/main/java/lk/peliyagoda/marketpro/cloud/
+          ! grep -Rq 'e46b90c5-ed6a-4952-82e9-8582fac06d89' app/src/main/java/lk/peliyagoda/marketpro/cloud/
+          ! grep -Rq 'bf49c22f-f245-4d3c-987e-c5ec081d7cad' app/src/main/java/lk/peliyagoda/marketpro/cloud/
+          ! grep -q 'sb_secret_' stagingMarket/build.gradle.kts
+          ! grep -q 'service_role' stagingMarket/build.gradle.kts
+          echo "PASS: Single shared Market Pro source and separately pinned Staging app; no production hostname in runtime Cloud Kotlin"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android 35 SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Prepare bundled Sinhala font
+        run: bash scripts/prepare_sinhala_font.sh
+      - name: Build original unchanged offline preview AND integrated staging full app
+        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug :stagingMarket:assembleDebug
+      - name: Verify both APK package IDs and staging permissions
+        shell: bash
+        run: |
+          set -euo pipefail
+          STAGE=stagingMarket/build/outputs/apk/debug/stagingMarket-debug.apk
+          OWNER=app/build/outputs/apk/debug/app-debug.apk
+          test -s "$STAGE"
+          test -s "$OWNER"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$STAGE" > /tmp/stage_badging.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$OWNER" > /tmp/prod_preview_badging.txt
+          grep -Fq "package: name='lk.peliyagoda.marketpro.staging.fullapp'" /tmp/stage_badging.txt
+          grep -Fq "package: name='lk.peliyagoda.marketpro.security.foundation.v350'" /tmp/prod_preview_badging.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions "$STAGE" > /tmp/stage_permissions.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions "$OWNER" > /tmp/prod_preview_permissions.txt
+          grep -Fq 'android.permission.INTERNET' /tmp/stage_permissions.txt
+          ! grep -Fq 'android.permission.INTERNET' /tmp/prod_preview_permissions.txt
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$STAGE"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$OWNER"
+          cp "$STAGE" MarketPro-Team-Integrated-Staging-Foundation-v4.0.0-debug.apk
+          sha256sum MarketPro-Team-Integrated-Staging-Foundation-v4.0.0-debug.apk
+      - name: QA artifact only - NOT a staff/production install release
+        uses: actions/upload-artifact@v4
+        with:
+          name: MarketPro-Team-FullApp-Staging-Foundation-v4.0.0
+          path: MarketPro-Team-Integrated-Staging-Foundation-v4.0.0-debug.apk
+          retention-days: 15
+          if-no-files-found: error
