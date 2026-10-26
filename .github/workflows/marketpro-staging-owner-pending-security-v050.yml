@@ -21,7 +21,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          BASE=6a8c4c73a428c42c9d6377a4535fe3bc741c2078
+          BASE=c56e9caf60e4429439650f111a95b21b36725a39
           git diff --exit-code "$BASE" HEAD -- app/ stagingOwner/ web/marketpro-dashboard/ supabase/functions/ supabase/migrations/ supabase/proposals/
           changed=$(git diff --name-only "$BASE" HEAD -- supabase/staging/ | grep -v '^supabase/staging/staging_qa_owner_pending_service_only_v050.sql$' || true)
           test -z "$changed" || { echo "Unexpected modified hosted staging SQL: $changed"; exit 1; }
