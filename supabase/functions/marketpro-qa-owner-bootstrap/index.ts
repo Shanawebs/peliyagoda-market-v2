@@ -1,5 +1,6 @@
-// REVIEW ONLY: do NOT deploy while Owner bootstrap gate / Android isolation
-// remain unreviewed. Staging project qqiheexpbuzohllugxrk only.
+// STAGING DEPLOYED / AUTH REQUIRED / ROLLOUT GATE OFF.
+// No Owner phone, invitation, Staff access or writer is enabled.
+// Project qqiheexpbuzohllugxrk ONLY; do not deploy to Production.
 // Pinned SDK; never disable JWT verification or expose an admin API key.
 import {withSupabase} from "npm:@supabase/server@1.9.2";
 import {
