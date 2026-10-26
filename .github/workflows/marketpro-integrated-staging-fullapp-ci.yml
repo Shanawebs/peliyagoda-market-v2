@@ -30,7 +30,8 @@ jobs:
           grep -Fq '"MARKETPRO_SUPABASE_HOST", "\"qqiheexpbuzohllugxrk.supabase.co\""' stagingMarket/build.gradle.kts
           grep -Fq '"MARKETPRO_WORKSPACE_ID", "\"af77cb66-76b2-492a-a460-06132f468713\""' stagingMarket/build.gradle.kts
           grep -Fq '"MARKETPRO_OWNER_USER_ID", "\"98c3b101-d452-4b6b-902c-0b1a31fc340c\""' stagingMarket/build.gradle.kts
-          grep -Fq '"MARKETPRO_LOCAL_PREVIEW", "true"' stagingMarket/build.gradle.kts
+          grep -Fq '"MARKETPRO_LOCAL_PREVIEW", "false"' stagingMarket/build.gradle.kts
+          grep -Fq '"MARKETPRO_LOCAL_PREVIEW", "true"' app/build.gradle.kts
           grep -Fq '"MARKETPRO_STAFF_LOGIN_ENABLED", "false"' stagingMarket/build.gradle.kts
           grep -Fq '"MARKETPRO_STAFF_OUTBOX_AUTO_UPLOAD", "false"' stagingMarket/build.gradle.kts
           grep -Fq 'android.permission.INTERNET" tools:node="remove"' app/src/main/AndroidManifest.xml
