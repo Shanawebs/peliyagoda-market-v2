@@ -292,6 +292,9 @@ internal class StagingOwnerAuth {
                 "No phone registered • No Staff Access • No Purchase Sync."
         } catch (e: AuthException) {
             throw AuthException("FAIL [" + stage + "] — " + (e.message ?: "Denied."))
+        } catch (e: OwnerKeystoreLab.ProofValidation) {
+            // Only compile-time safe labels; no server material or secrets.
+            throw AuthException("FAIL [" + stage + "] — " + e.safeCode)
         } catch (_: org.json.JSONException) {
             throw AuthException("FAIL [" + stage + "] — Invalid JSON response.")
         } catch (_: java.security.GeneralSecurityException) {

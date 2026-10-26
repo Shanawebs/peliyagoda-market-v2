@@ -100,18 +100,22 @@ internal class OwnerKeystoreLab {
         )
     }
 
-    /** Sign server-generated values only. This does NOT register a phone. */
+    /**
+     * Safe deterministic labels. Never echo the actual server challenge,
+     * nonce, fingerprint, time, phone UUID, JWT, signature or private key.
+     */
+    internal class ProofValidation(val safeCode: String) : IllegalArgumentException()
+
+    /** Sign server-generated values only; real database activation is absent. */
     fun signStagingServerChallenge(c: JSONObject): String {
         val (privateKey, publicKey) = pair()
-        require(c.optString("proof_version") == OwnerProofTranscript.VERSION) {
-            "Wrong server challenge version"
-        }
-        require(c.optString("fingerprint_sha256") == fingerprint(publicKey)) {
-            "Server public key does not match this phone"
-        }
-        require(c.optBoolean("phone_activated", true) == false) {
-            "Unexpected phone activation response"
-        }
+        if (c.optString("proof_version") != OwnerProofTranscript.VERSION)
+            throw ProofValidation("P5_VERSION")
+        if (c.optString("fingerprint_sha256") != fingerprint(publicKey))
+            throw ProofValidation("P5_KEY_FINGERPRINT")
+        if (c.optBoolean("phone_activated", true) != false)
+            throw ProofValidation("P5_UNEXPECTED_DEVICE_STATE")
+
         val material = OwnerProofTranscript(
             workspaceId = c.getString("workspace_id"),
             ownerUserId = c.getString("owner_user_id"),
@@ -123,9 +127,25 @@ internal class OwnerKeystoreLab {
             issuedAtMillis = c.getLong("issued_at_millis"),
             expiresAtMillis = c.getLong("expires_at_millis")
         )
+        val now = System.currentTimeMillis()
+        val bytes = try {
+            material.bytes(now)
+        } catch (e: IllegalArgumentException) {
+            val code = when (e.message) {
+                "Invalid local test UUID" -> "P5_UUID_FORMAT"
+                "Invalid local test nonce or fingerprint" -> "P5_HEX_FORMAT"
+                "Invalid challenge window" -> "P5_INVALID_TIME_WINDOW"
+                "Challenge is too long" -> "P5_EXCESSIVE_TTL"
+                "Expired or future local challenge" ->
+                    if (now < material.issuedAtMillis) "P5_PHONE_CLOCK_BEHIND"
+                    else "P5_PHONE_CLOCK_AHEAD_OR_EXPIRED"
+                else -> "P5_INVALID_TRANSCRIPT"
+            }
+            throw ProofValidation(code)
+        }
         val signature = Signature.getInstance("SHA256withECDSA").run {
             initSign(privateKey)
-            update(material.bytes(System.currentTimeMillis()))
+            update(bytes)
             sign()
         }
         return Base64.encodeToString(
