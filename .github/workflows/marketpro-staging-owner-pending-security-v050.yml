@@ -22,7 +22,90 @@ jobs:
         run: |
           set -euo pipefail
           BASE=c56e9caf60e4429439650f111a95b21b36725a39
-          git diff --exit-code "$BASE" HEAD -- app/ stagingOwner/ web/marketpro-dashboard/ supabase/functions/ supabase/migrations/ supabase/proposals/
+          git diff --exit-code "$BASE" HEAD -- app/ stagingOwner/ web/marketpro-dashboard/ supabase/migrations/ supabase/proposals/
+          allowed='^(supabase/functions/marketpro-qa-owner-bootstrap/index.ts|supabase/functions/_shared/pending_owner_edge_core.mjs|supabase/functions/_shared/pending_owner_proof.mjs)
+          changed=$(git diff --name-only "$BASE" HEAD -- supabase/staging/ | grep -v '^supabase/staging/staging_qa_owner_pending_service_only_v050.sql$' || true)
+          test -z "$changed" || { echo "Unexpected modified hosted staging SQL: $changed"; exit 1; }
+          python3 - <<'PY'
+          from pathlib import Path
+          sql=Path("supabase/staging/staging_qa_owner_pending_service_only_v050.sql").read_text()
+          assert "qa_owner_pending_gate" in sql
+          assert "enabled boolean NOT NULL DEFAULT false" in sql
+          assert "status text NOT NULL DEFAULT 'pending' CHECK(status='pending')" in sql
+          assert "enabled boolean NOT NULL DEFAULT false CHECK(enabled=false)" in sql
+          assert "can_write boolean NOT NULL DEFAULT false CHECK(can_write=false)" in sql
+          assert "TO service_role" in sql
+          assert "GRANT EXECUTE" in sql
+          assert "TO authenticated;" not in sql and "TO anon;" not in sql
+          assert "lkoptqhodgjeuwwfihfr" not in sql
+          assert sql.rstrip().endswith("COMMIT;")
+          PY
+
+  pg17-pending-policy:
+    needs: production-frozen
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start isolated disposable PostgreSQL 17
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm -d --name marketpro_qa_pending_pg17 \
+            -e POSTGRES_PASSWORD=disposable-only -v "$PWD":/work:ro \
+            -w /work postgres:17
+          for i in $(seq 1 40); do
+            if docker exec marketpro_qa_pending_pg17 pg_isready -U postgres; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Real database security and idempotency/replay testing
+        shell: bash
+        run: |
+          docker exec marketpro_qa_pending_pg17 psql -X -v ON_ERROR_STOP=1 \
+            -U postgres -d postgres -f supabase/tests/staging_qa_owner_pending_pg17_v050.sql
+      - name: Tear down ephemeral testing DB
+        if: always()
+        run: docker stop marketpro_qa_pending_pg17 || true
+
+  pending-owner-crypto:
+    needs: production-frozen
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run real signed P256 pending domain and JWT rejection tests
+        shell: bash
+        run: |
+          node --test tests/staging_owner_pending_edge_v050.test.mjs
+          node --test tests/staging_owner_remote_proof_edge.test.mjs
+          node --test tests/staging_owner_bootstrap_edge_integration.test.mjs
+          node --test tests/staging_owner_bootstrap_key_crypto.test.mjs
+      - name: Ensure authenticated route and disabled financial writers
+        shell: bash
+        run: |
+          grep -Fq 'withSupabase({auth:"user"}' supabase/functions/marketpro-qa-owner-bootstrap/index.ts
+          grep -Fq 'npm:@supabase/server@1.9.2' supabase/functions/marketpro-qa-owner-bootstrap/index.ts
+          grep -Fq 'pending_issue' supabase/functions/_shared/pending_owner_edge_core.mjs
+          grep -Fq 'pending_verify' supabase/functions/_shared/pending_owner_edge_core.mjs
+
+  pending-edge-deno:
+    needs: production-frozen
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Typecheck staging pending Owner Edge route
+        run: deno check supabase/functions/marketpro-qa-owner-bootstrap/index.ts
+
+          other=$(git diff --name-only "$BASE" HEAD -- supabase/functions/ | grep -Ev "$allowed" || true)
+          test -z "$other" || { echo "Unsafe unrelated Edge file: $other"; exit 1; }
           changed=$(git diff --name-only "$BASE" HEAD -- supabase/staging/ | grep -v '^supabase/staging/staging_qa_owner_pending_service_only_v050.sql$' || true)
           test -z "$changed" || { echo "Unexpected modified hosted staging SQL: $changed"; exit 1; }
           python3 - <<'PY'
