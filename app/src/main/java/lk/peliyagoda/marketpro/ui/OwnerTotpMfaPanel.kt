@@ -42,11 +42,9 @@ internal fun OwnerTotpMfaPanel() {
     val context=LocalContext.current.applicationContext
     val client=remember(context) {CloudOwnerAuth(context)}
     val scope=rememberCoroutineScope()
-    val enabled=OwnerTotpMfaPolicy.canCallAuth(
+    val enabled=OwnerTotpMfaPolicy.canCallOwnerAuth(
         BuildConfig.MARKETPRO_LOCAL_PREVIEW,
-        BuildConfig.MARKETPRO_OWNER_TOTP_MFA_AUTH_DEPLOYED,
-        BuildConfig.MARKETPRO_STAFF_LOGIN_ENABLED,
-        BuildConfig.MARKETPRO_STAFF_PAIRING_RPC_DEPLOYED
+        BuildConfig.MARKETPRO_OWNER_TOTP_MFA_AUTH_DEPLOYED
     )
     // No rememberSaveable or persistent state: no screenshots/logging of OTP.
     var verifiedFactors by remember {
