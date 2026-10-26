@@ -24,7 +24,7 @@ jobs:
           git diff --exit-code "$BASE" HEAD -- app/ supabase/migrations/ supabase/proposals/ web/marketpro-dashboard/ supabase/functions/marketpro-staff-device-proof/ supabase/functions/marketpro-staff-key-enrollment/
           unexpected=$(git diff --name-only "$BASE" HEAD -- supabase/staging/ | grep -v '^supabase/staging/verify_qa_owner_edge_locked_READ_ONLY.sql$' || true)
           test -z "$unexpected" || { echo "Unsafe SQL modification: $unexpected"; exit 1; }
-          python3 -c 'from pathlib import Path; p=Path("supabase/staging/verify_qa_owner_edge_locked_READ_ONLY.sql"); b="\n".join(x for x in p.read_text().splitlines() if not x.lstrip().startswith("--")).strip(); assert b.startswith("SELECT "); assert b.endswith(";") and b.count(";")==1'
+          python3 -c 'from pathlib import Path; p=Path("supabase/staging/verify_qa_owner_edge_locked_READ_ONLY.sql"); b="\n".join(x for x in p.read_text().splitlines() if not x.lstrip().startswith("--")).strip(); assert b.split()[0].upper()=="SELECT"; assert b.endswith(";") and b.count(";")==1'
           grep -Fq '"MARKETPRO_LOCAL_PREVIEW", "true"' app/build.gradle.kts
           grep -Fq '"MARKETPRO_STAFF_LOGIN_ENABLED", "false"' app/build.gradle.kts
           grep -Fq 'android.permission.INTERNET" tools:node="remove"' app/src/main/AndroidManifest.xml
