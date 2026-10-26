@@ -46,7 +46,7 @@ internal class StaffPublicKeyEnrollmentClient(context:Context) {
             !session.accessToken.contains('\r'))
         val origin=URL(BuildConfig.MARKETPRO_SUPABASE_URL)
         require(origin.protocol=="https" &&
-            origin.host=="lkoptqhodgjeuwwfihfr.supabase.co" &&
+            origin.host==BuildConfig.MARKETPRO_SUPABASE_HOST &&
             (origin.port==-1||origin.port==443) &&
             (origin.path.isEmpty()||origin.path=="/") &&
             origin.query==null && origin.ref==null && origin.userInfo==null)
