@@ -36,6 +36,11 @@ android {
         buildConfigField("boolean", "MARKETPRO_STAFF_PAIRING_RPC_DEPLOYED", "false")
         // Dedicated Owner confirmation + server audit not activated.
         buildConfigField("boolean", "MARKETPRO_STAFF_WRITE_APPROVAL_RPC_DEPLOYED", "false")
+        // Explicit, build-specific destinations. Existing preview keeps its
+        // original Production values but has NO INTERNET and all writer flags OFF.
+        buildConfigField("String", "MARKETPRO_SUPABASE_HOST", "\"lkoptqhodgjeuwwfihfr.supabase.co\"")
+        buildConfigField("String", "MARKETPRO_WORKSPACE_ID", "\"e46b90c5-ed6a-4952-82e9-8582fac06d89\"")
+        buildConfigField("String", "MARKETPRO_OWNER_USER_ID", "\"bf49c22f-f245-4d3c-987e-c5ec081d7cad\"")
         buildConfigField("String", "MARKETPRO_SUPABASE_URL", "\"https://lkoptqhodgjeuwwfihfr.supabase.co\"")
         buildConfigField("String", "MARKETPRO_SUPABASE_PUBLISHABLE_KEY", "\"sb_publishable__7F9sfydgBtHiZNPV9kNzg_hGfazjxg\"")
         applicationId = "lk.peliyagoda.marketpro.security.foundation.v350"
