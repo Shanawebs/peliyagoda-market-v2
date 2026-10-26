@@ -1,6 +1,7 @@
 package lk.peliyagoda.marketpro.stagingowner
 
 import android.util.Base64
+import android.os.SystemClock
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
@@ -248,6 +249,9 @@ internal class StagingOwnerAuth {
                 .put("spki_base64url", publicSpki)
 
             stage = "P3_ISSUE_SERVER"
+            // Capture BEFORE the HTTP request, so the monotonic age includes
+            // round-trip latency and never extends the server's 60s TTL.
+            val issueRequestStartElapsedMs = SystemClock.elapsedRealtime()
             val issued = postOwnerProof(token, request)
 
             stage = "P4_CHECK_CHALLENGE"
@@ -269,7 +273,7 @@ internal class StagingOwnerAuth {
                 throw AuthException("Server challenge format invalid.")
 
             stage = "P5_PHONE_SIGN"
-            val signature = lab.signStagingServerChallenge(challenge)
+            val signature = lab.signStagingServerChallenge(challenge, issueRequestStartElapsedMs)
 
             stage = "P6_VERIFY_SERVER"
             val verifyRequest = JSONObject()
