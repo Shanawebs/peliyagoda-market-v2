@@ -207,11 +207,9 @@ class CloudOwnerAuth(private val app: Context) {
     }
 
     private fun requireOwnerTotpEnabled() {
-        check(OwnerTotpMfaPolicy.canCallAuth(
+        check(OwnerTotpMfaPolicy.canCallOwnerAuth(
             BuildConfig.MARKETPRO_LOCAL_PREVIEW,
-            BuildConfig.MARKETPRO_OWNER_TOTP_MFA_AUTH_DEPLOYED,
-            BuildConfig.MARKETPRO_STAFF_LOGIN_ENABLED,
-            BuildConfig.MARKETPRO_STAFF_PAIRING_RPC_DEPLOYED
+            BuildConfig.MARKETPRO_OWNER_TOTP_MFA_AUTH_DEPLOYED
         )) { "Owner Authenticator MFA is disabled in this offline Security Preview" }
     }
 
