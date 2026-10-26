@@ -26,6 +26,7 @@ class MainActivity : Activity() {
     private lateinit var loginButton: Button
     private lateinit var verifyButton: Button
     private lateinit var probeButton: Button
+    private lateinit var remoteProofButton: Button
     private lateinit var passwordInput: EditText
     private lateinit var codeInput: EditText
     @Volatile private var busy = false
@@ -72,6 +73,7 @@ class MainActivity : Activity() {
         loginButton.isEnabled=false
         verifyButton.isEnabled=false
         probeButton.isEnabled=false
+        remoteProofButton.isEnabled=false
         output.text="Staging Server සමඟ ආරක්ෂිතව සම්බන්ධ වෙමින්..."
         Thread {
             val response=try { Pair(true,task()) }
@@ -87,6 +89,7 @@ class MainActivity : Activity() {
                 loginButton.isEnabled=true
                 verifyButton.isEnabled=awaitingMfa
                 probeButton.isEnabled=readyForProbe
+                remoteProofButton.isEnabled=readyForProbe
             }
         }.start()
     }
@@ -106,7 +109,7 @@ class MainActivity : Activity() {
         setContentView(scroll)
 
         root.addView(text("Market Pro",27f,true,green))
-        root.addView(text("STAGING • Owner Security v0.3.0",17f,true,green))
+        root.addView(text("STAGING • Owner Security v0.4.0",17f,true,green))
         val note=text(
             "වෙනම ආරක්ෂක පරීක්ෂණ App එකක්.\n" +
             "Staging Auth Login පමණයි. No Purchase Sync • No Staff Access.\n" +
@@ -203,8 +206,18 @@ class MainActivity : Activity() {
             work({auth.checkEdgeAal2()})
         }
         probeButton.isEnabled=false
+        root.addView(text(
+            "MFA Verify කළ පසු, ඉහත Check එක හෝ පහත Signature Test එකෙන් එකක් තෝරන්න. " +
+            "වෙනත් Test එකක් සඳහා නැවත Login කරන්න.",
+            13f,false,Color.DKGRAY
+        ))
+        remoteProofButton=button(root,"Verify Phone Signature With Server") {
+            readyForProbe=false
+            work({auth.proveRemoteOwnerKey(lab)})
+        }
+        remoteProofButton.isEnabled=false
 
-        root.addView(text("Test v0.3.0 • Separate App ID • No Cloud Data Writes",
+        root.addView(text("Test v0.4.0 • Separate App ID • No Cloud Data Writes",
             12f,false,Color.GRAY).apply {
             setPadding(0,dp(20),0,0)
         })
