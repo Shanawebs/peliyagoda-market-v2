@@ -28,6 +28,7 @@ class MainActivity : Activity() {
     private lateinit var passwordInput: EditText
     private lateinit var codeInput: EditText
     @Volatile private var busy = false
+    private var awaitingMfa = false
     private val green = Color.rgb(13, 85, 58)
 
     private fun dp(n:Int)= (resources.displayMetrics.density*n).toInt()
@@ -81,7 +82,7 @@ class MainActivity : Activity() {
                 output.text=response.second
                 if(response.first)success()
                 loginButton.isEnabled=true
-                if(!response.first)verifyButton.isEnabled=true
+                verifyButton.isEnabled=awaitingMfa
             }
         }.start()
     }
@@ -152,6 +153,8 @@ class MainActivity : Activity() {
             topMargin=dp(10)
         })
         loginButton=button(root,"Login to Staging (Password)") {
+            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            awaitingMfa=false
             val pwd=passwordInput.text.toString()
             passwordInput.text.clear()
             if(pwd.isBlank()) {
@@ -160,7 +163,7 @@ class MainActivity : Activity() {
                 // Password is only held within this immediate request; no
                 // saved state, SharedPreferences, database or background task.
                 work({auth.signIn(pwd)}) {
-                    verifyButton.isEnabled=true
+                    awaitingMfa=true
                 }
             }
         }
@@ -175,7 +178,7 @@ class MainActivity : Activity() {
                 // No token, password or code remains stored by the app.
                 // Unlock screenshots only for the status-only result.
                 window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-                verifyButton.isEnabled=false
+                awaitingMfa=false
             }
         }
         verifyButton.isEnabled=false
