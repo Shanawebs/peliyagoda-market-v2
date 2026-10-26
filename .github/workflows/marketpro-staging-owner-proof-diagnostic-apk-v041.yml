@@ -40,10 +40,10 @@ jobs:
           assert 'qqiheexpbuzohllugxrk.supabase.co' in a
           assert 'lkoptqhodgjeuwwfihfr' not in a and 'sb_secret_' not in a
           assert 'marketpro_qa_service_remote_proof' not in a
-          assert '.put("intent","proof_issue")' in a
-          assert '.put("intent","proof_verify")' in a
+          assert '.put("intent", "proof_issue")' in a
+          assert '.put("intent", "proof_verify")' in a
           assert 'lab.signStagingServerChallenge(challenge)' in a
-          assert 'device_registered",true)!=false' in a
+          assert 'outcome.optBoolean("device_registered", true) != false' in a
           assert 'Diagnose Phone Signature With Server' in ui
           for stage in ('P1_SESSION','P2_PUBLIC_KEY','P3_ISSUE_SERVER',
                         'P4_CHECK_CHALLENGE','P5_PHONE_SIGN',
@@ -80,7 +80,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
-      - name: Build isolated v0.4 APK and run Kotlin unit tests
+      - name: Build isolated v0.4.1 APK and run Kotlin unit tests
         run: gradle --no-daemon --stacktrace :stagingOwner:testDebugUnitTest :stagingOwner:assembleDebug
       - name: Check actual package, permissions and debug signature
         shell: bash
@@ -118,7 +118,7 @@ jobs:
           else
             gh release create "$TAG" "$APK" \
               --target "$GITHUB_SHA" --prerelease \
-              --title "Market Pro Staging v0.4 — Real Phone Server Signature Test" \
+              --title "Market Pro Staging v0.4.1 — Safe Diagnostic Test" \
               --notes "$NOTES"
           fi
           gh release view "$TAG" --json url,assets
