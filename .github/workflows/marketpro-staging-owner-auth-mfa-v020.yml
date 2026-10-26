@@ -1,0 +1,90 @@
+name: Market Pro Staging — Owner Login MFA APK v0.2.0
+
+on:
+  push:
+    branches:
+      - feature/marketpro-staging-owner-auth-mfa-v020
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: marketpro-staging-owner-auth-v020
+  cancel-in-progress: true
+
+jobs:
+  staging-auth-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Preserve existing Market Pro app, Supabase server and dashboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code 377e899affdb2261f90239ed2d2e334c0d6688d1 HEAD -- app/ supabase/ web/marketpro-dashboard/ scripts/
+          python3 -m unittest discover -s tests -p test_staging_owner_auth_v020.py -v
+          grep -Fq 'include(":app")' settings.gradle.kts
+          grep -Fq 'include(":stagingOwner")' settings.gradle.kts
+          grep -Fq '"MARKETPRO_LOCAL_PREVIEW", "true"' app/build.gradle.kts
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Android SDK platform 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Build Owner Auth/MFA APK and run Kotlin unit tests
+        run: gradle --no-daemon --stacktrace :stagingOwner:testDebugUnitTest :stagingOwner:assembleDebug
+      - name: Verify app ID, installation permissions and APK integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE=stagingOwner/build/outputs/apk/debug/stagingOwner-debug.apk
+          APK=MarketPro-Staging-OwnerAuth-MFA-v0.2.0-debug.apk
+          test -s "$FILE"
+          cp "$FILE" "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" >/tmp/staging-auth-badging.txt
+          grep -Fq "package: name='lk.peliyagoda.marketpro.staging.auth'" /tmp/staging-auth-badging.txt
+          grep -Fq "versionName='0.2.0'" /tmp/staging-auth-badging.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions "$APK" > /tmp/staging-auth-permissions.txt
+          grep -Fq 'android.permission.INTERNET' /tmp/staging-auth-permissions.txt
+          ! grep -Eq 'android.permission.(ACCESS_NETWORK_STATE|READ_SMS|READ_CONTACTS|CAMERA|WRITE_EXTERNAL_STORAGE)' /tmp/staging-auth-permissions.txt
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$APK"
+          sha256sum "$APK"
+      - name: Preserve generated APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MarketPro-Staging-OwnerAuth-MFA-v0.2.0-APK
+          path: MarketPro-Staging-OwnerAuth-MFA-v0.2.0-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+      - name: Direct APK download on GitHub prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG=marketpro-staging-owner-auth-mfa-v0.2.0
+          APK=MarketPro-Staging-OwnerAuth-MFA-v0.2.0-debug.apk
+          NOTES='Standalone staging Owner Auth MFA test. Uses Staging Supabase Auth ONLY, in-memory password/OTP/JWT and local Keystore P-256 signature checks. NO Owner phone activation, NO Staff pairing, NO purchases, NO Cloud data sync or changes to Production Android. This v0.2 is a DEBUG test APK; do not type production passwords. Login/MFA real-phone flow still requires physical QA.'
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" --clobber
+          else
+            gh release create "$TAG" "$APK" \
+              --target "$GITHUB_SHA" --prerelease \
+              --title "Market Pro Staging Owner Login + MFA v0.2.0 — TEST ONLY" \
+              --notes "$NOTES"
+          fi
+          gh release view "$TAG" --json url,assets

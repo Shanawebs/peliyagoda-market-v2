@@ -6,104 +6,193 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.content.res.ColorStateList
+import android.text.InputType
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 
 /**
- * Strictly offline Owner Keystore test harness. Not the purchasing app.
- * Production DB, Staff permission, real Owner Auth and Cloud writer are absent.
+ * Two fully separated QA tasks: local Keystore proof + Supabase Owner login/MFA.
+ * NO purchase, Staff invite, catalog or phone registration interface in APK.
  */
 class MainActivity : Activity() {
     private val lab = OwnerKeystoreLab()
-    private lateinit var output:TextView
-    private val darkGreen = Color.rgb(13, 85, 58)
+    private val auth = StagingOwnerAuth()
+    private lateinit var output: TextView
+    private lateinit var loginButton: Button
+    private lateinit var verifyButton: Button
+    private lateinit var passwordInput: EditText
+    private lateinit var codeInput: EditText
+    @Volatile private var busy = false
+    private var awaitingMfa = false
+    private val green = Color.rgb(13, 85, 58)
 
-    private fun dp(value:Int):Int = (resources.displayMetrics.density * value).toInt()
-    private fun panel(color:Int):GradientDrawable = GradientDrawable().apply {
-        setColor(color)
-        cornerRadius = dp(16).toFloat()
+    private fun dp(n:Int)= (resources.displayMetrics.density*n).toInt()
+    private fun panel(color:Int)=GradientDrawable().apply {
+        setColor(color);cornerRadius=dp(16).toFloat()
     }
-    private fun text(str:String,size:Float,bold:Boolean=false,color:Int=Color.BLACK) =
+    private fun text(body:String,size:Float,bold:Boolean=false,color:Int=Color.BLACK)=
         TextView(this).apply {
-            text=str
-            textSize=size
-            setTextColor(color)
-            if(bold) setTypeface(null,Typeface.BOLD)
+            text=body;textSize=size;setTextColor(color)
+            if(bold)setTypeface(null,Typeface.BOLD)
             setPadding(0,dp(6),0,dp(6))
         }
-    private fun addButton(root:LinearLayout,label:String,action:()->Unit) {
-        val btn=Button(this).apply {
-            text=label
-            isAllCaps=false
-            backgroundTintList=ColorStateList.valueOf(darkGreen)
-            setTextColor(Color.WHITE)
-            setOnClickListener { action() }
+    private fun button(root:LinearLayout,title:String,action:()->Unit):Button {
+        val b=Button(this).apply {
+            text=title;isAllCaps=false;setTextColor(Color.WHITE)
+            backgroundTintList=ColorStateList.valueOf(green)
+            setOnClickListener { if(!busy)action() }
         }
-        root.addView(btn,LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,dp(56)).apply {
-            topMargin=dp(12)
+        root.addView(b,LinearLayout.LayoutParams(-1,dp(54)).apply {
+            topMargin=dp(10)
         })
+        return b
+    }
+    private fun field(hintText:String,numeric:Boolean=false):EditText =
+        EditText(this).apply {
+            hint=hintText
+            textSize=16f
+            isSingleLine=true
+            setPadding(dp(14),dp(7),dp(14),dp(7))
+            background=panel(Color.WHITE)
+            inputType=if(numeric)
+                InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            else InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+
+    private fun work(task:()->String,success:()->Unit={}) {
+        if(busy)return
+        busy=true
+        loginButton.isEnabled=false
+        verifyButton.isEnabled=false
+        output.text="Staging Auth server සමඟ ආරක්ෂිතව සම්බන්ධ වෙමින්..."
+        Thread {
+            val response=try { Pair(true,task()) }
+            catch (e:StagingOwnerAuth.AuthException) {
+                Pair(false,e.message ?: "Staging Auth failed.")
+            }
+            catch (_:Exception) {Pair(false,"Staging Auth test failed. No phone enrolled.")}
+            runOnUiThread {
+                busy=false
+                if(isFinishing||isDestroyed)return@runOnUiThread
+                output.text=response.second
+                if(response.first)success()
+                loginButton.isEnabled=true
+                verifyButton.isEnabled=awaitingMfa
+            }
+        }.start()
     }
 
-    override fun onCreate(savedInstanceState:Bundle?) {
-        super.onCreate(savedInstanceState)
-        val scroll=ScrollView(this).apply { isFillViewport=true }
+    override fun onCreate(state:Bundle?) {
+        super.onCreate(state)
+        // Secure screenshots during password/OTP entry; clear after successful
+        // MFA so the user can share the GREEN status without revealing secrets.
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        val scroll=ScrollView(this).apply {isFillViewport=true}
         val root=LinearLayout(this).apply {
             orientation=LinearLayout.VERTICAL
-            setPadding(dp(22),dp(32),dp(22),dp(36))
+            setPadding(dp(22),dp(25),dp(22),dp(40))
             setBackgroundColor(Color.rgb(247,250,248))
         }
         scroll.addView(root)
         setContentView(scroll)
 
-        root.addView(text("Market Pro",28f,true,darkGreen))
-        root.addView(text("STAGING • Owner Phone Key Test",17f,true,darkGreen))
-        val description=text(
-            "මෙය ආරක්ෂක පරීක්ෂණ APK එකක් පමණි.\n" +
-            "No Cloud Login • No Internet • No Sync • No Staff Access\n" +
-            "Production Market Pro එකට මෙයින් බලපෑමක් නැහැ.",14f,
-            false,Color.rgb(60,73,66)
-        )
-        description.background=panel(Color.rgb(227,241,231))
-        description.setPadding(dp(16),dp(14),dp(16),dp(14))
-        root.addView(description,LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin=dp(16);bottomMargin=dp(16) })
+        root.addView(text("Market Pro",27f,true,green))
+        root.addView(text("STAGING • Owner Security v0.2.0",17f,true,green))
+        val note=text(
+            "වෙනම ආරක්ෂක පරීක්ෂණ App එකක්.\n" +
+            "Staging Auth Login පමණයි. No Purchase Sync • No Staff Access.\n" +
+            "Production Market Pro එකට බලපෑමක් නැහැ.",
+            14f,false,Color.rgb(54,75,64))
+        note.background=panel(Color.rgb(225,241,231))
+        note.setPadding(dp(15),dp(13),dp(15),dp(13))
+        root.addView(note,LinearLayout.LayoutParams(-1,-2).apply {
+            topMargin=dp(12);bottomMargin=dp(14)
+        })
 
-        root.addView(text("Device security",20f,true,darkGreen))
-        root.addView(text(
-            "Create a non-exportable P-256 key in the Android Keystore. " +
-            "Sign and verify a temporary local challenge. No secret or signature is uploaded.",
-            15f,false,Color.DKGRAY
-        ))
-
-        output=text("Ready for local test. No account is connected.",15f)
+        root.addView(text("1 • Phone Security",20f,true,green))
+        output=text("Ready. No Supabase session.",15f)
         output.background=panel(Color.WHITE)
-        output.setPadding(dp(16),dp(15),dp(16),dp(15))
-        root.addView(output,LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin=dp(14);bottomMargin=dp(6) })
-
-        addButton(root,"1. Generate / Check Owner Key") {
+        output.setPadding(dp(15),dp(13),dp(15),dp(13))
+        root.addView(output,LinearLayout.LayoutParams(-1,-2).apply {
+            topMargin=dp(10);bottomMargin=dp(6)
+        })
+        button(root,"Generate / Check Owner Key") {
             try {
-                val s=lab.summary()
-                output.text="KEY READY ✓\nSHA-256 public fingerprint:\n" +
-                    s.fingerprintSha256.chunked(16).joinToString("\n") +
-                    "\n\nKeystore hardware backed: " + (if(s.hardwareBacked) "Yes" else "Not verified")
-            }catch(_:Exception){output.text="Keystore unavailable on this device. No cloud changes made."}
+                val summary=lab.summary()
+                output.text="LOCAL KEY READY ✓\nFingerprint:\n"+
+                    summary.fingerprintSha256.chunked(16).joinToString("\n")+
+                    "\nHardware-backed: "+
+                    (if(summary.hardwareBacked)"Yes" else "Not confirmed")
+            }catch(_:Exception){
+                output.text="Keystore unavailable. No cloud changes."
+            }
         }
-        addButton(root,"2. Sign & Verify Local Challenge") {
+        button(root,"Sign & Verify Local Challenge") {
             try {
                 output.text=if(lab.verifyLocalChallenge())
-                    "PASS ✓  Real Android Keystore P-256 signature verified locally.\n" +
-                    "Modified transcript rejected.\nNO phone enrolled on Supabase."
-                else "FAILED: Local signature validation failed. No cloud changes made."
-            }catch(_:Exception){output.text="Local signature test could not complete. No cloud changes made."}
+                    "PASS ✓ Local P-256 Signature Verified.\n" +
+                    "Tampered message rejected.\nNo phone registered."
+                else "FAILED • Local signing check."
+            }catch(_:Exception){
+                output.text="Local signing failed. No cloud changes."
+            }
         }
-        root.addView(text("Test version 0.1.0 · Offline-only · Separate app ID",12f,
-            false,Color.GRAY))
+
+        root.addView(text("2 • Staging Owner Login",20f,true,green).apply {
+            setPadding(0,dp(26),0,dp(8))
+        })
+        root.addView(text("Owner: mywin7070@gmail.com\nSupabase: Two-Phone STAGING only",
+            14f,false,Color.DKGRAY))
+        passwordInput=field("Staging Owner Password")
+        root.addView(passwordInput,LinearLayout.LayoutParams(-1,dp(52)).apply {
+            topMargin=dp(10)
+        })
+        loginButton=button(root,"Login to Staging (Password)") {
+            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            awaitingMfa=false
+            val pwd=passwordInput.text.toString()
+            passwordInput.text.clear()
+            if(pwd.isBlank()) {
+                output.text="Staging Owner Password ඇතුළත් කරන්න."
+            }else{
+                // Password is only held within this immediate request; no
+                // saved state, persistent storage, database or background queue.
+                work({auth.signIn(pwd)}) {
+                    awaitingMfa=true
+                }
+            }
+        }
+        codeInput=field("Authenticator Code • 6 Digits",numeric=true)
+        root.addView(codeInput,LinearLayout.LayoutParams(-1,dp(52)).apply {
+            topMargin=dp(12)
+        })
+        verifyButton=button(root,"Verify Authenticator — AAL2") {
+            val code=codeInput.text.toString()
+            codeInput.text.clear()
+            work({auth.verify(code)}) {
+                // No token, password or code remains stored by the app.
+                // Unlock screenshots only for the status-only result.
+                window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                awaitingMfa=false
+            }
+        }
+        verifyButton.isEnabled=false
+
+        root.addView(text("Test v0.2.0 • Separate App ID • No Cloud Data Writes",
+            12f,false,Color.GRAY).apply {
+            setPadding(0,dp(20),0,0)
+        })
+    }
+
+    override fun onDestroy() {
+        auth.clear()
+        if(::passwordInput.isInitialized)passwordInput.text.clear()
+        if(::codeInput.isInitialized)codeInput.text.clear()
+        super.onDestroy()
     }
 }
