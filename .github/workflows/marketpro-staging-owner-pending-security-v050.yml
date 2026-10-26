@@ -66,3 +66,39 @@ jobs:
       - name: Tear down ephemeral testing DB
         if: always()
         run: docker stop marketpro_qa_pending_pg17 || true
+
+  pending-owner-crypto:
+    needs: production-frozen
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run real signed P256 pending domain and JWT rejection tests
+        shell: bash
+        run: |
+          node --test tests/staging_owner_pending_edge_v050.test.mjs
+          node --test tests/staging_owner_remote_proof_edge.test.mjs
+          node --test tests/staging_owner_bootstrap_edge_integration.test.mjs
+          node --test tests/staging_owner_bootstrap_key_crypto.test.mjs
+      - name: Ensure authenticated route and disabled financial writers
+        shell: bash
+        run: |
+          grep -Fq 'withSupabase({auth:"user"}' supabase/functions/marketpro-qa-owner-bootstrap/index.ts
+          grep -Fq 'npm:@supabase/server@1.9.2' supabase/functions/marketpro-qa-owner-bootstrap/index.ts
+          grep -Fq 'pending_issue' supabase/functions/_shared/pending_owner_edge_core.mjs
+          grep -Fq 'pending_verify' supabase/functions/_shared/pending_owner_edge_core.mjs
+
+  pending-edge-deno:
+    needs: production-frozen
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Typecheck staging pending Owner Edge route
+        run: deno check supabase/functions/marketpro-qa-owner-bootstrap/index.ts
