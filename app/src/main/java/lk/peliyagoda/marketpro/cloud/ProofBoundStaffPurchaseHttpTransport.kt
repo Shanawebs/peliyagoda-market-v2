@@ -44,7 +44,7 @@ internal class ProofBoundStaffPurchaseHttpTransport:
             !session.accessToken.contains('\n'))
         val root=URL(BuildConfig.MARKETPRO_SUPABASE_URL)
         require(root.protocol=="https"&&
-            root.host=="lkoptqhodgjeuwwfihfr.supabase.co" &&
+            root.host==BuildConfig.MARKETPRO_SUPABASE_HOST &&
             (root.port==-1||root.port==443)&&
             (root.path.isBlank()||root.path=="/")&&
             root.query==null && root.ref==null && root.userInfo==null)
