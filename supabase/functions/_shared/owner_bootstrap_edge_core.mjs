@@ -63,6 +63,67 @@ export async function handleOwnerBootstrapIntent(
     };
   }
 
+  // QA REMOTE SIGNATURE TEST ONLY. NO phone activation, enrollment,
+  // invitation, finance or business data. Privileged RPCs are exposed only
+  // to the server's service_role; signed Owner AAL2 is checked above.
+  if(caller.owner==="98c3b101-d452-4b6b-902c-0b1a31fc340c" &&
+     payload.intent==="proof_issue" &&
+     hasOnlyKeys(payload,["intent","workspace_id","device_id","spki_base64url"]) &&
+     UUID.test(payload.device_id) && typeof payload.spki_base64url==="string" &&
+     B64URL.test(payload.spki_base64url)) {
+    const spki=payload.spki_base64url.replace(/-/g,"+").replace(/_/g,"/");
+    const padded=spki.padEnd(Math.ceil(spki.length/4)*4,"=");
+    const {data,error}=await ctx.supabaseAdmin.rpc(
+      "marketpro_qa_service_remote_proof_issue",{
+        p_owner:caller.owner,p_session:caller.session,
+        p_device:payload.device_id,p_spki:padded
+      });
+    if(error || !isPlainRecord(data) ||
+       data.proof_version!==OWNER_BOOTSTRAP_VERSION ||
+       data.workspace_id!==STAGING_WORKSPACE ||
+       data.owner_user_id!==caller.owner ||
+       data.session_id!==caller.session ||
+       data.device_id!==payload.device_id ||
+       data.phone_activated!==false || data.staff_access_granted!==false)
+      return denied;
+    return {ok:true,challenge:data,phone_activated:false,staff_access:false};
+  }
+
+  if(caller.owner==="98c3b101-d452-4b6b-902c-0b1a31fc340c" &&
+     payload.intent==="proof_verify" &&
+     hasOnlyKeys(payload,["intent","workspace_id","challenge_id","signature_der_base64url"]) &&
+     UUID.test(payload.challenge_id) &&
+     typeof payload.signature_der_base64url==="string" &&
+     B64URL.test(payload.signature_der_base64url)) {
+    const args={
+      p_challenge:payload.challenge_id,
+      p_owner:caller.owner,p_session:caller.session
+    };
+    const {data:material,error:lookupErr}=await ctx.supabaseAdmin.rpc(
+      "marketpro_qa_service_remote_proof_material",args);
+    if(lookupErr || !isPlainRecord(material) ||
+       material.proof_version!==OWNER_BOOTSTRAP_VERSION ||
+       material.workspace_id!==STAGING_WORKSPACE ||
+       material.owner_user_id!==caller.owner ||
+       material.session_id!==caller.session ||
+       material.challenge_id!==payload.challenge_id ||
+       !UUID.test(material.device_id)) return denied;
+    if(!await verifySignature(material,payload.signature_der_base64url,nowMs))
+       return denied;
+    const {data:receipt,error:commitErr}=await ctx.supabaseAdmin.rpc(
+      "marketpro_qa_service_remote_proof_consume",args);
+    if(commitErr || !isPlainRecord(receipt) ||
+       receipt.verified_and_consumed!==true ||
+       receipt.device_id!==material.device_id ||
+       receipt.fingerprint_sha256!==material.fingerprint_sha256 ||
+       receipt.device_registered!==false ||
+       receipt.staff_access!==false ||
+       receipt.can_write!==false) return denied;
+    return {ok:true,remote_p256_proof_verified:true,
+      nonce_consumed_once:true,device_registered:false,
+      staff_access:false,financial_writes:false};
+  }
+
   if(payload.intent==="issue" &&
     hasOnlyKeys(payload,["intent","workspace_id","device_id","spki_base64url"]) &&
     UUID.test(payload.device_id) && typeof payload.spki_base64url==="string" &&

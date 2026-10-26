@@ -211,6 +211,116 @@ internal class StagingOwnerAuth {
         }
     }
 
+    /**
+     * Live remote ECDSA test: Server nonce -> Android Keystore signature ->
+     * server P-256 verifier -> atomic nonce consumption. Still NO enrollment.
+     * This intentionally uses the same verified Owner AAL2 bearer ONCE,
+     * then immediately clears it even on failure.
+     */
+    fun proveRemoteOwnerKey(lab: OwnerKeystoreLab): String {
+        val token = aal2TestToken
+            ?: throw AuthException("මුලින් Staging Owner MFA Verify කරන්න.")
+        try {
+            val age = System.currentTimeMillis() - aal2VerifiedAtMs
+            if (age < 0 || age > 120_000) {
+                throw AuthException("MFA Session expired. නැවත Login කරන්න.")
+            }
+            val chunks = token.split(".")
+            if (chunks.size != 3) throw AuthException("Invalid Auth session.")
+            val claims=JSONObject(String(Base64.decode(
+                chunks[1],Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
+            ),Charsets.UTF_8))
+            if(claims.optString("aal")!="aal2" ||
+                claims.optString("sub")!=OWNER_ID ||
+                !ID_FORMAT.matches(claims.optString("session_id"))) {
+                throw AuthException("Owner AAL2 verification required.")
+            }
+            val deviceId = UUID.randomUUID().toString()
+            val request=JSONObject()
+                .put("intent","proof_issue")
+                .put("workspace_id","af77cb66-76b2-492a-a460-06132f468713")
+                .put("device_id",deviceId)
+                .put("spki_base64url",lab.publicSpkiBase64Url())
+            val issued=postOwnerProof(token,request)
+            val challenge=issued.optJSONObject("challenge")
+                ?: throw AuthException("Server challenge missing.")
+            if(issued.optBoolean("ok")!=true ||
+                issued.optBoolean("phone_activated",true)!=false ||
+                challenge.optString("owner_user_id")!=OWNER_ID ||
+                challenge.optString("session_id")!=claims.optString("session_id") ||
+                challenge.optString("device_id")!=deviceId ||
+                challenge.optString("workspace_id")!="af77cb66-76b2-492a-a460-06132f468713") {
+                throw AuthException("Server challenge identity mismatch.")
+            }
+            val signature = lab.signStagingServerChallenge(challenge)
+            val verifyRequest = JSONObject()
+                .put("intent","proof_verify")
+                .put("workspace_id","af77cb66-76b2-492a-a460-06132f468713")
+                .put("challenge_id",challenge.getString("challenge_id"))
+                .put("signature_der_base64url",signature)
+            val outcome=postOwnerProof(token,verifyRequest)
+            if(outcome.optBoolean("ok")!=true ||
+               outcome.optBoolean("remote_p256_proof_verified")!=true ||
+               outcome.optBoolean("nonce_consumed_once")!=true ||
+               outcome.optBoolean("device_registered",true)!=false ||
+               outcome.optBoolean("staff_access",true)!=false ||
+               outcome.optBoolean("financial_writes",true)!=false)
+                throw AuthException("Server signature receipt failed.")
+            return "PASS ✓ Server verified REAL Phone P-256 Signature.\\n" +
+                   "One-time challenge consumed.\\n" +
+                   "No phone registered • No Staff Access • No Purchase Sync."
+        } catch(e:AuthException) {
+            throw e
+        } catch (_: Exception) {
+            throw AuthException("Phone Signature Test failed. No device registered.")
+        } finally {
+            clear()
+        }
+    }
+
+    /** Fixed Staging HTTPS endpoint only, never a caller-supplied URL. */
+    private fun postOwnerProof(token:String,payload:JSONObject):JSONObject {
+        val url=URL(ORIGIN+"/functions/v1/marketpro-qa-owner-bootstrap")
+        require(url.protocol=="https" &&
+            url.host=="qqiheexpbuzohllugxrk.supabase.co")
+        val conn = url.openConnection() as HttpURLConnection
+        try {
+            conn.requestMethod="POST"
+            conn.connectTimeout=10_000
+            conn.readTimeout=12_000
+            conn.instanceFollowRedirects=false
+            conn.setRequestProperty("apikey",API_KEY)
+            conn.setRequestProperty("Authorization","Bearer "+token)
+            conn.setRequestProperty("Content-Type","application/json")
+            conn.setRequestProperty("Accept","application/json")
+            conn.doOutput=true
+            conn.outputStream.use {
+                it.write(payload.toString().toByteArray(Charsets.UTF_8))
+            }
+            if(conn.responseCode!=200)
+                throw AuthException("Staging Server denied proof ("+conn.responseCode+").")
+            val data=conn.inputStream.use { input ->
+                val out=ByteArrayOutputStream()
+                val buffer=ByteArray(1024)
+                while(true) {
+                    val n=input.read(buffer)
+                    if(n<0)break
+                    if(out.size()+n>8192)
+                        throw AuthException("Server response too large.")
+                    out.write(buffer,0,n)
+                }
+                out.toByteArray()
+            }
+            return JSONObject(String(data,Charsets.UTF_8))
+        }catch(e:AuthException){
+            throw e
+        }catch(_:IOException){
+            throw AuthException("Staging Server connection failed.")
+        }finally {
+            conn.disconnect()
+        }
+    }
+
     /** No factor enrollment or modification; only preverified TOTP factors. */
     private fun verifiedFactor(a: JSONArray?): String? {
         if (a == null) return null
