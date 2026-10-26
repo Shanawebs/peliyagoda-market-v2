@@ -1,0 +1,128 @@
+name: Market Pro Staging — Owner Secure Failure Diagnostic APK v0.4.2
+
+on:
+  push:
+    branches:
+      - feature/marketpro-staging-owner-proof-p5-diagnostic-v042
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: marketpro-staging-remote-proof-p5-diagnostic-v042
+  cancel-in-progress: true
+
+jobs:
+  signed-staging-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Protect Production Android, database and dashboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=64cb6733cef0e4e97f504ee5bf887990416d6928
+          git diff --exit-code "$BASE" HEAD -- app/ supabase/migrations/ supabase/proposals/ web/marketpro-dashboard/
+          grep -Fq 'applicationId = "lk.peliyagoda.marketpro.staging.remoteproofdiag2"' stagingOwner/build.gradle.kts
+          grep -Fq 'versionName = "0.4.2"' stagingOwner/build.gradle.kts
+          grep -Fq 'include(":app")' settings.gradle.kts
+          grep -Fq 'include(":stagingOwner")' settings.gradle.kts
+          grep -Fq '"MARKETPRO_LOCAL_PREVIEW", "true"' app/build.gradle.kts
+          python3 - <<'PY'
+          from pathlib import Path
+          a=Path('stagingOwner/src/main/java/lk/peliyagoda/marketpro/stagingowner/StagingOwnerAuth.kt').read_text()
+          ui=Path('stagingOwner/src/main/java/lk/peliyagoda/marketpro/stagingowner/MainActivity.kt').read_text()
+          m=Path('stagingOwner/src/main/AndroidManifest.xml').read_text()
+          assert 'qqiheexpbuzohllugxrk.supabase.co' in a
+          assert 'lkoptqhodgjeuwwfihfr' not in a and 'sb_secret_' not in a
+          assert 'marketpro_qa_service_remote_proof' not in a
+          assert '.put("intent", "proof_issue")' in a
+          assert '.put("intent", "proof_verify")' in a
+          assert 'lab.signStagingServerChallenge(challenge)' in a
+          assert 'outcome.optBoolean("device_registered", true) != false' in a
+          assert 'Diagnose P5 Signature With Server' in ui
+          for stage in ('P1_SESSION','P2_PUBLIC_KEY','P3_ISSUE_SERVER',
+                        'P4_CHECK_CHALLENGE','P5_PHONE_SIGN',
+                        'P6_VERIFY_SERVER','P7_CHECK_RECEIPT'):
+              assert stage in a, 'Missing safe error stage '+stage
+          assert 'clear() // Ephemeral AAL2 bearer ALWAYS discarded.' in a
+          k=Path('stagingOwner/src/main/java/lk/peliyagoda/marketpro/stagingowner/OwnerKeystoreLab.kt').read_text()
+          assert 'class ProofValidation(val safeCode: String)' in k
+          assert 'P5_PHONE_CLOCK_BEHIND' in k
+          assert 'P5_PHONE_CLOCK_AHEAD_OR_EXPIRED' in k
+          assert 'sb_secret_' not in a
+
+          assert 'android:allowBackup="false"' in m
+          assert 'android:usesCleartextTraffic="false"' in m
+          print('PASS: staging proof-only Android contracts')
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run remote P256, JWT and canonical transcript crypto regressions
+        run: |
+          python3 -m unittest discover -s tests -p test_staging_remote_p5_diagnostic_v042.py -v
+          node --test tests/staging_owner_remote_proof_edge.test.mjs
+          node --test tests/staging_owner_bootstrap_edge_integration.test.mjs
+          node --test tests/staging_owner_bootstrap_key_crypto.test.mjs
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK platform 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Build isolated v0.4.2 APK and run Kotlin unit tests
+        run: gradle --no-daemon --stacktrace :stagingOwner:testDebugUnitTest :stagingOwner:assembleDebug
+      - name: Check actual package, permissions and debug signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=MarketPro-Staging-OwnerProofP5Diagnostic-v0.4.2-debug.apk
+          cp stagingOwner/build/outputs/apk/debug/stagingOwner-debug.apk "$APK"
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" >/tmp/mp_badging.txt
+          grep -Fq "package: name='lk.peliyagoda.marketpro.staging.remoteproofdiag2'" /tmp/mp_badging.txt
+          grep -Fq "versionName='0.4.2'" /tmp/mp_badging.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions "$APK" >/tmp/mp_perms.txt
+          grep -Fq 'android.permission.INTERNET' /tmp/mp_perms.txt
+          ! grep -Eq 'android.permission.(READ_SMS|CAMERA|READ_CONTACTS|READ_PHONE_STATE|WRITE_EXTERNAL_STORAGE)' /tmp/mp_perms.txt
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$APK"
+          sha256sum "$APK"
+      - name: Upload test APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MarketPro-Staging-OwnerProofP5Diagnostic-v0.4.2-APK
+          path: MarketPro-Staging-OwnerProofP5Diagnostic-v0.4.2-debug.apk
+          retention-days: 30
+          if-no-files-found: error
+      - name: Publish verified DIRECT APK as prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG=marketpro-staging-owner-proof-p5-diagnostic-v0.4.2
+          APK=MarketPro-Staging-OwnerProofP5Diagnostic-v0.4.2-debug.apk
+          NOTES='STAGING P5 safe substage diagnostic v0.4.2: distinguishes signature key, UUID, transcript, clock skew without showing secrets; AAL2 Owner only, never enrolls phones or staff, does not write finance. No Production changes.'
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" --clobber
+          else
+            gh release create "$TAG" "$APK" \
+              --target "$GITHUB_SHA" --prerelease \
+              --title "Market Pro Staging v0.4.2 — P5 Diagnostic" \
+              --notes "$NOTES"
+          fi
+          gh release view "$TAG" --json url,assets
