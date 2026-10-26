@@ -163,6 +163,41 @@ internal class OwnerKeystoreLab {
         )
     }
 
+    /** Pending-only P-256 proof: no Owner/Staff privileges. */
+    fun signPendingOwnerChallenge(c:JSONObject,requestStartedElapsedMs:Long):String {
+        val (privateKey,publicKey)=pair()
+        if(c.optString("proof_version")!=PendingOwnerTranscript.VERSION)
+            throw ProofValidation("P5_PENDING_DOMAIN")
+        if(c.optString("fingerprint_sha256")!=fingerprint(publicKey))
+            throw ProofValidation("P5_PENDING_KEY_MISMATCH")
+        if(c.optString("registration_status")!="not_registered" ||
+           c.optBoolean("device_activated",true)!=false ||
+           c.optBoolean("staff_access",true)!=false)
+            throw ProofValidation("P5_UNSAFE_PENDING_RECEIPT")
+        val p=PendingOwnerTranscript(
+            workspaceId=c.getString("workspace_id"),
+            ownerUserId=c.getString("owner_user_id"),
+            deviceId=c.getString("device_id"),
+            sessionId=c.getString("session_id"),
+            challengeId=c.getString("challenge_id"),
+            nonceHex=c.getString("nonce_hex"),
+            fingerprintSha256=c.getString("fingerprint_sha256"),
+            issuedAtMillis=c.getLong("issued_at_millis"),
+            expiresAtMillis=c.getLong("expires_at_millis")
+        )
+        val now=ServerChallengeClock.signingTimeMillis(
+            p.issuedAtMillis,p.expiresAtMillis,
+            requestStartedElapsedMs,SystemClock.elapsedRealtime()
+        )
+        val signed=Signature.getInstance("SHA256withECDSA").run {
+            initSign(privateKey)
+            update(p.bytes(now))
+            sign()
+        }
+        return Base64.encodeToString(signed,
+            Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+    }
+
     private fun fingerprint(public: PublicKey):String =
         MessageDigest.getInstance("SHA-256").digest(public.encoded)
             .joinToString("") { "%02x".format(it.toInt() and 255) }

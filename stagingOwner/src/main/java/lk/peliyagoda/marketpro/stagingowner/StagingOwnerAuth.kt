@@ -312,6 +312,87 @@ internal class StagingOwnerAuth {
         }
     }
 
+    /**
+     * Explicit QA Owner choice: one authenticated, separately domain-signed
+     * proposal for PENDING only. NEVER registers or activates a live phone.
+     * No background refresh, phone storage or financial API access.
+     */
+    fun requestPendingOwnerRegistration(lab:OwnerKeystoreLab,installId:String):String {
+        var stage="R1_AAL2_SESSION"
+        try {
+            val token=aal2TestToken ?: throw AuthException("Verify Owner MFA first.")
+            val age=System.currentTimeMillis()-aal2VerifiedAtMs
+            if(age<0 || age>120_000)
+                throw AuthException("MFA verification expired. Log in again.")
+            if(UUID.fromString(installId).toString()!=installId)
+                throw AuthException("Invalid installation identity.")
+            val parts=token.split(".")
+            if(parts.size!=3) throw AuthException("Invalid Owner session.")
+            val jwt=JSONObject(String(Base64.decode(parts[1],
+                Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING),Charsets.UTF_8))
+            if(jwt.optString("sub")!=OWNER_ID ||
+               jwt.optString("aal")!="aal2" ||
+               !ID_FORMAT.matches(jwt.optString("session_id")))
+                throw AuthException("Current Owner AAL2 session required.")
+
+            stage="R2_PENDING_REQUEST"
+            val req=JSONObject()
+                .put("intent","pending_issue")
+                .put("workspace_id","af77cb66-76b2-492a-a460-06132f468713")
+                .put("device_id",installId)
+                .put("spki_base64url",lab.publicSpkiBase64Url())
+                .put("explicit_consent",true)
+
+            stage="R3_PENDING_CHALLENGE"
+            val started=SystemClock.elapsedRealtime()
+            val issued=postOwnerProof(token,req)
+            val challenge=issued.optJSONObject("challenge")
+                ?: throw AuthException("Missing registration challenge.")
+            if(issued.optBoolean("ok")!=true ||
+               issued.optString("registration_status")!="not_registered" ||
+               issued.optBoolean("device_activated",true)!=false ||
+               issued.optBoolean("staff_access",true)!=false ||
+               challenge.optString("proof_version")!=PendingOwnerTranscript.VERSION ||
+               challenge.optString("workspace_id")!="af77cb66-76b2-492a-a460-06132f468713" ||
+               challenge.optString("owner_user_id")!=OWNER_ID ||
+               challenge.optString("session_id")!=jwt.optString("session_id") ||
+               challenge.optString("device_id")!=installId ||
+               challenge.optString("registration_status")!="not_registered" ||
+               challenge.optBoolean("device_activated",true)!=false)
+                throw AuthException("Registration challenge identity mismatch.")
+
+            stage="R4_PENDING_SIGN"
+            val signed=lab.signPendingOwnerChallenge(challenge,started)
+            stage="R5_PENDING_SERVER_VERIFY"
+            val verify=JSONObject()
+                .put("intent","pending_verify")
+                .put("workspace_id","af77cb66-76b2-492a-a460-06132f468713")
+                .put("challenge_id",challenge.getString("challenge_id"))
+                .put("signature_der_base64url",signed)
+            val proof=postOwnerProof(token,verify)
+            stage="R6_PENDING_RECEIPT"
+            if(proof.optBoolean("ok")!=true ||
+               proof.optString("registration_status")!="pending" ||
+               proof.optBoolean("device_activated",true)!=false ||
+               proof.optBoolean("hardware_attestation_verified",true)!=false ||
+               proof.optBoolean("can_write",true)!=false ||
+               proof.optBoolean("staff_access",true)!=false ||
+               proof.optBoolean("purchase_sync",true)!=false)
+                throw AuthException("Server pending-only receipt mismatch.")
+            return "PASS ✓ Owner Phone Request: PENDING.\n" +
+                "Server verified P-256 key proof.\n" +
+                "NOT activated • No Staff Access • No Purchase Sync."
+        } catch(e:AuthException) {
+            throw AuthException("FAIL ["+stage+"] — "+(e.message ?: "Denied."))
+        } catch(e:OwnerKeystoreLab.ProofValidation) {
+            throw AuthException("FAIL ["+stage+"] — "+e.safeCode)
+        } catch(_:Exception) {
+            throw AuthException("FAIL ["+stage+"] — Registration not completed.")
+        } finally {
+            clear() // No bearer/token/codes persisted or reused.
+        }
+    }
+
     /** Fixed Staging HTTPS endpoint only, never a caller-supplied URL. */
     private fun postOwnerProof(token:String,payload:JSONObject):JSONObject {
         val url=URL(ORIGIN+"/functions/v1/marketpro-qa-owner-bootstrap")

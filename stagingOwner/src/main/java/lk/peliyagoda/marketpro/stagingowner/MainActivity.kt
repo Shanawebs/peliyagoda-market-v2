@@ -1,6 +1,7 @@
 package lk.peliyagoda.marketpro.stagingowner
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.os.Bundle
 import android.graphics.Color
 import android.graphics.Typeface
@@ -27,6 +28,7 @@ class MainActivity : Activity() {
     private lateinit var verifyButton: Button
     private lateinit var probeButton: Button
     private lateinit var remoteProofButton: Button
+    private lateinit var pendingButton: Button
     private lateinit var passwordInput: EditText
     private lateinit var codeInput: EditText
     @Volatile private var busy = false
@@ -74,6 +76,7 @@ class MainActivity : Activity() {
         verifyButton.isEnabled=false
         probeButton.isEnabled=false
         remoteProofButton.isEnabled=false
+        pendingButton.isEnabled=false
         output.text="Staging Server සමඟ ආරක්ෂිතව සම්බන්ධ වෙමින්..."
         Thread {
             val response=try { Pair(true,task()) }
@@ -90,6 +93,7 @@ class MainActivity : Activity() {
                 verifyButton.isEnabled=awaitingMfa
                 probeButton.isEnabled=readyForProbe
                 remoteProofButton.isEnabled=readyForProbe
+                pendingButton.isEnabled=readyForProbe
             }
         }.start()
     }
@@ -109,7 +113,7 @@ class MainActivity : Activity() {
         setContentView(scroll)
 
         root.addView(text("Market Pro",27f,true,green))
-        root.addView(text("STAGING • Owner Security v0.4.3",17f,true,green))
+        root.addView(text("STAGING • Owner Security v0.5.0",17f,true,green))
         val note=text(
             "වෙනම ආරක්ෂක පරීක්ෂණ App එකක්.\n" +
             "Staging Auth Login පමණයි. No Purchase Sync • No Staff Access.\n" +
@@ -217,7 +221,36 @@ class MainActivity : Activity() {
         }
         remoteProofButton.isEnabled=false
 
-        root.addView(text("Test v0.4.3 • Separate App ID • No Cloud Data Writes",
+        root.addView(text("4 • Owner Phone Registration Request",20f,true,green).apply {
+            setPadding(0,dp(26),0,dp(8))
+        })
+        root.addView(text(
+            "මෙම ඉල්ලීම PENDING තත්ත්වයට පමණි. Phone Activate, Staff Access " +
+            "හෝ Purchase Sync කිසිවක් මෙයින් සක්‍රීය නොවේ.",
+            14f,false,Color.DKGRAY
+        ))
+        pendingButton=button(root,"Request Owner Registration (Pending)") {
+            AlertDialog.Builder(this)
+                .setTitle("Owner Phone Registration — Pending")
+                .setMessage(
+                    "Staging Owner Phone එක PENDING ලෙස යෝජනා කරන්නද?\\n\\n" +
+                    "මෙය සැබෑ App Activation එකක් නොවේ. Staff Access හා " +
+                    "Purchase Sync තවමත් අක්‍රීයව පවතී."
+                )
+                .setNegativeButton("Cancel",null)
+                .setPositiveButton("Submit Pending Request") { _,_ ->
+                    readyForProbe=false
+                    work({
+                        auth.requestPendingOwnerRegistration(
+                            lab,PendingInstallId.getOrCreate(this)
+                        )
+                    })
+                }
+                .show()
+        }
+        pendingButton.isEnabled=false
+
+        root.addView(text("Test v0.5.0 • Separate App ID • No Cloud Data Writes",
             12f,false,Color.GRAY).apply {
             setPadding(0,dp(20),0,0)
         })

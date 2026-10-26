@@ -3,6 +3,7 @@
 // Project qqiheexpbuzohllugxrk ONLY; do not deploy to Production.
 // Pinned SDK; never disable JWT verification or expose an admin API key.
 import {withSupabase} from "npm:@supabase/server@1.9.2";
+import {handlePendingOwnerIntent} from "../_shared/pending_owner_edge_core.mjs";
 import {
   handleOwnerBootstrapIntent,MAX_BODY_CHARS,validOwnerBootstrapClaims
 } from "../_shared/owner_bootstrap_edge_core.mjs";
@@ -31,7 +32,12 @@ export default {
     }catch{return deny();}
 
     try {
-      const result=await handleOwnerBootstrapIntent(ctx,body);
+      const pendingIntent = body!==null && typeof body==="object" &&
+        !Array.isArray(body) &&
+        (body as Record<string,unknown>).intent;
+      const result=(pendingIntent==="pending_issue" || pendingIntent==="pending_verify")
+        ? await handlePendingOwnerIntent(ctx,body)
+        : await handleOwnerBootstrapIntent(ctx,body);
       return Response.json(result,{
         status:result.ok===true?200:403,
         headers:HEADERS
