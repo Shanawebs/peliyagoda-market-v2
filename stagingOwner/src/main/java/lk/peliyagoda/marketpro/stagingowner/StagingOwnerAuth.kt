@@ -4,6 +4,7 @@ import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
+import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.UUID
@@ -185,7 +186,18 @@ internal class StagingOwnerAuth {
                 })
             }
             // Bounded read: no untrusted response can allocate unlimited RAM.
-            val bytes = conn.inputStream.use { it.readNBytes(MAX_RESPONSE + 1) }
+            val bytes = conn.inputStream.use { input ->
+                val out = ByteArrayOutputStream()
+                val chunk = ByteArray(4096)
+                while (true) {
+                    val count = input.read(chunk)
+                    if (count < 0) break
+                    if (out.size() + count > MAX_RESPONSE)
+                        throw AuthException("Server response too large.")
+                    out.write(chunk, 0, count)
+                }
+                out.toByteArray()
+            }
             if (bytes.size > MAX_RESPONSE) throw AuthException("Server response too large.")
             return JSONObject(String(bytes, Charsets.UTF_8))
         } catch (e: AuthException) {
