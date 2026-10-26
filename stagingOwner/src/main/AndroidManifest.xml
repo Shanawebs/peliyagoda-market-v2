@@ -6,7 +6,7 @@
     <application
         android:allowBackup="false"
         android:fullBackupContent="false"
-        android:label="Market Pro · Staging Owner Auth"
+        android:label="Market Pro · Staging Edge Test"
         android:usesCleartextTraffic="false"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity
