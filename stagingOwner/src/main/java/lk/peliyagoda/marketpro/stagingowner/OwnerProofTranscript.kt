@@ -26,7 +26,9 @@ internal data class OwnerProofTranscript(
 
     fun bytes(nowMillis: Long): ByteArray {
         require(listOf(workspaceId,ownerUserId,deviceId,sessionId,challengeId)
-            .all { uuidPattern.matches(it) }) { "Invalid local test UUID" }
+            .all { value -> runCatching { java.util.UUID.fromString(value).toString() == value }.getOrDefault(false) }) {
+            "Invalid local test UUID"
+        }
         require(hex64.matches(nonceHex) && hex64.matches(fingerprintSha256)) {
             "Invalid local test nonce or fingerprint"
         }
