@@ -177,7 +177,7 @@ BEGIN
    'fingerprint_sha256',c.fingerprint_sha256,
    'issued_at_millis',floor(extract(epoch from c.issued_at)*1000)::bigint,
    'expires_at_millis',floor(extract(epoch from c.expires_at)*1000)::bigint,
-   'spki_base64',pg_catalog.encode(c.spki_der,'base64')
+   'spki_base64',replace(pg_catalog.encode(c.spki_der,'base64'),E'\n','')
  ) INTO m
  FROM marketpro_private.qa_owner_bootstrap_challenges c
  JOIN auth.sessions s ON s.id=c.session_id AND s.user_id=c.owner_user_id
