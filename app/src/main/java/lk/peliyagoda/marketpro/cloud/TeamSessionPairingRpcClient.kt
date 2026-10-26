@@ -26,7 +26,7 @@ internal class TeamSessionPairingRpcClient(context: Context) {
     private val localDeviceId = CloudDeviceIdentity.get(app)
 
     companion object {
-        private const val HOST = "lkoptqhodgjeuwwfihfr.supabase.co"
+        private val HOST = BuildConfig.MARKETPRO_SUPABASE_HOST
         private const val RESPONSE_LIMIT = 16384
         private val RPC_NAMES = setOf(
             "marketpro_owner_invite_staff",
