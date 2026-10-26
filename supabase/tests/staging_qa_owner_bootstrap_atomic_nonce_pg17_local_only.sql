@@ -80,7 +80,7 @@ DECLARE
  staff_id uuid:='b805598b-421f-447b-aa4c-ffb66f721338';
  owner_session uuid:='11111111-1111-4111-8111-111111111111';
  owner_device uuid:='33333333-3333-4333-8333-333333333333';
- spki text:=encode(decode(repeat('ab',91),'hex'),'base64');
+ spki text:=replace(encode(decode(repeat('ab',91),'hex'),'base64'), E'\n', '');
  claims jsonb;
  c1 jsonb;
  c2 jsonb;
