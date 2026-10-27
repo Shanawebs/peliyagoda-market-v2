@@ -212,8 +212,8 @@ END;$staff$;
 DO $verify$BEGIN
  IF (SELECT count(*) FROM public.registered_devices WHERE enabled AND can_write)<>1
  OR (SELECT count(*) FROM public.registered_devices WHERE enabled)<>2
- OR (SELECT count(*) FROM marketpro_private.qa_finance_sync_receipts_v1)<>7
- OR (SELECT count(*) FROM public.sync_operations)<>7
+ OR (SELECT count(*) FROM marketpro_private.qa_finance_sync_receipts_v1)<>8
+ OR (SELECT count(*) FROM public.sync_operations)<>8
  OR (SELECT revision FROM public.purchases
    WHERE id='aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee')<>2
  THEN RAISE EXCEPTION 'Cloud finance consistency error';END IF;
