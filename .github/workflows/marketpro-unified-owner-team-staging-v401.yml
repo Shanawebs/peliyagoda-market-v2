@@ -1,0 +1,108 @@
+name: Market Pro Single APK Owner+Team Staging v4.0.1
+
+on:
+  push:
+    branches:
+      - feature/marketpro-single-apk-role-enforced-build
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: marketpro-unified-role-staging-v401
+  cancel-in-progress: true
+
+jobs:
+  one-apk-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Enforce Staging-only changes and one shared Owner/Team APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code 860965ecf9c38b0d029f673eceff518e3c62b317 HEAD -- supabase/ web/marketpro-dashboard/ app/src/main/AndroidManifest.xml
+          grep -Fq 'applicationId = "lk.peliyagoda.marketpro.staging.fullapp"' stagingMarket/build.gradle.kts
+          grep -Fq 'versionCode = 401' stagingMarket/build.gradle.kts
+          grep -Fq 'MARKETPRO_REQUIRE_CLOUD_ROLE", "true"' stagingMarket/build.gradle.kts
+          grep -Fq 'MARKETPRO_REQUIRE_CLOUD_ROLE", "false"' app/build.gradle.kts
+          grep -Fq 'MARKETPRO_STAFF_LOGIN_ENABLED", "true"' stagingMarket/build.gradle.kts
+          grep -Fq 'MARKETPRO_TEAM_PULL_RPC_DEPLOYED", "false"' stagingMarket/build.gradle.kts
+          grep -Fq 'MARKETPRO_STAFF_FINANCE_RPC_DEPLOYED", "false"' stagingMarket/build.gradle.kts
+          grep -Fq 'MARKETPRO_STAFF_OUTBOX_AUTO_UPLOAD", "false"' stagingMarket/build.gradle.kts
+          grep -Fq 'MARKETPRO_STAFF_PAIRING_RPC_DEPLOYED", "false"' stagingMarket/build.gradle.kts
+          grep -Fq 'MarketProActiveRole.activateTeam' app/src/main/java/lk/peliyagoda/marketpro/cloud/CloudStaffAuth.kt
+          grep -Fq 'MarketProActiveRole.activateOwner' app/src/main/java/lk/peliyagoda/marketpro/cloud/CloudOwnerAuth.kt
+          grep -Fq 'verifiedEditorMembership' app/src/main/java/lk/peliyagoda/marketpro/cloud/CloudStaffAuth.kt
+          python3 - <<'PY'
+          from pathlib import Path
+          r=Path("app/src/main/java/lk/peliyagoda/marketpro/data/MarketRepository.kt").read_text()
+          assert r.count("requireDayWrite(date)")>=9
+          assert "requireCatalogWrite()" in r
+          assert "requireOwnerWrite()" in r
+          g=Path("app/src/main/java/lk/peliyagoda/marketpro/cloud/MarketProActiveRole.kt").read_text()
+          assert 'ZoneId.of("Asia/Colombo")' in g
+          assert 'LocalBusinessDateEditPolicy.mayEdit(role,target,today)' in g
+          assert 'MARKETPRO_REQUIRE_CLOUD_ROLE' in g
+          assert 'lkoptqhodgjeuwwfihfr.supabase.co' not in g
+          assert 'sb_secret_' not in g
+          print("PASS: shared source, isolated QA Owner/Team identity, no live cloud writer")
+          PY
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Prepare Sinhala fonts
+        run: bash scripts/prepare_sinhala_font.sh
+      - name: Test all app role policies and assemble single Market Pro APK
+        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :stagingMarket:assembleDebug
+      - name: Verify APK signature, package and role-dependent version
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=MarketPro-Unified-OwnerTeam-Staging-v4.0.1-debug.apk
+          cp stagingMarket/build/outputs/apk/debug/stagingMarket-debug.apk "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" > /tmp/unified_badging.txt
+          grep -Fq "package: name='lk.peliyagoda.marketpro.staging.fullapp'" /tmp/unified_badging.txt
+          grep -Fq "versionName='4.0.1-staging'" /tmp/unified_badging.txt
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions "$APK" > /tmp/unified_perms.txt
+          grep -Fq 'android.permission.INTERNET' /tmp/unified_perms.txt
+          sha256sum "$APK"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MarketPro-Unified-OwnerTeam-Staging-v4.0.1-APK
+          path: MarketPro-Unified-OwnerTeam-Staging-v4.0.1-debug.apk
+          retention-days: 30
+          if-no-files-found: error
+      - name: Publish direct APK as QA-only prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG=marketpro-unified-owner-team-staging-v4.0.1
+          APK=MarketPro-Unified-OwnerTeam-Staging-v4.0.1-debug.apk
+          NOTES='QA STAGING ONLY: ONE native Market Pro Android APK for both Owner and Team. Owner/Team account sign in selects role; Team role verified against Supabase workspace_members; Room edit guard restricts Team edits to Colombo today, Owner to today/history. Multiple Team accounts tested. NO active device enrolled; Cloud auto-upload, Cloud download and financial writes remain OFF until server/database/device and cross-phone QA are completed. NOT A FINAL SYNC RELEASE. Keeps Production app installed separately.'
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" --clobber
+          else
+            gh release create "$TAG" "$APK" --target "$GITHUB_SHA" --prerelease \
+              --title "Market Pro Unified Owner+Team v4.0.1 STAGING" --notes "$NOTES"
+          fi
+          gh release view "$TAG" --json url,assets
