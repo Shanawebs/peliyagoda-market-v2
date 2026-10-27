@@ -46,6 +46,10 @@ object StaffAuthSafetyPolicy {
         }
     }
 
+    /** Only authenticates the Team identity. Not permission for Pull or writes. */
+    fun allowIdentityLogin(isOfflinePreview:Boolean,staffLoginEnabled:Boolean):Boolean =
+        !isOfflinePreview && staffLoginEnabled
+
     fun allowNetwork(
         isOfflinePreview: Boolean,
         staffLoginEnabled: Boolean,
