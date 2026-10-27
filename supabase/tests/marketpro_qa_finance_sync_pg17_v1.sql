@@ -9,6 +9,18 @@ ALTER TABLE public.purchase_additions ALTER COLUMN revision SET DEFAULT 1;
 ALTER TABLE public.requisitions ALTER COLUMN revision SET DEFAULT 1;
 ALTER TABLE public.daily_cash_received ALTER COLUMN revision SET DEFAULT 1;
 ALTER TABLE public.daily_other_expenses ALTER COLUMN revision SET DEFAULT 1;
+-- Hosted public.sync_operations exists; create its minimal equivalent in disposable QA.
+CREATE TABLE public.sync_operations(
+ operation_id uuid PRIMARY KEY,
+ workspace_id uuid NOT NULL,
+ device_id uuid NOT NULL,
+ actor_user_id uuid NOT NULL,
+ entity_type text NOT NULL,
+ entity_id uuid NOT NULL,
+ operation_type text NOT NULL,
+ payload_hash text NOT NULL,
+ applied_at timestamptz NOT NULL DEFAULT now()
+);
 -- No new Owner or Staff auth records: reuse exact preflight fixture.
 \i supabase/staging/marketpro_qa_finance_sync_v1_REVIEW_ONLY.sql
 
