@@ -1,0 +1,46 @@
+name: Market Pro Staging Dashboard Verification
+
+on:
+  push:
+    branches:
+      - feature/marketpro-staging-live-dashboard
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-staging-dashboard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check dashboard JS and run browser-independent tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check web/marketpro-dashboard/config.mjs
+          node --check web/marketpro-dashboard/auth-client.mjs
+          node --check web/marketpro-dashboard/core.mjs
+          node --check web/marketpro-dashboard/app.mjs
+          node --test web/tests/marketpro-dashboard.test.mjs
+      - name: Assert staged live database, secure read-only login and no prod cutover
+        shell: bash
+        run: |
+          set -euo pipefail
+          HTML=web/marketpro-dashboard/index.html
+          CONF=web/marketpro-dashboard/config.mjs
+          API=web/marketpro-dashboard/auth-client.mjs
+          grep -Fq 'connect-src https://qqiheexpbuzohllugxrk.supabase.co' "$HTML"
+          ! grep -Fq 'lkoptqhodgjeuwwfihfr' "$HTML"
+          grep -Fq 'Auto-updating every 5 seconds' "$HTML"
+          grep -Fq 'https://qqiheexpbuzohllugxrk.supabase.co' "$CONF"
+          grep -Fq 'REFRESH_INTERVAL_MS = 5000' "$CONF"
+          grep -Fq 'daily_financial_summary' "$API"
+          grep -Fq 'sessionStorage' "$API"
+          ! grep -R -Fq 'sb_secret_' web/marketpro-dashboard
+          ! grep -R -Fq 'service_role' web/marketpro-dashboard
+          grep -Fq 'connect-src https://qqiheexpbuzohllugxrk.supabase.co' web/marketpro-dashboard/vercel.json
