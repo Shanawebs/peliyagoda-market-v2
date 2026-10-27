@@ -45,6 +45,18 @@ jobs:
           grep -Fq 'android.permission.INTERNET" tools:node="remove"' app/src/main/AndroidManifest.xml
           grep -Fq 'android.permission.INTERNET' stagingMarket/src/main/AndroidManifest.xml
 
+      - name: Dashboard syntax and staging migration checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check web/marketpro-dashboard/core.mjs
+          node --check web/marketpro-dashboard/auth-client.mjs
+          node --check web/marketpro-dashboard/app.mjs
+          grep -Fq 'https://qqiheexpbuzohllugxrk.supabase.co' web/marketpro-dashboard/config.mjs
+          grep -Fq 'REFRESH_INTERVAL_MS = 5000' web/marketpro-dashboard/config.mjs
+          grep -Fq 'other_expenses_cents' supabase/staging/marketpro_staging_dashboard_other_expenses_v410.sql
+          grep -Fq 'security_invoker=true' supabase/staging/marketpro_staging_dashboard_other_expenses_v410.sql
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
