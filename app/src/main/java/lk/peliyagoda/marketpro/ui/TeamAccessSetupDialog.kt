@@ -55,7 +55,7 @@ fun TeamAccessSetupDialog(onDismiss: () -> Unit) {
     if (!showCatalogReview) AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = Color.White,
-        title = { Text("Team Account & Device Setup") },
+        title = { Text("Market Pro — Account & Phone") },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth().heightIn(max = 510.dp)
@@ -64,20 +64,20 @@ fun TeamAccessSetupDialog(onDismiss: () -> Unit) {
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextButton(onClick = { showStaff = true }) {
-                        Text("Staff Phone",
+                        Text("Team Login",
                             fontWeight = if (showStaff) FontWeight.Bold else FontWeight.Normal)
                     }
                     TextButton(onClick = { showStaff = false }) {
-                        Text("Owner Phone",
+                        Text("Owner Login",
                             fontWeight = if (!showStaff) FontWeight.Bold else FontWeight.Normal)
                     }
                 }
                 if (showStaff) {
-                    Text("Purchasing Team — Separate Login",
+                    Text("Market Pro Team — Same App",
                         style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "Use your OWN verified Staff email account. " +
-                            "Never share or enter the Owner password on this phone."
+                        "Owner සහ Team දෙපිරිසම භාවිත කරන්නේ එකම Market Pro APK එකයි. " +
+                            "Login අනුව Teamට අද දිනයේ දත්ත පමණක් වෙනස් කළ හැකියි."
                     )
                     if (liveEnrollment) {
                         OutlinedTextField(
@@ -136,9 +136,9 @@ fun TeamAccessSetupDialog(onDismiss: () -> Unit) {
                     StaffSessionPairingPanel()
                     StaffCatalogCandidatePanel()
                     Text(
-                        "After Owner and server activation: today’s entries may be " +
-                            "corrected any number of times; previous days are " +
-                            "read-only on Staff Phone, based on Sri Lanka server date."
+                        "Teamට අද දිනයේ Purchases, Kitchen, Cash සහ Expenses " +
+                            "ඕනෑම වාර ගණනක් වෙනස් කළ හැකියි. පරණ දවස් " +
+                            "View කරන්න පමණයි; ඒවා Edit කළ හැක්කේ Ownerටයි."
                     )
                 } else {
                     TeamPhoneManagementPreview()
