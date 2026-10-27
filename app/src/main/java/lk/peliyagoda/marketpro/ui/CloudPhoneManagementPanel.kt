@@ -3,6 +3,7 @@ package lk.peliyagoda.marketpro.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
@@ -40,6 +41,7 @@ internal fun CloudPhoneManagementPanel() {
     var busy by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf("") }
     var snapshot by remember { mutableStateOf<CloudPhoneRegistryClient.Snapshot?>(null) }
+    var confirmOwnerRecovery by remember { mutableStateOf(false) }
 
     fun runRequest(job:suspend () -> Unit) {
         if(busy)return
@@ -126,6 +128,17 @@ internal fun CloudPhoneManagementPanel() {
         if(data!=null) {
             Text(if(data.role=="owner") "Owner — Manage Team Phones"
                 else "Team — This Phone's Approval Status",fontWeight=FontWeight.Bold)
+            if(data.role=="owner") {
+                Text(
+                    "Owner Phone reinstalled? If approval says 'Owner phone is not active', " +
+                        "verify a fresh Owner Authenticator code under the Owner Login tab first. " +
+                        "Then recover THIS phone. The previously approved Owner UUID is revoked."
+                )
+                Button(
+                    enabled=!busy,
+                    onClick={ confirmOwnerRecovery=true }
+                ) { Text("Secure Re-Link Owner Phone") }
+            }
             if(data.phones.isEmpty()) Text("No Phone Requests Yet")
             data.phones.forEach { device ->
                 val state=if(device.enabled) "APPROVED" else "PENDING / UNLINKED"
@@ -156,5 +169,33 @@ internal fun CloudPhoneManagementPanel() {
             }
         )
         HorizontalDivider()
+    }
+    if(confirmOwnerRecovery) {
+        AlertDialog(
+            onDismissRequest={ confirmOwnerRecovery=false },
+            title={ Text("Recover This Owner Phone?") },
+            text={
+                Text(
+                    "Only continue on your actual Owner Phone. Verify your Owner " +
+                        "Authenticator 6-digit code first (within 5 minutes). " +
+                        "The old Owner installation's Cloud access will be revoked " +
+                        "and this phone will become the sole approved Owner device. " +
+                        "No local JSON backup or unsynced records are transferred. " +
+                        "Pending Team phone approval is NOT automatic."
+                )
+            },
+            dismissButton={
+                TextButton(onClick={confirmOwnerRecovery=false}) { Text("Cancel") }
+            },
+            confirmButton={
+                Button(enabled=!busy,onClick={
+                    confirmOwnerRecovery=false
+                    runRequest {
+                        notice=client.secureRelinkThisOwnerPhone()
+                        snapshot=client.listPhones()
+                    }
+                }) { Text("Confirm Secure Re-Link") }
+            }
+        )
     }
 }
