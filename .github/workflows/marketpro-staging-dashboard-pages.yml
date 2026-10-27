@@ -1,0 +1,68 @@
+name: Market Pro QA Dashboard — GitHub Pages
+
+on:
+  push:
+    branches:
+      - feature/marketpro-staging-live-dashboard
+    paths:
+      - 'web/marketpro-dashboard/**'
+      - 'web/tests/marketpro-dashboard.test.mjs'
+      - '.github/workflows/marketpro-staging-dashboard-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-marketpro-qa-dashboard
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify QA-only Supabase endpoint and read-only dashboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check web/marketpro-dashboard/app.mjs
+          node --check web/marketpro-dashboard/auth-client.mjs
+          node --check web/marketpro-dashboard/core.mjs
+          node --test web/tests/marketpro-dashboard.test.mjs
+          grep -Fq 'connect-src https://qqiheexpbuzohllugxrk.supabase.co' web/marketpro-dashboard/index.html
+          grep -Fq 'REFRESH_INTERVAL_MS = 5000' web/marketpro-dashboard/config.mjs
+          grep -Fq 'https://qqiheexpbuzohllugxrk.supabase.co' web/marketpro-dashboard/config.mjs
+          ! grep -RqF 'lkoptqhodgjeuwwfihfr' web/marketpro-dashboard/index.html web/marketpro-dashboard/config.mjs
+          ! grep -RqF 'sb_secret_' web/marketpro-dashboard
+          ! grep -RqF 'service_role' web/marketpro-dashboard
+      - name: Package QA static assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p _site/marketpro-qa-dashboard
+          for file in index.html styles.css app.mjs auth-client.mjs core.mjs config.mjs; do
+            cp "web/marketpro-dashboard/$file" "_site/marketpro-qa-dashboard/$file"
+          done
+          printf '' > _site/.nojekyll
+          cat > _site/index.html <<'HTML'
+          <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex,nofollow"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Market Pro Staging</title></head><body><a href="./marketpro-qa-dashboard/">Open Market Pro QA Dashboard</a></body></html>
+          HTML
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload Pages Artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
