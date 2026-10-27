@@ -12,6 +12,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import org.json.JSONArray
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -56,11 +57,10 @@ internal class CloudStaffAuth(context: Context) {
     private class InvalidAuth : IOException("Staff sign-in expired or was rejected")
 
     private fun requireActivatedAuth() {
-        check(StaffAuthSafetyPolicy.allowNetwork(
+        check(StaffAuthSafetyPolicy.allowIdentityLogin(
             BuildConfig.MARKETPRO_LOCAL_PREVIEW,
-            BuildConfig.MARKETPRO_STAFF_LOGIN_ENABLED,
-            BuildConfig.MARKETPRO_TEAM_PULL_RPC_DEPLOYED
-        )) { "Staff Login is unavailable in this offline Development Preview" }
+            BuildConfig.MARKETPRO_STAFF_LOGIN_ENABLED
+        )) { "Team Login unavailable until enabled in staging" }
     }
 
     private fun key(): SecretKey {
@@ -198,6 +198,34 @@ internal class CloudStaffAuth(context: Context) {
         return identity
     }
 
+    /** Server RLS returns self's role only. Identity login confers NO Cloud writes. */
+    private fun verifiedEditorMembership(bearer:String,userId:String):Boolean {
+        require(java.util.UUID.fromString(userId).toString()==userId)
+        val url=URL(BuildConfig.MARKETPRO_SUPABASE_URL +
+            "/rest/v1/workspace_members?select=role" +
+            "&workspace_id=eq.${CloudSyncConfig.WORKSPACE_ID}" +
+            "&user_id=eq.$userId&limit=2")
+        require(url.protocol=="https" &&
+            url.host==BuildConfig.MARKETPRO_SUPABASE_HOST)
+        val connection=(url.openConnection() as HttpURLConnection).apply {
+            requestMethod="GET"
+            instanceFollowRedirects=false
+            connectTimeout=12000
+            readTimeout=15000
+            setRequestProperty("apikey",BuildConfig.MARKETPRO_SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization","Bearer $bearer")
+            setRequestProperty("Accept","application/json")
+        }
+        return try {
+            if(connection.responseCode!=200) return false
+            val response=connection.inputStream.bufferedReader().use { it.readText().take(8192) }
+            val roles=JSONArray(response)
+            roles.length()==1 && roles.getJSONObject(0).optString("role")=="editor"
+        } finally {
+            connection.disconnect()
+        }
+    }
+
     /** Never called from UI or WorkManager until explicitly enabled. */
     suspend fun signInStaff(emailInput: String,password: String): StaffVerifiedIdentity =
         withContext(Dispatchers.IO) {
@@ -213,7 +241,13 @@ internal class CloudStaffAuth(context: Context) {
                 val refresh=response.getString("refresh_token")
                 val profile=request("/auth/v1/user","GET",bearer=access)
                 val identity=validateProfile(profile,email,previous?.userId)
+                if (BuildConfig.MARKETPRO_REQUIRE_CLOUD_ROLE)
+                    check(verifiedEditorMembership(access,identity.userId)) {
+                        "This account is not an approved Team workspace member"
+                    }
                 store(Session(email,identity.userId,access,refresh))
+                if (BuildConfig.MARKETPRO_REQUIRE_CLOUD_ROLE)
+                    MarketProActiveRole.activateTeam(app,identity.userId)
                 identity
             }
         }
@@ -225,6 +259,9 @@ internal class CloudStaffAuth(context: Context) {
     suspend fun verifiedPullSession(): TeamPullSession = withContext(Dispatchers.IO) {
         mutex.withLock {
             requireActivatedAuth()
+            check(BuildConfig.MARKETPRO_TEAM_PULL_RPC_DEPLOYED) {
+                "Team cloud downloads are not released yet"
+            }
             val old=readStored() ?: error("Sign in with the dedicated Staff account")
             var active=old
             val profile=try {
@@ -260,6 +297,8 @@ internal class CloudStaffAuth(context: Context) {
             // Remove locally first even when offline. No chance to reuse stale
             // staff session on this phone; remote token expiry is independent.
             prefs.edit().remove(KEY).commit()
+            if (BuildConfig.MARKETPRO_REQUIRE_CLOUD_ROLE)
+                MarketProActiveRole.clearIfActive(app,"team")
             if (old != null && StaffAuthSafetyPolicy.allowNetwork(
                 BuildConfig.MARKETPRO_LOCAL_PREVIEW,
                 BuildConfig.MARKETPRO_STAFF_LOGIN_ENABLED,
