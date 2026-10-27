@@ -1,5 +1,6 @@
 package lk.peliyagoda.marketpro.ui
 
+import android.app.ActivityManager
 import android.content.Context
 import lk.peliyagoda.marketpro.cloud.CloudSyncScheduler
 import androidx.lifecycle.ViewModel
@@ -13,6 +14,8 @@ import lk.peliyagoda.marketpro.data.PurchaseHistoryLot
 import lk.peliyagoda.marketpro.data.RequisitionEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.flatMapLatest
@@ -67,10 +70,36 @@ class MarketViewModel(private val repository: MarketRepository, private val appC
         }
     }
 
+    private fun appProcessIsVisible(): Boolean {
+        val state = ActivityManager.RunningAppProcessInfo()
+        ActivityManager.getMyMemoryState(state)
+        return state.importance <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE
+    }
+
     init {
         viewModelScope.launch(Dispatchers.IO) {
             repository.seedCatalogOnce()
             enqueueIfEnabled()
+        }
+        // Foreground near-live convergence for the final two-phone staging build.
+        // It is pull-only: local writes still use the durable Outbox + immediate Worker.
+        val ctx = appContext
+        if (ctx != null) {
+            viewModelScope.launch(Dispatchers.IO) {
+                while (isActive) {
+                    delay(10_000L)
+                    if (appProcessIsVisible() &&
+                        lk.peliyagoda.marketpro.cloud.StagingTwoPhoneSyncScheduler.enabled() &&
+                        repository.cloudSyncEnabled()
+                    ) {
+                        runCatching {
+                            lk.peliyagoda.marketpro.cloud
+                                .StagingTwoPhoneSyncCoordinator(ctx)
+                                .pullOnly()
+                        }
+                    }
+                }
+            }
         }
     }
 
