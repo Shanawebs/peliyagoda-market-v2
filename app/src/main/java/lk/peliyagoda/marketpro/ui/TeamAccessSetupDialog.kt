@@ -141,6 +141,9 @@ fun TeamAccessSetupDialog(onDismiss: () -> Unit) {
                             "View කරන්න පමණයි; ඒවා Edit කළ හැක්කේ Ownerටයි."
                     )
                 } else {
+                    // Explicit fresh Supabase TOTP verification is required before
+                    // the secure recovery of an Owner phone reinstalled from APK.
+                    OwnerTotpMfaPanel()
                     TeamPhoneManagementPreview()
                     OwnerSessionPairingPanel()
                     Text("Owner — Team Access Control",
