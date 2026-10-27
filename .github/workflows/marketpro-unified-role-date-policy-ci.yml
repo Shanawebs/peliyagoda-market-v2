@@ -1,0 +1,63 @@
+name: Market Pro — One APK for Owner and Team — Date Policy
+
+on:
+  push:
+    branches:
+      - feature/marketpro-unified-apk-owner-team-date-rules
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  same-apk-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Enforce one shared full source, correct Staging and no writers
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code c442b6acd730ede8c5fafd738780e014f08c9515 HEAD -- supabase/ app/src/main/java/lk/peliyagoda/marketpro/data/
+          grep -Fq 'include(":stagingMarket")' settings.gradle.kts
+          grep -Fq 'java.srcDirs("../app/src/main/java")' stagingMarket/build.gradle.kts
+          grep -Fq 'applicationId = "lk.peliyagoda.marketpro.staging.fullapp"' stagingMarket/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_LOGIN_ENABLED", "false"' stagingMarket/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_FINANCE_RPC_DEPLOYED", "false"' stagingMarket/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAFF_OUTBOX_AUTO_UPLOAD", "false"' stagingMarket/build.gradle.kts
+          grep -Fq 'TeamAccessPolicy.authorize' app/src/test/java/lk/peliyagoda/marketpro/cloud/TeamAccessPolicyTest.kt
+          grep -Fq 'multipleTeamPhonesHaveIdenticalTodayRightsWithoutDifferentApks' app/src/test/java/lk/peliyagoda/marketpro/cloud/TeamAccessPolicyTest.kt
+          grep -Fq 'Market Pro Team — Same App' app/src/main/java/lk/peliyagoda/marketpro/ui/TeamAccessSetupDialog.kt
+          echo "PASS: One APK, several Team phones, Owner-managed devices; writer gates still OFF."
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Setup Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Prepare Sinhala app font
+        run: bash scripts/prepare_sinhala_font.sh
+      - name: Run role policy unit tests and build same full Staging APK
+        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :stagingMarket:assembleDebug
+      - name: Verify isolated build package and writer isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=stagingMarket/build/outputs/apk/debug/stagingMarket-debug.apk
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" > /tmp/marketpro_unified_badging.txt
+          grep -Fq "package: name='lk.peliyagoda.marketpro.staging.fullapp'" /tmp/marketpro_unified_badging.txt
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$APK"
+          echo "PASS: One signed Staging Market Pro test APK, NO Cloud writer release."
