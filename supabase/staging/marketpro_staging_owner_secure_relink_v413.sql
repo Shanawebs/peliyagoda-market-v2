@@ -100,8 +100,8 @@ begin
         pg_catalog.hashtextextended(p_workspace_id::text,0)
     );
 
-    select count(*), min(d.id)
-      into v_owner_count,v_previous_device_id
+    select count(*)
+      into v_owner_count
       from public.registered_devices d
       join public.workspace_members m
         on m.workspace_id=d.workspace_id and m.user_id=d.user_id
@@ -109,6 +109,17 @@ begin
        and m.role='owner' and d.enabled;
     if v_owner_count <> 1 then
         raise exception 'Expected exactly one active Owner phone before recovery'
+            using errcode='42501';
+    end if;
+    select d.id into v_previous_device_id
+      from public.registered_devices d
+      join public.workspace_members m
+        on m.workspace_id=d.workspace_id and m.user_id=d.user_id
+     where d.workspace_id=p_workspace_id
+       and d.user_id=v_uid and m.role='owner' and d.enabled
+     for update of d;
+    if v_previous_device_id is null then
+        raise exception 'Previous Owner device belongs to another user'
             using errcode='42501';
     end if;
 
