@@ -48,8 +48,8 @@ fun TeamAccessSetupDialog(onDismiss: () -> Unit) {
     var password by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf("") }
+    // Identity login is safe while device pairing/Cloud writers remain OFF.
     val liveEnrollment = !BuildConfig.MARKETPRO_LOCAL_PREVIEW &&
-        BuildConfig.MARKETPRO_TEAM_PULL_RPC_DEPLOYED &&
         BuildConfig.MARKETPRO_STAFF_LOGIN_ENABLED
 
     if (!showCatalogReview) AlertDialog(
