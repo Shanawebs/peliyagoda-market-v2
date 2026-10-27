@@ -1,0 +1,64 @@
+name: Market Pro Staging Finance Sync v1 — PG17 REVIEW ONLY
+
+on:
+  push:
+    branches:
+      - feature/marketpro-staging-finance-sync-writer-v1-review
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  finance-sync-fail-closed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Reject Production and live runtime changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=266d5cefc19c2b63b00ebe8794c05561925c5b37
+          git diff --exit-code "$BASE" HEAD -- app/ stagingMarket/ stagingOwner/ web/ supabase/functions/ supabase/migrations/
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('supabase/staging/marketpro_qa_finance_sync_v1_REVIEW_ONLY.sql')
+          s=p.read_text()
+          assert 'qqiheexpbuzohllugxrk' in s
+          assert 'lkoptqhodgjeuwwfihfr' not in s
+          assert 'enabled boolean NOT NULL DEFAULT false' in s
+          assert "marketpro_qa_finance_apply_v1" in s
+          assert "auth.sessions" in s
+          assert "registered_devices" in s
+          assert "v_role='editor' AND v_day<>v_today" in s
+          assert "v_old_day<>v_day" in s
+          assert "expected revision" in s.lower() or "p_expected_revision" in s
+          assert "qa_finance_sync_receipts_v1" in s
+          assert "marketpro_private" in s
+          assert "GRANT EXECUTE" in s and "TO authenticated" in s
+          assert "TO service_role" not in s
+          assert "ON CONFLICT (operation_id)" not in s
+          assert s.strip().endswith("COMMIT;")
+          print('PASS: Dormant service-vetted Owner/Team financial sync; no production writes')
+          PY
+      - name: Disposable Postgres 17 container
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run -d --rm --name marketpro_finance_qa_pg17 \
+            -e POSTGRES_PASSWORD=disposable-only -v "$PWD":/work:ro \
+            -w /work postgres:17
+          for i in $(seq 1 50); do
+            if docker exec marketpro_finance_qa_pg17 pg_isready -U postgres; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Test five finance types, repeat corrections, server dates and revocation
+        run: |
+          docker exec marketpro_finance_qa_pg17 psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -f supabase/tests/marketpro_qa_finance_sync_pg17_v1.sql
+      - name: Destroy disposable database
+        if: always()
+        run: docker stop marketpro_finance_qa_pg17 || true
