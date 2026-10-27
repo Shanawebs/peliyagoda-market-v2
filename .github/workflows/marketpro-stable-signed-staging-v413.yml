@@ -1,0 +1,230 @@
+name: Market Pro Stable Signed Staging Update v4.1.3
+
+on:
+  push:
+    branches:
+      - feature/marketpro-owner-secure-relink-v413
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: marketpro-stable-signed-v413
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    env:
+      MARKETPRO_REQUIRE_STABLE_SIGNING: 'true'
+      MARKETPRO_STAGING_SIGNING_STORE_PATH: ${{ github.workspace }}/marketpro-staging-stable.jks
+      MARKETPRO_STAGING_KEYSTORE_BASE64: ${{ secrets.MARKETPRO_STAGING_KEYSTORE_BASE64 }}
+      MARKETPRO_STAGING_STORE_PASSWORD: ${{ secrets.MARKETPRO_STAGING_STORE_PASSWORD }}
+      MARKETPRO_STAGING_KEY_ALIAS: ${{ secrets.MARKETPRO_STAGING_KEY_ALIAS }}
+      MARKETPRO_STAGING_KEY_PASSWORD: ${{ secrets.MARKETPRO_STAGING_KEY_PASSWORD }}
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify production isolation and final staging gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'applicationId = "lk.peliyagoda.marketpro.staging.fullapp"' stagingMarket/build.gradle.kts
+          grep -Fq 'versionCode = 413' stagingMarket/build.gradle.kts
+          grep -Fq 'versionName = marketProDisplayVersion' stagingMarket/build.gradle.kts
+          grep -Fq 'create("stableStaging")' stagingMarket/build.gradle.kts
+          grep -Fq 'MARKETPRO_REQUIRE_STABLE_SIGNING' stagingMarket/build.gradle.kts
+          grep -Fq 'val marketProDisplayVersion = "4.1.3-staging"' stagingMarket/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAGING_QA_FINANCE_RPC", "true"' stagingMarket/build.gradle.kts
+          grep -Fq '"MARKETPRO_TWO_PHONE_AUTO_SYNC", "true"' stagingMarket/build.gradle.kts
+          grep -Fq '"MARKETPRO_TEAM_DOMAIN_MERGE_DEPLOYED", "true"' stagingMarket/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAGING_QA_FINANCE_RPC", "false"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_TWO_PHONE_AUTO_SYNC", "false"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_TEAM_DOMAIN_MERGE_DEPLOYED", "false"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_LOCAL_PREVIEW", "true"' app/build.gradle.kts
+          grep -Fq 'marketpro_qa_finance_apply_v1' app/src/main/java/lk/peliyagoda/marketpro/cloud/StagingQaFinanceSync.kt
+          grep -Fq 'StagingTwoPhoneSyncScheduler.enabled()' app/src/main/java/lk/peliyagoda/marketpro/cloud/CloudSyncScheduler.kt
+          grep -Fq 'Activate / Sync Two-Phone' app/src/main/java/lk/peliyagoda/marketpro/ui/CloudPhoneManagementPanel.kt
+          ! grep -Rq 'service_role' app/src/main/java/lk/peliyagoda/marketpro/cloud/Staging*.kt
+          ! grep -Rq 'sb_secret_' app/src/main/java/lk/peliyagoda/marketpro/cloud/Staging*.kt
+          grep -Fq 'android.permission.INTERNET" tools:node="remove"' app/src/main/AndroidManifest.xml
+          grep -Fq 'android.permission.INTERNET' stagingMarket/src/main/AndroidManifest.xml
+
+      - name: Verify streamlined menu and preserved backup PIN flow
+        shell: bash
+        run: |
+          set -euo pipefail
+          UI=app/src/main/java/lk/peliyagoda/marketpro/ui/MarketProApp.kt
+          ! grep -Fq '"Security & Backup"' "$UI"
+          ! grep -Fq 'securityBackupOpen' "$UI"
+          grep -Fq '"Backup All Records (JSON)"' "$UI"
+          grep -Fq '"Restore Backup (JSON)"' "$UI"
+          grep -Fq '"Security & Team Sync"' "$UI"
+          grep -Fq 'restorePinOpen = true' "$UI"
+          grep -Fq 'RestorePinDialog(' "$UI"
+          grep -Fq 'restoreAuthorized = false' "$UI"
+          grep -Fq 'vm.restoreBackup(json)' "$UI"
+          grep -Fq 'check(cloudDao.state("enrolled") != "true")' app/src/main/java/lk/peliyagoda/marketpro/data/MarketRepository.kt
+
+      - name: Verify Owner secure recovery requires Authenticator and explicit approval
+        shell: bash
+        run: |
+          set -euo pipefail
+          SQL=supabase/staging/marketpro_staging_owner_secure_relink_v413.sql
+          C=app/src/main/java/lk/peliyagoda/marketpro/cloud/CloudPhoneRegistryClient.kt
+          P=app/src/main/java/lk/peliyagoda/marketpro/ui/CloudPhoneManagementPanel.kt
+          T=app/src/main/java/lk/peliyagoda/marketpro/ui/TeamAccessSetupDialog.kt
+          grep -Fq 'marketpro_qa_owner_secure_relink_v1' "$SQL"
+          grep -Fq 'auth.jwt()' "$SQL"
+          grep -Fq "v_jwt->>'aal' is distinct from 'aal2'" "$SQL"
+          grep -Fq "a.value->>'method' = 'totp'" "$SQL"
+          grep -Fq 'v_totp_epoch < v_now_epoch-300' "$SQL"
+          grep -Fq "wm.role='owner'" "$SQL"
+          grep -Fq "m.role='owner' and d.enabled" "$SQL"
+          grep -Fq 'auth.sessions' "$SQL"
+          grep -Fq 'p_confirm is distinct from true' "$SQL"
+          grep -Fq 'qa_owner_relink_audit_v1' "$SQL"
+          grep -Fq 'revoke all on function public.marketpro_qa_owner_secure_relink_v1' "$SQL"
+          grep -Fq 'grant execute on function public.marketpro_qa_owner_secure_relink_v1' "$SQL"
+          grep -Fq 'secureRelinkThisOwnerPhone()' "$C"
+          grep -Fq 'Confirm Secure Re-Link' "$P"
+          grep -Fq 'OwnerTotpMfaPanel()' "$T"
+          grep -Fq 'p_confirm",true' "$C"
+
+      - name: Dashboard syntax and staging migration checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check web/marketpro-dashboard/core.mjs
+          node --check web/marketpro-dashboard/auth-client.mjs
+          node --check web/marketpro-dashboard/app.mjs
+          node --test web/tests/marketpro-dashboard.test.mjs
+          grep -Fq 'https://qqiheexpbuzohllugxrk.supabase.co' web/marketpro-dashboard/config.mjs
+          grep -Fq 'REFRESH_INTERVAL_MS = 5000' web/marketpro-dashboard/config.mjs
+          grep -Fq 'connect-src https://qqiheexpbuzohllugxrk.supabase.co' web/marketpro-dashboard/vercel.json
+          ! grep -Fq 'connect-src https://lkoptqhodgjeuwwfihfr.supabase.co' web/marketpro-dashboard/vercel.json
+          grep -Fq 'other_expenses_cents' supabase/staging/marketpro_staging_dashboard_other_expenses_v410.sql
+          grep -Fq 'security_invoker=true' supabase/staging/marketpro_staging_dashboard_other_expenses_v410.sql
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android 35 SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Prepare Sinhala font
+        run: bash scripts/prepare_sinhala_font.sh
+
+      - name: Require and unpack PRIVATE stable staging signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${MARKETPRO_STAGING_KEYSTORE_BASE64}" ||
+                -z "${MARKETPRO_STAGING_STORE_PASSWORD}" ||
+                -z "${MARKETPRO_STAGING_KEY_ALIAS}" ||
+                -z "${MARKETPRO_STAGING_KEY_PASSWORD}" ]]; then
+            echo '::error::Set all four MARKETPRO_STAGING_* GitHub Actions repository secrets before building the release.'
+            exit 1
+          fi
+          umask 077
+          printf '%s' "${MARKETPRO_STAGING_KEYSTORE_BASE64}" | base64 --decode > "${MARKETPRO_STAGING_SIGNING_STORE_PATH}"
+          test -s "${MARKETPRO_STAGING_SIGNING_STORE_PATH}"
+          keytool -list -keystore "${MARKETPRO_STAGING_SIGNING_STORE_PATH}" -storepass "${MARKETPRO_STAGING_STORE_PASSWORD}" -alias "${MARKETPRO_STAGING_KEY_ALIAS}" >/dev/null
+
+      - name: Unit tests and both Android builds
+        run: |
+          set -euo pipefail
+          gradle --no-daemon --stacktrace \
+            :app:testDebugUnitTest \
+            :app:assembleDebug \
+            :stagingMarket:assembleDebug
+
+      - name: Validate final staging APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=MarketPro-Staging-StableUpdate-v4.1.3-signed.apk
+          cp stagingMarket/build/outputs/apk/debug/stagingMarket-debug.apk "$APK"
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" > /tmp/mp413_badging.txt
+          grep -Fq "package: name='lk.peliyagoda.marketpro.staging.fullapp'" /tmp/mp413_badging.txt
+          grep -Fq "versionCode='413'" /tmp/mp413_badging.txt
+          grep -Fq "versionName='4.1.3-staging'" /tmp/mp413_badging.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions "$APK" > /tmp/mp413_permissions.txt
+          grep -Fq 'android.permission.INTERNET' /tmp/mp413_permissions.txt
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK" > /tmp/mp413_signature.txt
+          grep -Fqi '0a617edb7520deb0255cfc13ee0b2ee8382e2d8e6cb7f8e1dff68b4fbd130c4a' /tmp/mp413_signature.txt
+          echo 'Verified permanent STAGING signing certificate fingerprint'
+          sha256sum "$APK"
+
+      - name: Assert this APK can update the published v4.1.2 baseline
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/marketpro-baseline
+          gh release download marketpro-stable-signed-v4.1.2 \
+            --repo Shanawebs/peliyagoda-market-v2 \
+            --pattern 'MarketPro-Staging-StableUpdate-v4.1.2-signed.apk' \
+            --dir /tmp/marketpro-baseline
+          OLD=/tmp/marketpro-baseline/MarketPro-Staging-StableUpdate-v4.1.2-signed.apk
+          NEW=MarketPro-Staging-StableUpdate-v4.1.3-signed.apk
+          test -s "$OLD"
+          test -s "$NEW"
+          AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          SIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          "$AAPT" dump badging "$OLD" > /tmp/marketpro_old_badging
+          "$AAPT" dump badging "$NEW" > /tmp/marketpro_new_badging
+          grep -Fq "package: name='lk.peliyagoda.marketpro.staging.fullapp'" /tmp/marketpro_old_badging
+          grep -Fq "package: name='lk.peliyagoda.marketpro.staging.fullapp'" /tmp/marketpro_new_badging
+          grep -Fq "versionCode='412'" /tmp/marketpro_old_badging
+          grep -Fq "versionCode='413'" /tmp/marketpro_new_badging
+          "$SIGNER" verify --print-certs "$OLD" > /tmp/marketpro_old_signer
+          "$SIGNER" verify --print-certs "$NEW" > /tmp/marketpro_new_signer
+          OLD_CERT="$(grep -m1 'Signer #1 certificate SHA-256 digest:' /tmp/marketpro_old_signer | sed 's/.*: //')"
+          NEW_CERT="$(grep -m1 'Signer #1 certificate SHA-256 digest:' /tmp/marketpro_new_signer | sed 's/.*: //')"
+          test -n "$OLD_CERT"
+          test "$OLD_CERT" = "$NEW_CERT"
+          echo 'v4.1.3 matches v4.1.2 app ID + signing certificate, with higher versionCode.'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MarketPro-Staging-StableUpdate-v4.1.3-APK
+          path: MarketPro-Staging-StableUpdate-v4.1.3-signed.apk
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Publish direct staging APK
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG=marketpro-stable-signed-v4.1.3
+          APK=MarketPro-Staging-StableUpdate-v4.1.3-signed.apk
+          NOTES='STAGING QA ONLY. v4.1.3 provides fresh Owner Authenticator MFA and explicit confirmed Owner Phone Secure Re-Link for reinstall recovery, backed by a separate audited staging RPC. Requires deployed secured staging RPC and a fresh AAL2 TOTP session. Existing v4.1.2 installs can update in place with preserved app storage; previous Owner UUID is revoked ONLY when the Owner explicitly confirms. Pending Team phone requires separate approval. Production untouched. Physical two-phone sync must still be tested.'
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" --clobber
+          else
+            gh release create "$TAG" "$APK" --target "$GITHUB_SHA" --prerelease \
+              --title "Market Pro Stable Signed v4.1.3 STAGING" \
+              --notes "$NOTES"
+          fi
+          gh release view "$TAG" --json url,assets
