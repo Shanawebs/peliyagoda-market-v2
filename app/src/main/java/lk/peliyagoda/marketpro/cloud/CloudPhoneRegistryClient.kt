@@ -56,7 +56,8 @@ internal class CloudPhoneRegistryClient(context: Context) {
             require(name in setOf(
                 "marketpro_qa_cloud_request_phone",
                 "marketpro_qa_cloud_decide_team_phone",
-                "marketpro_qa_cloud_list_phones"
+                "marketpro_qa_cloud_list_phones",
+                "marketpro_qa_owner_secure_relink_v1"
             ))
             val origin=URL(BuildConfig.MARKETPRO_SUPABASE_URL)
             require(origin.protocol=="https" &&
@@ -132,6 +133,40 @@ internal class CloudPhoneRegistryClient(context: Context) {
                 p.getBoolean("can_write"))
         }
         return Snapshot(role,found)
+    }
+
+    /**
+     * STAGING ONLY. After a reinstall the local UUID no longer matches the
+     * formerly approved Owner device. The server requires a freshly verified
+     * Authenticator (TOTP AAL2 <= 5 minutes), an active Owner auth session
+     * and explicit confirmation before atomically retiring the old device.
+     *
+     * No local/admin bypass and no direct SQL or service-role key in Android.
+     */
+    suspend fun secureRelinkThisOwnerPhone():String {
+        allowed()
+        check(MarketProActiveRole.current(app)==TeamRole.OWNER) {
+            "Only a signed-in Owner can recover the Owner phone"
+        }
+        val id=CloudDeviceIdentity.get(app)
+        UUID.fromString(id)
+        val label=("Market Pro • "+Build.MANUFACTURER+" "+Build.MODEL)
+            .trim().take(100)
+        val result=rpc("marketpro_qa_owner_secure_relink_v1",JSONObject()
+            .put("p_workspace_id",workspace)
+            .put("p_new_device_id",id)
+            .put("p_new_device_label",label)
+            .put("p_confirm",true))
+        check(result.optBoolean("ok") &&
+            result.optString("device_id")==id &&
+            result.optBoolean("enabled") && result.optBoolean("can_write")) {
+            "Owner device recovery did not return an approved Owner state"
+        }
+        return when(result.optString("status")) {
+            "already_active" -> "This Owner phone is already approved."
+            "relinked" -> "Owner phone securely re-linked. Old device revoked. You may approve the pending Team phone."
+            else -> error("Unexpected Owner recovery response")
+        }
     }
 
     suspend fun decideTeamPhone(deviceId:String,approve:Boolean) {
