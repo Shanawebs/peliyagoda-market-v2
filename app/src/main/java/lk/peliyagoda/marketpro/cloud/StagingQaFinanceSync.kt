@@ -7,6 +7,7 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
 import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
@@ -233,6 +234,32 @@ internal class StagingQaFinancialOutboxCoordinator(
         cloud.cloudId("item", localId.toString())
             ?: throw StagingQaHeld("Item is not linked to an approved Cloud UUID")
 
+    /**
+     * After the server ACKs a singleton daily row, local contents are exactly
+     * the accepted Cloud contents. Persist that revision/hash as the new pull
+     * baseline so the next remote edit can be merged safely instead of being
+     * mistaken for an unbaselined conflict.
+     */
+    private fun singletonAckHash(type: String, body: JSONObject): String? {
+        val signature = when (type) {
+            "daily_cash_received" ->
+                body.getString("business_date") + "|" + body.getLong("amount_cents")
+            "daily_other_expenses" ->
+                OtherExpensesShadowPolicy.signature(
+                    body.getString("business_date"),
+                    body.getLong("transport_cents"),
+                    body.getLong("labor_charge_cents"),
+                    body.getLong("meals_drinks_cents"),
+                    body.getLong("others_cents"),
+                    body.getString("remarks")
+                )
+            else -> return null
+        }
+        val bytes = MessageDigest.getInstance("SHA-256")
+            .digest(signature.toByteArray(Charsets.UTF_8))
+        return bytes.joinToString("") { "%02x".format(it) }
+    }
+
     private suspend fun payload(row: CloudOutboxEntity): Pair<String, JSONObject> =
         when (row.entityType) {
             "purchase" -> {
@@ -393,6 +420,20 @@ internal class StagingQaFinancialOutboxCoordinator(
                             receipt.revision.toString()
                         )
                     )
+                    singletonAckHash(row.entityType, body)?.let { acceptedHash ->
+                        cloud.setState(
+                            CloudSyncStateEntity(
+                                "pull_applied_rev|" + row.entityType + "|" + cloudId,
+                                receipt.revision.toString()
+                            )
+                        )
+                        cloud.setState(
+                            CloudSyncStateEntity(
+                                "pull_applied_hash|" + row.entityType + "|" + cloudId,
+                                acceptedHash
+                            )
+                        )
+                    }
                     // Conditional ACK cannot erase a newer edit created during HTTP.
                     cloud.acknowledge(row.entityType, row.entityKey, row.operationId)
                 }
