@@ -165,6 +165,7 @@ class CloudOwnerAuth(private val app: Context) {
         remember(tokens)
         if (BuildConfig.MARKETPRO_REQUIRE_CLOUD_ROLE)
             MarketProActiveRole.activateOwner(app,userId)
+        CloudReceiveAutoSyncScheduler.start(app)
         Account(email, userId)
     } }
 
