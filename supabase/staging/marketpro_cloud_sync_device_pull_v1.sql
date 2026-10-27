@@ -190,7 +190,7 @@ BEGIN
  OR p_device_id IS NULL OR p_entity_type NOT IN (
   'category','item','requisition','purchase','purchase_addition',
   'daily_cash_received','daily_other_expenses')
- OR p_entity_type IS NULL OR p_page_size NOT BETWEEN 1 AND 50
+ OR p_entity_type IS NULL OR p_page_size IS NULL OR p_page_size NOT BETWEEN 1 AND 50
  OR ((p_after_updated_at IS NULL)<>(p_after_id IS NULL))
  OR v_uid IS NULL OR COALESCE((auth.jwt()->>'is_anonymous')::boolean,false)
  THEN RAISE EXCEPTION 'Invalid Cloud pull request' USING ERRCODE='42501';END IF;
