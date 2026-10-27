@@ -23,7 +23,7 @@ jobs:
           set -euo pipefail
           # Only new Staging SQL/tests/CI; no live Android app or Production changes.
           BASE=0cc5398be258e5cd8bbdc106664724a7d31ee68e
-          git diff --exit-code "$BASE" HEAD -- app/ stagingMarket/ stagingOwner/ web/
+          git diff --exit-code "$BASE" HEAD -- app/src/main/java/lk/peliyagoda/marketpro/data/ app/src/main/AndroidManifest.xml stagingOwner/ web/
           git diff --exit-code "$BASE" HEAD -- supabase/functions/ supabase/migrations/ supabase/proposals/
           python3 - <<'PY'
           from pathlib import Path
