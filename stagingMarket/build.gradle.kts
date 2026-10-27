@@ -7,7 +7,21 @@ plugins {
 
 // Single source of truth for user-visible version labels.
 // Next release: update this number only; both header and launcher follow it.
-val marketProDisplayVersion = "4.1.0-staging"
+val marketProDisplayVersion = "4.1.1-staging"
+
+// STAGING ONLY: protected persistent signing key comes from GitHub Actions secrets.
+// Do not commit .jks files or credentials to this public repository.
+// Without a configured key, local debug builds remain possible, but CI releases refuse to publish.
+val stableStorePath = System.getenv("MARKETPRO_STAGING_SIGNING_STORE_PATH")
+val stableStorePassword = System.getenv("MARKETPRO_STAGING_STORE_PASSWORD")
+val stableKeyAlias = System.getenv("MARKETPRO_STAGING_KEY_ALIAS")
+val stableKeyPassword = System.getenv("MARKETPRO_STAGING_KEY_PASSWORD")
+val hasStableSigning = listOf(
+    stableStorePath, stableStorePassword, stableKeyAlias, stableKeyPassword
+).all { !it.isNullOrBlank() }
+if (System.getenv("MARKETPRO_REQUIRE_STABLE_SIGNING") == "true") {
+    check(hasStableSigning) { "Stable staging signing secrets are required for releases" }
+}
 
 android {
     namespace = "lk.peliyagoda.marketpro"
@@ -52,7 +66,7 @@ android {
         applicationId = "lk.peliyagoda.marketpro.staging.fullapp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 410
+        versionCode = 411
         versionName = marketProDisplayVersion
         // Generated from the SAME version as the APK metadata. Never hardcode
         // versions separately in AndroidManifest or a Compose text component.
@@ -68,7 +82,23 @@ android {
         }
     }
 
+    signingConfigs {
+        if (hasStableSigning) {
+            create("stableStaging") {
+                storeFile = file(stableStorePath!!)
+                storePassword = stableStorePassword
+                keyAlias = stableKeyAlias
+                keyPassword = stableKeyPassword
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            if (hasStableSigning) {
+                signingConfig = signingConfigs.getByName("stableStaging")
+            }
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
