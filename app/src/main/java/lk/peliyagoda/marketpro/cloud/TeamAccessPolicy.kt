@@ -54,12 +54,14 @@ object TeamAccessPolicy {
         TeamAction.CORRECT_OTHER_EXPENSES
     )
     private val dailyWrite = dailyCreate + dailyCorrect
+    // Device administration and destructive/archive actions remain Owner-only.
+    // Normal catalog edits are available to BOTH roles in the same APK.
     private val pinRequired = setOf(
-        TeamAction.MODIFY_CATALOG, TeamAction.DELETE_RECORD,
+        TeamAction.DELETE_RECORD,
         TeamAction.REGISTER_DEVICE, TeamAction.REVOKE_DEVICE
     )
     private val staffAllowed = dailyWrite + setOf(
-        TeamAction.VIEW, TeamAction.EXPORT_REPORT
+        TeamAction.VIEW, TeamAction.EXPORT_REPORT, TeamAction.MODIFY_CATALOG
     )
 
     private fun isUuid(value: String): Boolean =
@@ -84,7 +86,7 @@ object TeamAccessPolicy {
             return deny("Viewer account cannot modify market records")
         }
         if (context.role == TeamRole.PURCHASING_STAFF && action !in staffAllowed) {
-            return deny("Staff cannot change catalog, delete records or manage devices")
+            return deny("Team can edit today's data, but cannot administer phones or archive protected records")
         }
         if (action in dailyWrite) {
             val today = isoDateOrNull(context.serverBusinessToday)
