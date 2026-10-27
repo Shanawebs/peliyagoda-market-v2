@@ -28,6 +28,12 @@ object CloudSyncScheduler {
         Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
 
     fun kick(context: Context) {
+        // Final two-phone staging uses its own Owner+Team coordinator and must
+        // never fall through to the legacy single-owner marketpro_apply_change worker.
+        if (StagingTwoPhoneSyncScheduler.enabled()) {
+            StagingTwoPhoneSyncScheduler.kick(context)
+            return
+        }
         val request = OneTimeWorkRequestBuilder<CloudSyncWorker>()
             .setConstraints(constraints())
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
@@ -40,6 +46,10 @@ object CloudSyncScheduler {
     }
 
     fun schedulePeriodic(context: Context) {
+        if (StagingTwoPhoneSyncScheduler.enabled()) {
+            StagingTwoPhoneSyncScheduler.schedule(context)
+            return
+        }
         // The WorkManager minimum periodic interval is 15 minutes; edits
         // also trigger immediate unique work while the app is in use.
         val periodic = PeriodicWorkRequestBuilder<CloudSyncWorker>(15, TimeUnit.MINUTES)
