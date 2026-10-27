@@ -199,7 +199,7 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" > /tmp/mp415_badging.txt
           grep -Fq "package: name='lk.peliyagoda.marketpro.staging.fullapp'" /tmp/mp415_badging.txt
           grep -Fq "versionCode='415'" /tmp/mp415_badging.txt
-          grep -Fq "versionName='4.1.4-staging'" /tmp/mp415_badging.txt
+          grep -Fq "versionName='4.1.5-staging'" /tmp/mp415_badging.txt
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions "$APK" > /tmp/mp415_permissions.txt
           grep -Fq 'android.permission.INTERNET' /tmp/mp415_permissions.txt
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK" > /tmp/mp415_signature.txt
