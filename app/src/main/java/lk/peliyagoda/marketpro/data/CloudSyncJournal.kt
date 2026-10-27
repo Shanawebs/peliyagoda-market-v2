@@ -97,6 +97,23 @@ interface CloudSyncDao {
     @Query("SELECT cloudId FROM cloud_entity_ids WHERE entityType=:type AND entityKey=:key LIMIT 1")
     suspend fun cloudId(type: String, key: String): String?
 
+    /**
+     * Rebind one local logical key from a never-acknowledged provisional UUID
+     * to the canonical Cloud UUID discovered for the same singleton business key.
+     * The expected old UUID makes this compare-and-set safe against races.
+     */
+    @Query("""
+        UPDATE cloud_entity_ids
+        SET cloudId=:newCloudId
+        WHERE entityType=:type AND entityKey=:key AND cloudId=:expectedOldCloudId
+    """)
+    suspend fun rebindIdentity(
+        type: String,
+        key: String,
+        expectedOldCloudId: String,
+        newCloudId: String
+    ): Int
+
     @Query("SELECT COUNT(*) FROM cloud_sync_outbox")
     fun observePendingCount(): Flow<Int>
 
@@ -196,7 +213,8 @@ class CloudChangeJournal(private val dao: CloudSyncDao) {
         // its change and pending operation. Historical restored rows cannot
         // be trusted merely because their UUID format looks valid.
         if (wireType in setOf(
-                "purchase", "requisition", "purchase_addition", "daily_cash_received"
+                "purchase", "requisition", "purchase_addition",
+                "daily_cash_received", "daily_other_expenses"
             ) && dao.state(lk.peliyagoda.marketpro.cloud.FreshAttachState.PROTOCOL) ==
                 lk.peliyagoda.marketpro.cloud.FreshAttachState.VERSION
         ) {
