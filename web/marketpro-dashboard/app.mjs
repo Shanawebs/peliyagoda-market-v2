@@ -49,8 +49,8 @@ function chooseDailyRow() {
   return state.summary.find(x => x.business_date === state.date) ||
     normalizeDailyRow({
       business_date: state.date, required_grams: 0, initial_purchase_expenses_cents: 0,
-      additional_purchase_expenses_cents: 0, total_expenses_cents: 0,
-      cash_received_cents: 0, cash_balance_cents: 0
+      additional_purchase_expenses_cents: 0, other_expenses_cents: 0,
+      total_expenses_cents: 0, cash_received_cents: 0, cash_balance_cents: 0
     });
 }
 function money(id, cents) {
@@ -64,7 +64,8 @@ function renderMetrics() {
   money("kpi-cash", day.cash_received_cents);
   money("kpi-balance", day.cash_balance_cents);
   text("kpi-kitchen-sub", requisitions.length + " requisition entries");
-  text("kpi-expenses-sub", purchases.length + " purchases · " + additions.length + " extra lots");
+  text("kpi-expenses-sub", purchases.length + " purchases · " + additions.length +
+    " extra lots · Other " + lkr(day.other_expenses_cents));
   text("count-purchases", purchases.length);
   text("count-additions", additions.length);
   text("count-requisitions", requisitions.length);
@@ -546,11 +547,13 @@ function openPdfPreview() {
     }
     const matchingDay = state.summary.find(x => x.business_date === state.date);
     if (!matchingDay) throw Error("No financial summary for this day. Refresh and try again.");
-    if (matchingDay.total_expenses_cents !== report.totalSpentCents) {
-      throw Error("Purchase totals and cloud summary do not currently match. Refresh before generating the report.");
+    const otherExpenses = matchingDay.other_expenses_cents;
+    const allExpenses = report.totalSpentCents + otherExpenses;
+    if (matchingDay.total_expenses_cents !== allExpenses) {
+      throw Error("Purchase + other expense totals and cloud summary do not currently match. Refresh before generating the report.");
     }
     const cashReceived = matchingDay.cash_received_cents;
-    const balance = cashReceived - report.totalSpentCents;
+    const balance = cashReceived - allExpenses;
     const root = $("pdf-document"); root.replaceChildren();
     const heading = elem("header","","pdf-report-header");
     heading.append(elem("p","PELIYAGODA MARKET PRO","pdf-brand"),
@@ -565,13 +568,15 @@ function openPdfPreview() {
       reportLine("COMPLETED FINAL TOTAL ("+report.completedCount+")",
         lkr(report.completedTotalCents),"pdf-grand-total"),
       reportLine("CASH RECEIVED",lkr(cashReceived)),
-      reportLine("TOTAL SPENT (ALL PURCHASES)",lkr(report.totalSpentCents)),
+      reportLine("PURCHASE EXPENSES",lkr(report.totalSpentCents)),
+      reportLine("OTHER EXPENSES",lkr(otherExpenses)),
+      reportLine("TOTAL SPENT (PURCHASES + OTHER)",lkr(allExpenses)),
       reportLine("CASH BALANCE",lkr(balance),
         balance < 0n ? "pdf-balance-negative" : "pdf-balance-positive")
     );
     totals.append(elem("p",
-      "Cash balance includes every purchased lot, even when an item is incomplete. "+
-      "Completed final total includes only fully completed items.","pdf-report-note"));
+      "Cash balance includes every purchased lot plus Other Expenses. "+
+      "Completed final total includes only fully completed purchase items.","pdf-report-note"));
     root.append(totals,elem("footer","Market Pro | "+state.date+" | Cloud read-only report","pdf-report-footer"));
     clearMessage();
     state.pdfOpen = true;
@@ -639,7 +644,7 @@ async function readCatalog() {
 }
 async function readSummary() {
   const rows = await api.select("daily_financial_summary", {
-    select: "business_date,required_grams,initial_purchase_expenses_cents,additional_purchase_expenses_cents,total_expenses_cents,cash_received_cents,cash_balance_cents",
+    select: "business_date,required_grams,initial_purchase_expenses_cents,additional_purchase_expenses_cents,total_expenses_cents,cash_received_cents,cash_balance_cents,other_expenses_cents",
     workspace_id: "eq." + currentWorkspace(), order: "business_date.desc", limit: "365"
   });
   state.summary = rows.map(normalizeDailyRow);
