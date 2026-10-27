@@ -1,0 +1,116 @@
+name: Market Pro Final Two-Phone Sync Staging v4.1.0
+
+on:
+  push:
+    branches:
+      - feature/marketpro-final-two-phone-sync-v410
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: marketpro-final-two-phone-sync-v410
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify production isolation and final staging gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'applicationId = "lk.peliyagoda.marketpro.staging.fullapp"' stagingMarket/build.gradle.kts
+          grep -Fq 'versionCode = 410' stagingMarket/build.gradle.kts
+          grep -Fq 'versionName = marketProDisplayVersion' stagingMarket/build.gradle.kts
+          grep -Fq 'val marketProDisplayVersion = "4.1.0-staging"' stagingMarket/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAGING_QA_FINANCE_RPC", "true"' stagingMarket/build.gradle.kts
+          grep -Fq '"MARKETPRO_TWO_PHONE_AUTO_SYNC", "true"' stagingMarket/build.gradle.kts
+          grep -Fq '"MARKETPRO_TEAM_DOMAIN_MERGE_DEPLOYED", "true"' stagingMarket/build.gradle.kts
+          grep -Fq '"MARKETPRO_STAGING_QA_FINANCE_RPC", "false"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_TWO_PHONE_AUTO_SYNC", "false"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_TEAM_DOMAIN_MERGE_DEPLOYED", "false"' app/build.gradle.kts
+          grep -Fq '"MARKETPRO_LOCAL_PREVIEW", "true"' app/build.gradle.kts
+          grep -Fq 'marketpro_qa_finance_apply_v1' app/src/main/java/lk/peliyagoda/marketpro/cloud/StagingQaFinanceSync.kt
+          grep -Fq 'StagingTwoPhoneSyncScheduler.enabled()' app/src/main/java/lk/peliyagoda/marketpro/cloud/CloudSyncScheduler.kt
+          grep -Fq 'Activate / Sync Two-Phone' app/src/main/java/lk/peliyagoda/marketpro/ui/CloudPhoneManagementPanel.kt
+          ! grep -Rq 'service_role' app/src/main/java/lk/peliyagoda/marketpro/cloud/Staging*.kt
+          ! grep -Rq 'sb_secret_' app/src/main/java/lk/peliyagoda/marketpro/cloud/Staging*.kt
+          grep -Fq 'android.permission.INTERNET" tools:node="remove"' app/src/main/AndroidManifest.xml
+          grep -Fq 'android.permission.INTERNET' stagingMarket/src/main/AndroidManifest.xml
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android 35 SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Prepare Sinhala font
+        run: bash scripts/prepare_sinhala_font.sh
+
+      - name: Unit tests and both Android builds
+        run: |
+          set -euo pipefail
+          gradle --no-daemon --stacktrace \
+            :app:testDebugUnitTest \
+            :app:assembleDebug \
+            :stagingMarket:assembleDebug
+
+      - name: Validate final staging APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=MarketPro-Final-TwoPhone-Sync-Staging-v4.1.0-debug.apk
+          cp stagingMarket/build/outputs/apk/debug/stagingMarket-debug.apk "$APK"
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" > /tmp/mp410_badging.txt
+          grep -Fq "package: name='lk.peliyagoda.marketpro.staging.fullapp'" /tmp/mp410_badging.txt
+          grep -Fq "versionCode='410'" /tmp/mp410_badging.txt
+          grep -Fq "versionName='4.1.0-staging'" /tmp/mp410_badging.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions "$APK" > /tmp/mp410_permissions.txt
+          grep -Fq 'android.permission.INTERNET' /tmp/mp410_permissions.txt
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$APK"
+          sha256sum "$APK"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MarketPro-Final-TwoPhone-Sync-Staging-v4.1.0-APK
+          path: MarketPro-Final-TwoPhone-Sync-Staging-v4.1.0-debug.apk
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Publish direct staging APK
+        shell: bash
+        env:
+          GH_TOKEN: \${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG=marketpro-final-two-phone-sync-v4.1.0
+          APK=MarketPro-Final-TwoPhone-Sync-Staging-v4.1.0-debug.apk
+          NOTES='STAGING QA ONLY. Final two-phone sync candidate: approved Owner/Team phone linking, production-catalog UUID binding, durable Room Offline Outbox auto-upload to isolated staging finance API, revision-safe Cloud ACK, Cloud-to-Room safe merge, foreground near-live pull and WorkManager recovery. Production app module remains offline and unchanged. Real two-physical-phone verification is still required before any production cutover.'
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" --clobber
+          else
+            gh release create "$TAG" "$APK" --target "$GITHUB_SHA" --prerelease \
+              --title "Market Pro Final Two-Phone Sync v4.1.0 STAGING" \
+              --notes "$NOTES"
+          fi
+          gh release view "$TAG" --json url,assets
