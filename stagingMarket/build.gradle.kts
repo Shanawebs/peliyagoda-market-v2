@@ -7,7 +7,7 @@ plugins {
 
 // Single source of truth for user-visible version labels.
 // Next release: update this number only; both header and launcher follow it.
-val marketProDisplayVersion = "4.1.1-staging"
+val marketProDisplayVersion = "4.1.2-staging"
 
 // STAGING ONLY: protected persistent signing key comes from GitHub Actions secrets.
 // Do not commit .jks files or credentials to this public repository.
@@ -66,7 +66,7 @@ android {
         applicationId = "lk.peliyagoda.marketpro.staging.fullapp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 411
+        versionCode = 412
         versionName = marketProDisplayVersion
         // Generated from the SAME version as the APK metadata. Never hardcode
         // versions separately in AndroidManifest or a Compose text component.
