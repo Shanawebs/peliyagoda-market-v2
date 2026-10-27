@@ -100,9 +100,21 @@ DO $test$DECLARE x jsonb;BEGIN
  RAISE EXCEPTION 'Team self-approved';
  EXCEPTION WHEN SQLSTATE '42501' THEN NULL; END;
 END;$test$;
+-- Team can list only its own requested phone, not Owner or other Team phones.
+DO $test$DECLARE x jsonb;BEGIN
+ x:=public.marketpro_qa_cloud_list_phones(
+ 'af77cb66-76b2-492a-a460-06132f468713');
+ IF x->>'role'<>'editor' OR jsonb_array_length(x->'devices')<>1
+ OR x->'devices'->0->>'user_id'<>'b805598b-421f-447b-aa4c-ffb66f721338'
+ THEN RAISE EXCEPTION 'Team phone listing leaked other users';END IF;
+END;$test$;
 SELECT set_config('request.jwt.claim.sub','98c3b101-d452-4b6b-902c-0b1a31fc340c',false);
 SELECT set_config('request.jwt.claims','{"sub":"98c3b101-d452-4b6b-902c-0b1a31fc340c","session_id":"11111111-1111-4111-8111-111111111111","aal":"aal2"}',false);
 DO $test$DECLARE x jsonb;BEGIN
+ x:=public.marketpro_qa_cloud_list_phones(
+ 'af77cb66-76b2-492a-a460-06132f468713');
+ IF x->>'role'<>'owner' OR jsonb_array_length(x->'devices')<>2
+ THEN RAISE EXCEPTION 'Owner cannot review Team phone';END IF;
  x:=public.marketpro_qa_cloud_decide_team_phone(
  'af77cb66-76b2-492a-a460-06132f468713',
  '33333333-3333-4333-8333-333333333333',
