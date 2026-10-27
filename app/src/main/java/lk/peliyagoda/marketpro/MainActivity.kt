@@ -12,7 +12,7 @@ import lk.peliyagoda.marketpro.ui.MarketViewModel
 
 class MainActivity : ComponentActivity() {
     private val model: MarketViewModel by viewModels {
-        MarketViewModel.factory(MarketRepository(MarketDatabase.get(applicationContext)), applicationContext)
+        MarketViewModel.factory(MarketRepository(MarketDatabase.get(applicationContext), applicationContext), applicationContext)
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
