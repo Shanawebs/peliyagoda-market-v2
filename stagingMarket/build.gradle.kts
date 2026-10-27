@@ -7,7 +7,7 @@ plugins {
 
 // Single source of truth for user-visible version labels.
 // Next release: update this number only; both header and launcher follow it.
-val marketProDisplayVersion = "4.0.0-staging"
+val marketProDisplayVersion = "4.0.1-staging"
 
 android {
     namespace = "lk.peliyagoda.marketpro"
@@ -48,7 +48,7 @@ android {
         applicationId = "lk.peliyagoda.marketpro.staging.fullapp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 400
+        versionCode = 401
         versionName = marketProDisplayVersion
         // Generated from the SAME version as the APK metadata. Never hardcode
         // versions separately in AndroidManifest or a Compose text component.
