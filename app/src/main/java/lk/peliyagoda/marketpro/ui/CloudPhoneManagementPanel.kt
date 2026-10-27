@@ -19,6 +19,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import lk.peliyagoda.marketpro.BuildConfig
 import lk.peliyagoda.marketpro.cloud.CloudPhoneRegistryClient
+import lk.peliyagoda.marketpro.cloud.OneMarketProPullSessionProvider
+import lk.peliyagoda.marketpro.cloud.TeamInboxDownloadCoordinator
+import lk.peliyagoda.marketpro.cloud.TeamPullRequestPolicy
 import kotlinx.coroutines.launch
 
 /** ONE APK on Owner/Team phones. Does not activate financial sync or permissions. */
@@ -69,6 +72,30 @@ internal fun CloudPhoneManagementPanel() {
             onClick={runRequest { snapshot=client.listPhones();notice="Phone list refreshed" }}
         ) { Text("Refresh Linked Phones") }
 
+        if (BuildConfig.MARKETPRO_TEAM_PULL_RPC_DEPLOYED) {
+            Button(
+                enabled=!busy,
+                onClick={runRequest {
+                    val coordinator=TeamInboxDownloadCoordinator(
+                        context,OneMarketProPullSessionProvider(context)
+                    )
+                    var staged=0
+                    var conflicts=0
+                    for(type in TeamPullRequestPolicy.orderedTypes) {
+                        val result=coordinator.stageCloudType(type,pageSize=35,maxPages=8)
+                        check(!result.hasMore) {
+                            "Cloud download is partial; complete the next page before merging"
+                        }
+                        staged+=result.recordsStaged
+                        conflicts+=result.pendingLocalEditConflicts
+                    }
+                    notice="Cloud Inbox: $staged records staged; $conflicts local edit conflicts. " +
+                        "Finance merge and uploads are still OFF."
+                }}
+            ) {
+                Text("Download Cloud Updates (Safe Stage)")
+            }
+        }
         val data=snapshot
         if(data!=null) {
             Text(if(data.role=="owner") "Owner — Manage Team Phones"
