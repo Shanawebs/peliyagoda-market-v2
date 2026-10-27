@@ -1,0 +1,140 @@
+name: Market Pro Unified Cloud Phone and Pull APK v4.0.3
+
+on:
+  push:
+    branches:
+      - feature/marketpro-cloud-auto-sync-and-backup-ui-v403
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: marketpro-staging-phone-pull-v403
+  cancel-in-progress: true
+
+jobs:
+  cloud-and-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify one APK, Production isolation and Cloud rollout gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=3209d76fdcef17afab86524a881a97057c685009
+          git diff --exit-code "$BASE" HEAD -- app/src/main/java/lk/peliyagoda/marketpro/data/ app/src/main/AndroidManifest.xml web/ supabase/functions/ supabase/migrations/ supabase/proposals/
+          grep -Fq 'applicationId = "lk.peliyagoda.marketpro.staging.fullapp"' stagingMarket/build.gradle.kts
+          grep -Fq 'versionCode = 403' stagingMarket/build.gradle.kts
+          grep -Fq 'MARKETPRO_PHONE_REGISTRY_RPC_DEPLOYED", "true"' stagingMarket/build.gradle.kts
+          grep -Fq 'MARKETPRO_PHONE_REGISTRY_RPC_DEPLOYED", "false"' app/build.gradle.kts
+          grep -Fq 'MARKETPRO_TEAM_PULL_RPC_DEPLOYED", "true"' stagingMarket/build.gradle.kts
+          grep -Fq 'MARKETPRO_TEAM_DOMAIN_MERGE_DEPLOYED", "false"' stagingMarket/build.gradle.kts
+          grep -Fq 'MARKETPRO_STAFF_FINANCE_RPC_DEPLOYED", "false"' stagingMarket/build.gradle.kts
+          grep -Fq 'MARKETPRO_STAFF_OUTBOX_AUTO_UPLOAD", "false"' stagingMarket/build.gradle.kts
+          grep -Fq 'MARKETPRO_LOCAL_PREVIEW", "true"' app/build.gradle.kts
+          grep -Fq 'MARKETPRO_LOCAL_PREVIEW", "false"' stagingMarket/build.gradle.kts
+          grep -Fq 'MARKETPRO_CLOUD_RECEIVE_AUTO_ENABLED", "true"' stagingMarket/build.gradle.kts
+          grep -Fq 'MARKETPRO_CLOUD_RECEIVE_AUTO_ENABLED", "false"' app/build.gradle.kts
+          grep -Fq 'CloudReceiveAutoSyncScheduler.start(applicationContext)' app/src/main/java/lk/peliyagoda/marketpro/MainActivity.kt
+          grep -Fq 'PeriodWorkImpossible' /dev/null 2>/dev/null || true
+          grep -Fq 'PeriodicWorkRequestBuilder<CloudReceiveWorker>(15,TimeUnit.MINUTES)' app/src/main/java/lk/peliyagoda/marketpro/cloud/CloudReceiveAutoSyncScheduler.kt
+          grep -Fq 'SecurityAndBackupDialog(' app/src/main/java/lk/peliyagoda/marketpro/ui/MarketProApp.kt
+          grep -Fq 'Restore Backup (JSON) — PIN Required' app/src/main/java/lk/peliyagoda/marketpro/ui/SecurityAndBackupDialog.kt
+          ! grep -Fq 'Verify 6-Digit Local PIN' app/src/main/java/lk/peliyagoda/marketpro/ui/SecurityAndTeamStatusDialog.kt
+          grep -Fq 'MARKETPRO_TEAM_DOMAIN_MERGE_DEPLOYED", "false"' stagingMarket/build.gradle.kts
+          grep -Fq 'MARKETPRO_STAFF_OUTBOX_AUTO_UPLOAD", "false"' stagingMarket/build.gradle.kts
+
+          grep -Fq 'TeamInboxDownloadCoordinator' app/src/main/java/lk/peliyagoda/marketpro/ui/CloudPhoneManagementPanel.kt
+          grep -Fq 'OneMarketProPullSessionProvider' app/src/main/java/lk/peliyagoda/marketpro/ui/CloudPhoneManagementPanel.kt
+          grep -Fq 'marketpro_qa_cloud_decide_team_phone' app/src/main/java/lk/peliyagoda/marketpro/cloud/CloudPhoneRegistryClient.kt
+          grep -Fq 'marketpro_qa_cloud_request_phone' app/src/main/java/lk/peliyagoda/marketpro/cloud/CloudPhoneRegistryClient.kt
+          grep -Fq 'CloudPhoneManagementPanel()' app/src/main/java/lk/peliyagoda/marketpro/ui/TeamAccessSetupDialog.kt
+          ! grep -q 'sb_secret_' app/src/main/java/lk/peliyagoda/marketpro/cloud/CloudPhoneRegistryClient.kt
+          ! grep -q 'service_role' app/src/main/java/lk/peliyagoda/marketpro/cloud/CloudPhoneRegistryClient.kt
+          python3 - <<'PY'
+          from pathlib import Path
+          text=Path('supabase/staging/marketpro_cloud_sync_device_pull_v1.sql').read_text()
+          assert 'intake_enabled boolean NOT NULL DEFAULT false' in text
+          assert 'pull_enabled boolean NOT NULL DEFAULT false' in text
+          assert 'CREATE FUNCTION public.marketpro_team_pull_page(' in text
+          assert 'CREATE FUNCTION public.marketpro_qa_cloud_list_phones(' in text
+          assert 'CREATE FUNCTION public.marketpro_qa_cloud_decide_team_phone(' in text
+          assert 'can_write=false' in text
+          assert 'registered_devices_one_enabled_writer_idx' not in text
+          assert "lkoptqhodgjeuwwfihfr" not in text
+          PY
+      - name: Start disposable PostgreSQL 17
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm -d --name marketpro_cloud_v403_pg17 \
+            -e POSTGRES_PASSWORD=disposable-only -v "$PWD":/work:ro -w /work postgres:17
+          for i in $(seq 1 50); do
+            if docker exec marketpro_cloud_v403_pg17 pg_isready -U postgres; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Server role, revoke, Owner phone and seven-entity pull tests
+        run: docker exec marketpro_cloud_v403_pg17 psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -f supabase/tests/marketpro_cloud_sync_pg17_v1.sql
+      - name: Stop disposable DB
+        if: always()
+        run: docker stop marketpro_cloud_v403_pg17 || true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Setup Android 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Prepare Sinhala fonts
+        run: bash scripts/prepare_sinhala_font.sh
+      - name: Kotlin role tests + full Staging Android APK
+        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :stagingMarket:assembleDebug
+      - name: Validate exact signed staging package and safe permissions
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=MarketPro-Unified-CloudPhonePull-Staging-v4.0.3-debug.apk
+          cp stagingMarket/build/outputs/apk/debug/stagingMarket-debug.apk "$APK"
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" > /tmp/mp_cloud_v403_badging.txt
+          grep -Fq "package: name='lk.peliyagoda.marketpro.staging.fullapp'" /tmp/mp_cloud_v403_badging.txt
+          grep -Fq "versionName='4.0.3-staging'" /tmp/mp_cloud_v403_badging.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions "$APK" > /tmp/mp_cloud_v403_perms.txt
+          grep -Fq 'android.permission.INTERNET' /tmp/mp_cloud_v403_perms.txt
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$APK"
+          sha256sum "$APK"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MarketPro-Unified-CloudPhonePull-Staging-v4.0.3-APK
+          path: MarketPro-Unified-CloudPhonePull-Staging-v4.0.3-debug.apk
+          retention-days: 30
+          if-no-files-found: error
+      - name: Publish direct Android Staging QA APK
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG=marketpro-unified-cloud-phone-pull-v4.0.3
+          APK=MarketPro-Unified-CloudPhonePull-Staging-v4.0.3-debug.apk
+          NOTES='QA STAGING ONLY. Same Market Pro Owner/Team APK. On login and app resume trigger immediate safe cloud inbox read; WorkManager schedules periodic 15-minute read as Android permits. Does NOT perform instant real-time subscriptions, financial upload, or visible merge. Security & Backup menu handles Restore JSON PIN; Team Sync no longer has PIN button. Finance writer flags remain OFF; no Production change.'
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" --clobber
+          else
+            gh release create "$TAG" "$APK" --target "$GITHUB_SHA" --prerelease \
+              --title "Market Pro Unified Cloud Phone & Pull v4.0.3 STAGING" --notes "$NOTES"
+          fi
+          gh release view "$TAG" --json url,assets

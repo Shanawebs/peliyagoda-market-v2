@@ -7,7 +7,7 @@ plugins {
 
 // Single source of truth for user-visible version labels.
 // Next release: update this number only; both header and launcher follow it.
-val marketProDisplayVersion = "4.0.2-staging"
+val marketProDisplayVersion = "4.0.3-staging"
 
 android {
     namespace = "lk.peliyagoda.marketpro"
@@ -26,6 +26,7 @@ android {
         // Preview fields are disabled; no Owner/Staff password collection or network login.
         buildConfigField("boolean", "MARKETPRO_STAFF_LOGIN_ENABLED", "true")
         buildConfigField("boolean", "MARKETPRO_PHONE_REGISTRY_RPC_DEPLOYED", "true")
+        buildConfigField("boolean", "MARKETPRO_CLOUD_RECEIVE_AUTO_ENABLED", "true")
         buildConfigField("boolean", "MARKETPRO_STAFF_KEY_ENROLLMENT_DEPLOYED", "false")
         buildConfigField("boolean", "MARKETPRO_OWNER_TOTP_MFA_AUTH_DEPLOYED", "true")
         buildConfigField("boolean", "MARKETPRO_STAFF_FINANCE_RPC_DEPLOYED", "false")
@@ -49,7 +50,7 @@ android {
         applicationId = "lk.peliyagoda.marketpro.staging.fullapp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 402
+        versionCode = 403
         versionName = marketProDisplayVersion
         // Generated from the SAME version as the APK metadata. Never hardcode
         // versions separately in AndroidManifest or a Compose text component.

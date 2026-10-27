@@ -7,6 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import lk.peliyagoda.marketpro.data.MarketDatabase
 import lk.peliyagoda.marketpro.data.MarketRepository
+import lk.peliyagoda.marketpro.cloud.CloudReceiveAutoSyncScheduler
 import lk.peliyagoda.marketpro.ui.MarketProApp
 import lk.peliyagoda.marketpro.ui.MarketViewModel
 
@@ -18,5 +19,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent { MarketProApp(model) }
+    }
+    override fun onResume() {
+        super.onResume()
+        CloudReceiveAutoSyncScheduler.start(applicationContext)
     }
 }

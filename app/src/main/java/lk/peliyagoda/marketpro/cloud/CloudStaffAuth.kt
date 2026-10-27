@@ -248,6 +248,7 @@ internal class CloudStaffAuth(context: Context) {
                 store(Session(email,identity.userId,access,refresh))
                 if (BuildConfig.MARKETPRO_REQUIRE_CLOUD_ROLE)
                     MarketProActiveRole.activateTeam(app,identity.userId)
+        CloudReceiveAutoSyncScheduler.start(app)
                 identity
             }
         }
