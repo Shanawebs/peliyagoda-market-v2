@@ -3,6 +3,12 @@
 \i supabase/tests/marketpro_cloud_sync_pg17_v1.sql
 CREATE SCHEMA extensions;
 CREATE EXTENSION pgcrypto WITH SCHEMA extensions;
+-- Mirror hosted server-side revision defaults absent in the minimal PG17 fixture.
+ALTER TABLE public.purchases ALTER COLUMN revision SET DEFAULT 1;
+ALTER TABLE public.purchase_additions ALTER COLUMN revision SET DEFAULT 1;
+ALTER TABLE public.requisitions ALTER COLUMN revision SET DEFAULT 1;
+ALTER TABLE public.daily_cash_received ALTER COLUMN revision SET DEFAULT 1;
+ALTER TABLE public.daily_other_expenses ALTER COLUMN revision SET DEFAULT 1;
 -- No new Owner or Staff auth records: reuse exact preflight fixture.
 \i supabase/staging/marketpro_qa_finance_sync_v1_REVIEW_ONLY.sql
 
