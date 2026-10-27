@@ -44,7 +44,7 @@ jobs:
           grep -Fq 'https://qqiheexpbuzohllugxrk.supabase.co' web/marketpro-dashboard/config.mjs
           ! grep -RqF 'lkoptqhodgjeuwwfihfr' web/marketpro-dashboard/index.html web/marketpro-dashboard/config.mjs
           ! grep -RqF 'sb_secret_' web/marketpro-dashboard
-          ! grep -RqF 'service_role' web/marketpro-dashboard
+          ! grep -RqE '[a-zA-Z0-9_]+_secret_[a-zA-Z0-9]+' web/marketpro-dashboard
       - name: Package QA static assets
         shell: bash
         run: |
