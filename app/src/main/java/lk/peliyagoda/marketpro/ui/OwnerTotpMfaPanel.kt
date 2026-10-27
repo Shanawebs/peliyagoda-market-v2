@@ -39,7 +39,8 @@ import kotlinx.coroutines.launch
  */
 @Composable
 internal fun OwnerTotpMfaPanel() {
-    val context=LocalContext.current.applicationContext
+    val uiContext=LocalContext.current
+    val context=uiContext.applicationContext
     val client=remember(context) {CloudOwnerAuth(context)}
     val scope=rememberCoroutineScope()
     val enabled=OwnerTotpMfaPolicy.canCallOwnerAuth(
@@ -50,6 +51,7 @@ internal fun OwnerTotpMfaPanel() {
     var verifiedFactors by remember {
         mutableStateOf<List<CloudOwnerAuth.TotpFactor>>(emptyList())
     }
+    var factorsChecked by remember { mutableStateOf(false) }
     var setup by remember {mutableStateOf<CloudOwnerAuth.TotpEnrollment?>(null)}
     var code by remember {mutableStateOf("")}
     var busy by remember {mutableStateOf(false)}
@@ -58,7 +60,7 @@ internal fun OwnerTotpMfaPanel() {
 
     // Prevent revealing the setup seed in screenshots and Recent Apps previews.
     // Restore a prior FLAG_SECURE state on leaving this short-lived setup step.
-    val activity=generateSequence(context as Context) {
+    val activity=generateSequence(uiContext as Context) {
         (it as? ContextWrapper)?.baseContext
     }.filterIsInstance<Activity>().firstOrNull()
     val window=activity?.window
@@ -93,10 +95,12 @@ internal fun OwnerTotpMfaPanel() {
                 code=""
                 setup=null
                 status=""
+                factorsChecked=false
                 scope.launch {
                     try {
                         verifiedFactors=client.verifiedOwnerTotpFactors(
                             CloudSyncConfig.OWNER_USER_ID)
+                        factorsChecked=true
                         status=if(verifiedFactors.isEmpty())
                             "No verified Authenticator found. Set up a factor first."
                         else "Authenticator found. Enter a fresh 6-digit code."
@@ -107,7 +111,7 @@ internal fun OwnerTotpMfaPanel() {
             },enabled=!busy,modifier=Modifier.fillMaxWidth()){
                 Text("Check Owner Authenticator")
             }
-            if(verifiedFactors.isEmpty()){
+            if(factorsChecked && verifiedFactors.isEmpty()){
                 Button(onClick={
                     setup=null
                     code=""
