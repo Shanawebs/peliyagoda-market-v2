@@ -3,6 +3,7 @@ package lk.peliyagoda.marketpro.data
 import android.content.Context
 import lk.peliyagoda.marketpro.security.RestorePinGuard
 import lk.peliyagoda.marketpro.BuildConfig
+import lk.peliyagoda.marketpro.cloud.MarketProActiveRole
 import lk.peliyagoda.marketpro.util.PurchaseEntryRules
 import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
@@ -11,7 +12,22 @@ import org.json.JSONObject
 import java.time.LocalDate
 import java.time.OffsetDateTime
 
-class MarketRepository(private val db: MarketDatabase) {
+class MarketRepository(private val db: MarketDatabase, private val appContext: Context? = null) {
+    private fun roleContext(): Context = appContext
+        ?: error("Business role context missing")
+    private fun requireDayWrite(date: String) {
+        if (BuildConfig.MARKETPRO_REQUIRE_CLOUD_ROLE)
+            MarketProActiveRole.requireBusinessDateEditable(roleContext(), date)
+    }
+    private fun requireCatalogWrite() {
+        if (BuildConfig.MARKETPRO_REQUIRE_CLOUD_ROLE)
+            MarketProActiveRole.requireCatalogEditable(roleContext())
+    }
+    private fun requireOwnerWrite() {
+        if (BuildConfig.MARKETPRO_REQUIRE_CLOUD_ROLE)
+            MarketProActiveRole.requireOwnerAdmin(roleContext())
+    }
+
     private val dao = db.dao()
     private val cloudDao = db.cloudDao()
     private val journal = CloudChangeJournal(cloudDao)
@@ -37,6 +53,7 @@ class MarketRepository(private val db: MarketDatabase) {
     suspend fun updateOtherExpenseAmount(
         date: String, field: OtherExpenseField, cents: Long
     ) {
+        requireDayWrite(date)
         LocalDate.parse(date)
         require(cents in 0L..OtherExpenseAmounts.MAX_CATEGORY_CENTS)
         db.withTransaction {
@@ -58,6 +75,7 @@ class MarketRepository(private val db: MarketDatabase) {
     }
 
     suspend fun updateOtherExpenseRemarks(date: String, remarks: String) {
+        requireDayWrite(date)
         LocalDate.parse(date)
         require(remarks.length <= OtherExpenseAmounts.MAX_REMARK_CHARS)
         db.withTransaction {
@@ -76,6 +94,7 @@ class MarketRepository(private val db: MarketDatabase) {
     }
 
     suspend fun saveCashReceived(date: String, amountCents: Long) {
+        requireDayWrite(date)
         LocalDate.parse(date)
         require(amountCents in 0L..9_999_999_999L) { "Cash received is out of range" }
         db.withTransaction {
@@ -117,6 +136,7 @@ class MarketRepository(private val db: MarketDatabase) {
     }
 
     suspend fun addCategory(name: String): Boolean {
+        requireCatalogWrite()
         val clean = name.trim().replace(Regex("\\s+"), " ")
         if (clean.isBlank() || clean.length > 40 || clean.equals("All", true)) return false
         return db.withTransaction {
@@ -130,6 +150,7 @@ class MarketRepository(private val db: MarketDatabase) {
     }
 
     suspend fun addItem(name: String, category: String): Boolean {
+        requireCatalogWrite()
         val cleaned = name.trim().replace(Regex("\\s+"), " ")
         if (cleaned.isBlank() || cleaned.length > 80 || dao.allCategories().none { it.name == category }) return false
         return db.withTransaction {
@@ -149,6 +170,7 @@ class MarketRepository(private val db: MarketDatabase) {
 
     /** Rename without changing the item ID or any linked requisition/purchase records. */
     suspend fun renameItem(id: Long, name: String): Boolean {
+        requireCatalogWrite()
         val clean = name.trim().replace(Regex("\\s+"), " ")
         if (clean.isEmpty() || clean.length > 80) return false
         return db.withTransaction {
@@ -170,6 +192,7 @@ class MarketRepository(private val db: MarketDatabase) {
      * Reject incorrect approval codes before opening the write transaction.
      */
     suspend fun archiveItem(id: Long, approvalCode: String, appContext: Context): Boolean {
+        requireOwnerWrite()
         // No universal secret in the APK. Owner configures their own Keystore
         // 6-digit PIN; failed attempts have a persisted timed lockout.
         val guard = RestorePinGuard(appContext)
@@ -187,6 +210,7 @@ class MarketRepository(private val db: MarketDatabase) {
     }
 
     suspend fun addRequirements(date: String, kitchen: String, ids: Set<Long>) {
+        requireDayWrite(date)
         require(kitchen in MarketConstants.kitchens)
         require(LocalDate.parse(date) <= LocalDate.now().plusYears(10))
         val valid = dao.allItems().filter { it.isActive }.map { it.id }.toSet()
@@ -204,6 +228,7 @@ class MarketRepository(private val db: MarketDatabase) {
     }
 
     suspend fun saveRequirement(date: String, kitchen: String, id: Long, grams: Long) {
+        requireDayWrite(date)
         require(grams >= 0 && grams <= 1_000_000_000)
         require(kitchen in MarketConstants.kitchens)
         db.withTransaction {
@@ -213,6 +238,7 @@ class MarketRepository(private val db: MarketDatabase) {
     }
 
     suspend fun deleteRequirement(date: String, kitchen: String, id: Long) {
+        requireDayWrite(date)
         db.withTransaction {
             dao.deleteRequisition(date, kitchen, id)
             journal.record(
@@ -223,6 +249,7 @@ class MarketRepository(private val db: MarketDatabase) {
     }
 
     suspend fun savePurchase(date: String, id: Long, grams: Long, centsPerKg: Long) {
+        requireDayWrite(date)
         require(grams in 0..1_000_000_000 && centsPerKg in 0..1_000_000_000)
         db.withTransaction {
             if (grams == 0L && centsPerKg == 0L) {
@@ -240,6 +267,7 @@ class MarketRepository(private val db: MarketDatabase) {
     }
 
     suspend fun addPurchaseAddition(date: String, id: Long, grams: Long, centsPerKg: Long) {
+        requireDayWrite(date)
         require(grams in 1..1_000_000_000 && centsPerKg in 1..1_000_000_000)
         // The UI check also runs here in one transaction to guard against a
         // stale screen, rapid edits, and multiple extra-lot taps.
@@ -265,6 +293,7 @@ class MarketRepository(private val db: MarketDatabase) {
 
     /** Preserve lot IDs: records remain individually priced and editable. */
     suspend fun editPurchaseAddition(date: String, itemId: Long, lotId: Long, grams: Long, centsPerKg: Long) {
+        requireDayWrite(date)
         require(grams in 0..1_000_000_000 && centsPerKg in 0..1_000_000_000)
         db.withTransaction {
             check(dao.updateAddition(lotId, date, itemId, grams, centsPerKg) == 1) {
@@ -331,6 +360,7 @@ class MarketRepository(private val db: MarketDatabase) {
 
     /** Validate *everything* before replacing records, then change the database in one transaction. */
     suspend fun restoreBackup(json: String) {
+        requireOwnerWrite()
         // A user-approved full cloud rebootstrap protocol is required after enrollment.
         // Do NOT silently rewrite remote UUID identities when importing a backup.
         check(cloudDao.state("enrolled") != "true") {
