@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.withTransaction
 import java.time.Instant
 import lk.peliyagoda.marketpro.BuildConfig
+import lk.peliyagoda.marketpro.data.CloudOutboxEntity
+import lk.peliyagoda.marketpro.data.DailyCashReceivedEntity
 import lk.peliyagoda.marketpro.data.CloudIdentityEntity
 import lk.peliyagoda.marketpro.data.CloudRecordKey
 import lk.peliyagoda.marketpro.data.CloudSyncStateEntity
@@ -25,6 +27,36 @@ import org.json.JSONObject
  * - all UUID mappings are replaced in one Room transaction;
  * - initial seed outbox is cleared only after the complete catalog plan verifies.
  */
+/**
+ * A fresh install may contain exactly one saved Rs. 0.00 Cash Received row:
+ * entering zero in the Cash UI writes a Room placeholder + durable outbox,
+ * even though NO real money moved. Keep that zero row; discard only its
+ * pre-activation outbox operation AFTER the catalog mapping is validated.
+ *
+ * Any nonzero Cash, second Cash row, purchases, requisitions, additions,
+ * other expenses or unsupported finance outbox still blocks activation.
+ * This policy never mutates financial rows.
+ */
+internal object StagingZeroCashBootstrapPolicy {
+    fun permits(
+        cashRows: List<DailyCashReceivedEntity>,
+        pending: List<CloudOutboxEntity>
+    ): Boolean {
+        if (cashRows.size > 1 || cashRows.any { it.amountCents != 0L }) return false
+        val zeroCashDate = cashRows.singleOrNull()?.businessDate
+        return pending.all { operation ->
+            when (operation.entityType) {
+                "category", "item" -> true
+                "daily_cash_received" ->
+                    zeroCashDate != null &&
+                    operation.entityKey == zeroCashDate &&
+                    operation.action == "upsert"
+                else -> false
+            }
+        }
+    }
+}
+
 internal class StagingCatalogBinder(context: Context) {
     private val app = context.applicationContext
     private val db = MarketDatabase.get(app)
@@ -156,10 +188,9 @@ internal class StagingCatalogBinder(context: Context) {
                 dao.allRequisitions().isEmpty() &&
                     dao.allPurchases().isEmpty() &&
                     dao.allAdditions().isEmpty() &&
-                    dao.allCashReceived().isEmpty() &&
                     dao.allOtherExpenses().isEmpty()
             ) {
-                "This staging phone already contains financial data. Back it up, then use a fresh staging install before Cloud activation."
+                "This staging phone has nonempty financial records. Back up records and use an audited migration before activation."
             }
 
             val localCategories = dao.allCategories()
@@ -169,8 +200,12 @@ internal class StagingCatalogBinder(context: Context) {
             }
 
             val pending = cloud.pending(Int.MAX_VALUE)
-            check(pending.all { it.entityType == "category" || it.entityType == "item" }) {
-                "Financial Outbox is not empty; fresh activation blocked"
+            // The only permitted finance row is ONE exact-zero local cash
+            // placeholder. Its zero amount and local row remain intact.
+            // Its pre-activation outbox operation is discarded along with
+            // pre-activation catalog journal only after this strict check.
+            check(StagingZeroCashBootstrapPolicy.permits(dao.allCashReceived(),pending)) {
+                "Nonzero Cash or a real financial Outbox entry exists. Do not clear data; back it up and review before Cloud activation."
             }
 
             // Revalidate the exact local keys inside the same transaction.
