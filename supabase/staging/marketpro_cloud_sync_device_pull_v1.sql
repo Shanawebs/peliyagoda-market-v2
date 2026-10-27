@@ -142,6 +142,38 @@ REVOKE ALL ON FUNCTION public.marketpro_qa_cloud_decide_team_phone(uuid,uuid,uui
 GRANT EXECUTE ON FUNCTION public.marketpro_qa_cloud_decide_team_phone(uuid,uuid,uuid,boolean)
  TO authenticated;
 
+-- Both roles may see own device; Owner sees all Team devices for approval.
+CREATE FUNCTION public.marketpro_qa_cloud_list_phones(p_workspace_id uuid)
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=''
+AS $list$
+DECLARE v_uid uuid:=auth.uid();v_session uuid;v_role text;v_rows jsonb;
+BEGIN
+ IF p_workspace_id IS DISTINCT FROM 'af77cb66-76b2-492a-a460-06132f468713'::uuid
+ OR v_uid IS NULL OR COALESCE((auth.jwt()->>'is_anonymous')::boolean,false)
+ THEN RAISE EXCEPTION 'Unauthorized phone listing' USING ERRCODE='42501';END IF;
+ BEGIN v_session:=(auth.jwt()->>'session_id')::uuid;
+ EXCEPTION WHEN others THEN
+  RAISE EXCEPTION 'Invalid Auth session' USING ERRCODE='42501'; END;
+ SELECT m.role INTO v_role FROM public.workspace_members m
+ WHERE m.workspace_id=p_workspace_id AND m.user_id=v_uid AND m.role IN ('owner','editor');
+ IF v_role IS NULL OR NOT EXISTS(SELECT 1 FROM auth.sessions s
+    WHERE s.user_id=v_uid AND s.id=v_session
+      AND (s.not_after IS NULL OR s.not_after>clock_timestamp()))
+ THEN RAISE EXCEPTION 'Phone viewer not enrolled in workspace' USING ERRCODE='42501';END IF;
+ SELECT COALESCE(jsonb_agg(jsonb_build_object(
+   'device_id',d.id,'user_id',d.user_id,'label',d.device_label,
+   'role',m.role,'enabled',d.enabled,'can_write',d.can_write)
+   ORDER BY d.enrolled_at,d.id),'[]'::jsonb) INTO v_rows
+ FROM public.registered_devices d
+ JOIN public.workspace_members m ON m.workspace_id=d.workspace_id AND m.user_id=d.user_id
+ WHERE d.workspace_id=p_workspace_id AND (v_role='owner' OR d.user_id=v_uid);
+ RETURN jsonb_build_object('ok',true,'role',v_role,'devices',v_rows);
+END;$list$;
+REVOKE ALL ON FUNCTION public.marketpro_qa_cloud_list_phones(uuid)
+ FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.marketpro_qa_cloud_list_phones(uuid)
+ TO authenticated;
+
 -- Existing Kotlin TeamPullHttpTransport expects this stable RPC contract.
 -- Cloud row staging and local revision merge remain client-side conflict-safe.
 CREATE FUNCTION public.marketpro_team_pull_page(
