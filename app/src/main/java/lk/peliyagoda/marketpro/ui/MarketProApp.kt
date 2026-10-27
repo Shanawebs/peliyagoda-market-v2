@@ -198,6 +198,7 @@ fun MarketProApp(vm: MarketViewModel) {
         var ownerLoginOpen by remember { mutableStateOf(false) }
         var helpOpen by remember { mutableStateOf(false) }
         var securityStatusOpen by remember { mutableStateOf(false) }
+        var securityBackupOpen by remember { mutableStateOf(false) }
         var restorePinOpen by remember { mutableStateOf(false) }
         var restoreAuthorized by remember { mutableStateOf(false) }
         val restorePinGuard = remember(context) { RestorePinGuard(context.applicationContext) }
@@ -317,6 +318,9 @@ fun MarketProApp(vm: MarketViewModel) {
 
         if (securityStatusOpen) {
             SecurityAndTeamStatusDialog(onDismiss = { securityStatusOpen = false })
+        }
+        if (securityBackupOpen) {
+            SecurityAndBackupDialog(onDismiss = { securityBackupOpen = false })
         }
         if (restorePinOpen) {
             RestorePinDialog(
@@ -520,6 +524,20 @@ fun MarketProApp(vm: MarketViewModel) {
                                         cloudStatusOpen = true
                                     })
                                 }
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            "Security & Backup",
+                                            color = Color(0xFF605B88),
+                                            fontWeight = FontWeight.Bold,
+                                            style = MaterialTheme.typography.bodyLarge
+                                        )
+                                    },
+                                    onClick = {
+                                        menuOpen = false
+                                        securityBackupOpen = true
+                                    }
+                                )
                                 DropdownMenuItem(
                                     text = {
                                         Text(
