@@ -21,7 +21,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import lk.peliyagoda.marketpro.BuildConfig
-import lk.peliyagoda.marketpro.security.RestorePinGuard
 
 /**
  * Shows accurate protection status. Local PIN guards restore; it is NOT an
@@ -29,11 +28,7 @@ import lk.peliyagoda.marketpro.security.RestorePinGuard
  */
 @Composable
 fun SecurityAndTeamStatusDialog(onDismiss: () -> Unit) {
-    val context = LocalContext.current.applicationContext
-    val guard = remember(context) { RestorePinGuard(context) }
-    var showPinPrompt by remember { mutableStateOf(false) }
     var showTeamSetup by remember { mutableStateOf(false) }
-    var lastResult by remember { mutableStateOf("") }
     if (!showTeamSetup) AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = Color.White,
@@ -44,15 +39,6 @@ fun SecurityAndTeamStatusDialog(onDismiss: () -> Unit) {
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(
-                    "Local 6-Digit Restore PIN: " +
-                        if (guard.isConfigured()) "Configured" else "Not Set",
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Text(
-                    "PIN is protected using Android Keystore. It is required for " +
-                        "Restore Backup and limits repeated incorrect attempts."
-                )
                 Text(
                     "Other secure owner actions (delete, staff access, revoke phones) " +
                         "will require server-side Owner authentication in the " +
@@ -75,9 +61,11 @@ fun SecurityAndTeamStatusDialog(onDismiss: () -> Unit) {
                         "not the phone clock."
                 )
                 Text(
-                    "Team phone → Owner phone download / correction: NOT ACTIVE " +
-                        "in this offline UI preview. Do NOT share Owner login " +
-                        "with purchasing staff."
+                    if (BuildConfig.MARKETPRO_LOCAL_PREVIEW)
+                        "This is an offline preview. Cloud Phone Linking is unavailable."
+                    else
+                        "Phone Linking and Safe Cloud Download available for Owner / Team. " +
+                        "Automatic financial uploads are not yet active."
                 )
                 Text(
                     "Sync-pending data and local invoice photos can be lost on " +
@@ -92,14 +80,7 @@ fun SecurityAndTeamStatusDialog(onDismiss: () -> Unit) {
                     )
                 }
                 Button(onClick = { showTeamSetup = true }) {
-                    Text("Staff Login & Owner Activation Preview")
-                }
-                Button(onClick = { showPinPrompt = true }) {
-                    Text(if (guard.isConfigured())
-                        "Verify 6-Digit Local PIN" else "Set 6-Digit Local PIN")
-                }
-                if (lastResult.isNotEmpty()) {
-                    Text(lastResult, color = ProColors.teal)
+                    Text("Account & Phone — Cloud Sync")
                 }
             }
         },
@@ -109,15 +90,5 @@ fun SecurityAndTeamStatusDialog(onDismiss: () -> Unit) {
     )
     if (showTeamSetup) {
         TeamAccessSetupDialog(onDismiss = { showTeamSetup = false })
-    }
-    if (showPinPrompt) {
-        RestorePinDialog(
-            guard = guard,
-            onDismiss = { showPinPrompt = false },
-            onAuthorized = {
-                showPinPrompt = false
-                lastResult = "Local PIN verified. This does NOT enable OS uninstall blocking."
-            }
-        )
     }
 }
