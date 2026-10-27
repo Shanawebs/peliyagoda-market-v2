@@ -256,12 +256,17 @@ internal class CloudStaffAuth(context: Context) {
      * Refreshes expired session under one mutex. A verified *same* JWT subject
      * is required after refresh. Server separately checks workspace/device.
      */
-    suspend fun verifiedPullSession(): TeamPullSession = withContext(Dispatchers.IO) {
+    suspend fun verifiedPullSession(): TeamPullSession {
+        check(BuildConfig.MARKETPRO_TEAM_PULL_RPC_DEPLOYED) {
+            "Team cloud downloads are not released yet"
+        }
+        return verifiedPhoneSession()
+    }
+
+    /** Safe identity-only verification for pairing; does NOT enable Cloud Pull. */
+    suspend fun verifiedPhoneSession(): TeamPullSession = withContext(Dispatchers.IO) {
         mutex.withLock {
             requireActivatedAuth()
-            check(BuildConfig.MARKETPRO_TEAM_PULL_RPC_DEPLOYED) {
-                "Team cloud downloads are not released yet"
-            }
             val old=readStored() ?: error("Sign in with the dedicated Staff account")
             var active=old
             val profile=try {
