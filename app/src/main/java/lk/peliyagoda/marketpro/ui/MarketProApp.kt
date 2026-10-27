@@ -198,6 +198,7 @@ fun MarketProApp(vm: MarketViewModel) {
         var ownerLoginOpen by remember { mutableStateOf(false) }
         var helpOpen by remember { mutableStateOf(false) }
         var securityStatusOpen by remember { mutableStateOf(false) }
+        var securityBackupOpen by remember { mutableStateOf(false) }
         var restorePinOpen by remember { mutableStateOf(false) }
         var restoreAuthorized by remember { mutableStateOf(false) }
         val restorePinGuard = remember(context) { RestorePinGuard(context.applicationContext) }
@@ -318,6 +319,28 @@ fun MarketProApp(vm: MarketViewModel) {
         if (securityStatusOpen) {
             SecurityAndTeamStatusDialog(onDismiss = { securityStatusOpen = false })
         }
+        if (securityBackupOpen) {
+            SecurityAndBackupDialog(
+                pinConfigured = restorePinGuard.isConfigured(),
+                onBackup = {
+                    securityBackupOpen = false
+                    vm.prepareBackup { result ->
+                        result.onSuccess {
+                            pendingBackup = it
+                            backupSaver.launch("MarketPro-Backup-${LocalDate.now()}.json")
+                        }.onFailure { message("Could Not Prepare Backup") }
+                    }
+                },
+                onRestore = {
+                    securityBackupOpen = false
+                    restoreAuthorized = false
+                    restoreText = null
+                    restorePinOpen = true
+                },
+                onDismiss = { securityBackupOpen = false }
+            )
+        }
+
         if (restorePinOpen) {
             RestorePinDialog(
                 guard = restorePinGuard,
@@ -476,20 +499,9 @@ fun MarketProApp(vm: MarketViewModel) {
                                     menuOpen = false
                                     exportExcel()
                                 })
-                                DropdownMenuItem(text = { Text("Backup All Records (JSON)", color = Color(0xFF605B88), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
+                                DropdownMenuItem(text = { Text("Security & Backup", color = Color(0xFF605B88), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
                                     menuOpen = false
-                                    vm.prepareBackup { result ->
-                                        result.onSuccess {
-                                            pendingBackup = it
-                                            backupSaver.launch("MarketPro-Backup-${LocalDate.now()}.json")
-                                        }.onFailure { message("Could Not Prepare Backup") }
-                                    }
-                                })
-                                DropdownMenuItem(text = { Text("Restore Backup (JSON)", color = Color(0xFF605B88), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
-                                    menuOpen = false
-                                    restoreAuthorized = false
-                                    restoreText = null
-                                    restorePinOpen = true
+                                    securityBackupOpen = true
                                 })
                                 // The live Cloud owner remains attached to the original v3.3.7 app.
                                 // Make the preview limitation discoverable without exposing
