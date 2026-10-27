@@ -11,3 +11,10 @@ local.properties
 # Reproducible open-source font assets fetched by scripts/prepare_sinhala_font.sh
 app/src/main/res/font/noto_sans_sinhala.ttf
 app/src/main/assets/licenses/noto_sans_sinhala_ofl.txt
+
+# Never commit private Android APK signing material to this public repository
+*.jks
+*.keystore
+*.p12
+*.pfx
+*signing-secrets*.txt
