@@ -61,7 +61,7 @@ fun SecurityAndTeamStatusDialog(onDismiss: () -> Unit) {
                             BuildConfig.MARKETPRO_STAGING_QA_FINANCE_RPC &&
                             BuildConfig.MARKETPRO_TWO_PHONE_AUTO_SYNC
                         ) {
-                            "Staging v4.1.0: Phone Linking, Auto Upload, Safe Room Merge සහ " +
+                            "Staging v4.1.3: Phone Linking, Auto Upload, Safe Room Merge සහ " +
                                 "foreground near-live pull enabled for real two-phone QA."
                         } else {
                             "Cloud two-phone writer is not active in this build."
@@ -69,7 +69,7 @@ fun SecurityAndTeamStatusDialog(onDismiss: () -> Unit) {
                         color = ProColors.teal
                     )
                     Text(
-                        "Local Restore PIN සහ JSON Backup settings දැන් Security & Backup කොටසෙයි."
+                        "Local Restore PIN එක Restore Backup (JSON) තෝරන විට පරීක්ෂා කරයි."
                     )
                     Button(onClick = { showTeamSetup = true }) {
                         Text("Team Login, Phone Linking & Sync")
