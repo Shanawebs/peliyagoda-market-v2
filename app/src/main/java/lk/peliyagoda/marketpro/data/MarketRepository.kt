@@ -33,8 +33,13 @@ class MarketRepository(private val db: MarketDatabase, private val appContext: C
     private val journal = CloudChangeJournal(cloudDao)
     val cloudPendingCount: Flow<Int> = cloudDao.observePendingCount()
     suspend fun cloudSyncEnabled(): Boolean =
-        !BuildConfig.MARKETPRO_LOCAL_PREVIEW &&
-        cloudDao.state(lk.peliyagoda.marketpro.cloud.CloudSyncConfig.ENABLED) == "true"
+        if (lk.peliyagoda.marketpro.cloud.StagingTwoPhoneSyncScheduler.enabled()) {
+            cloudDao.state(lk.peliyagoda.marketpro.cloud.StagingCatalogBinder.READY) == "true" &&
+                cloudDao.state(lk.peliyagoda.marketpro.cloud.CloudSyncConfig.ENABLED) == "true"
+        } else {
+            !BuildConfig.MARKETPRO_LOCAL_PREVIEW &&
+                cloudDao.state(lk.peliyagoda.marketpro.cloud.CloudSyncConfig.ENABLED) == "true"
+        }
 
     val items: Flow<List<ItemEntity>> = dao.observeItems()
     // Includes only current selectable master items. Historical rows still use
