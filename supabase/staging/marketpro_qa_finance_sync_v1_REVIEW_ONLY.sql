@@ -108,7 +108,7 @@ BEGIN
  ) THEN RAISE EXCEPTION 'Finance Sync is disabled or device revoked'
   USING ERRCODE='42501'; END IF;
  IF v_role='owner' AND (
-   auth.jwt()->>'aal'<>'aal2'
+   (auth.jwt()->>'aal') IS DISTINCT FROM 'aal2'
    OR NOT EXISTS(SELECT 1 FROM auth.mfa_factors f
       WHERE f.user_id=v_uid AND f.factor_type='totp' AND f.status='verified')
  ) THEN RAISE EXCEPTION 'Owner MFA required' USING ERRCODE='42501';END IF;
