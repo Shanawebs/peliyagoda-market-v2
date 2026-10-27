@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       MARKETPRO_REQUIRE_STABLE_SIGNING: 'true'
-      MARKETPRO_STAGING_SIGNING_STORE_PATH: ${{ runner.temp }}/marketpro-staging-stable.jks
+      MARKETPRO_STAGING_SIGNING_STORE_PATH: ${{ github.workspace }}/marketpro-staging-stable.jks
       MARKETPRO_STAGING_KEYSTORE_BASE64: ${{ secrets.MARKETPRO_STAGING_KEYSTORE_BASE64 }}
       MARKETPRO_STAGING_STORE_PASSWORD: ${{ secrets.MARKETPRO_STAGING_STORE_PASSWORD }}
       MARKETPRO_STAGING_KEY_ALIAS: ${{ secrets.MARKETPRO_STAGING_KEY_ALIAS }}
