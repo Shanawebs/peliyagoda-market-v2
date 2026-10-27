@@ -22,6 +22,7 @@ import lk.peliyagoda.marketpro.cloud.CloudPhoneRegistryClient
 import lk.peliyagoda.marketpro.cloud.OneMarketProPullSessionProvider
 import lk.peliyagoda.marketpro.cloud.TeamInboxDownloadCoordinator
 import lk.peliyagoda.marketpro.cloud.TeamPullRequestPolicy
+import lk.peliyagoda.marketpro.cloud.StagingTwoPhoneSyncCoordinator
 import kotlinx.coroutines.launch
 
 /** ONE APK on Owner/Team phones. Does not activate financial sync or permissions. */
@@ -72,7 +73,32 @@ internal fun CloudPhoneManagementPanel() {
             onClick={runRequest { snapshot=client.listPhones();notice="Phone list refreshed" }}
         ) { Text("Refresh Linked Phones") }
 
-        if (BuildConfig.MARKETPRO_TEAM_PULL_RPC_DEPLOYED) {
+        if (BuildConfig.MARKETPRO_STAGING_QA_FINANCE_RPC &&
+            BuildConfig.MARKETPRO_TWO_PHONE_AUTO_SYNC
+        ) {
+            Button(
+                enabled=!busy,
+                onClick={runRequest {
+                    val coordinator=StagingTwoPhoneSyncCoordinator(context)
+                    if (coordinator.isReady()) {
+                        val report=coordinator.syncNow()
+                        notice="Two-Phone Sync active. Uploaded " + report.uploaded +
+                            ", pending " + report.pending +
+                            ", safe-merged " + report.pulledMerged + "."
+                    } else {
+                        val activation=coordinator.activateFreshPhone()
+                        notice="Two-Phone Sync ACTIVATED: " +
+                            activation.categories + " categories, " +
+                            activation.items + " active items linked; " +
+                            activation.archivedCloudItemsProtected +
+                            " archived Cloud items protected. First sync uploaded " +
+                            activation.firstSync.uploaded + "."
+                    }
+                }}
+            ) {
+                Text("Activate / Sync Two-Phone")
+            }
+        } else if (BuildConfig.MARKETPRO_TEAM_PULL_RPC_DEPLOYED) {
             Button(
                 enabled=!busy,
                 onClick={runRequest {
@@ -110,7 +136,7 @@ internal fun CloudPhoneManagementPanel() {
                         client.decideTeamPhone(device.id,!device.enabled)
                         snapshot=client.listPhones()
                         notice=if(device.enabled) "Team phone unlinked" else
-                            "Team phone approved for Cloud reads"
+                            "Team phone approved. Open that phone and tap Activate / Sync Two-Phone."
                     }}) {
                         Text(if(device.enabled) "Unlink Team Phone" else "Approve Team Phone")
                     }
@@ -118,8 +144,17 @@ internal fun CloudPhoneManagementPanel() {
             }
         }
         if(notice.isNotBlank()) Text(notice)
-        Text("Cloud Upload / 2-way financial sync තවම OFF. " +
-            "මේ පියවර Phone Linking සහ Cloud Read authorization සඳහායි.")
+        Text(
+            if (BuildConfig.MARKETPRO_STAGING_QA_FINANCE_RPC &&
+                BuildConfig.MARKETPRO_TWO_PHONE_AUTO_SYNC
+            ) {
+                "Two-Phone Auto Sync: approval පසු එක් phone එකකට වරක් Activate / Sync Two-Phone ඔබන්න. " +
+                    "ඊට පස්සේ local edits Outbox හරහා auto-upload වෙයි; අනෙක් phone එක safe-merge වෙයි."
+            } else {
+                "Cloud Upload / 2-way financial sync තවම OFF. " +
+                    "මේ පියවර Phone Linking සහ Cloud Read authorization සඳහායි."
+            }
+        )
         HorizontalDivider()
     }
 }
