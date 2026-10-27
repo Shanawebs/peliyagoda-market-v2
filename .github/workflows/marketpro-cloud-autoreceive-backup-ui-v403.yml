@@ -25,7 +25,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          BASE=5920513249798f30403593a83af11bd2d2540050
+          BASE=3209d76fdcef17afab86524a881a97057c685009
           git diff --exit-code "$BASE" HEAD -- app/src/main/java/lk/peliyagoda/marketpro/data/ app/src/main/AndroidManifest.xml web/ supabase/functions/ supabase/migrations/ supabase/proposals/
           grep -Fq 'applicationId = "lk.peliyagoda.marketpro.staging.fullapp"' stagingMarket/build.gradle.kts
           grep -Fq 'versionCode = 403' stagingMarket/build.gradle.kts
