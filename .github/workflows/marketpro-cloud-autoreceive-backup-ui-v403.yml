@@ -111,7 +111,7 @@ jobs:
           test -s "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" > /tmp/mp_cloud_v403_badging.txt
           grep -Fq "package: name='lk.peliyagoda.marketpro.staging.fullapp'" /tmp/mp_cloud_v403_badging.txt
-          grep -Fq "versionName='4.0.2-staging'" /tmp/mp_cloud_v403_badging.txt
+          grep -Fq "versionName='4.0.3-staging'" /tmp/mp_cloud_v403_badging.txt
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions "$APK" > /tmp/mp_cloud_v403_perms.txt
           grep -Fq 'android.permission.INTERNET' /tmp/mp_cloud_v403_perms.txt
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$APK"
