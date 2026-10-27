@@ -159,6 +159,8 @@ fun TeamAccessSetupDialog(onDismiss: () -> Unit) {
                             "writer and Dashboard remain unchanged."
                     )
                 }
+                // Same panel inside the same APK for both Owner and Team roles.
+                CloudPhoneManagementPanel()
                 if (notice.isNotBlank()) {
                     Text(notice,color=ProColors.teal,
                         style=MaterialTheme.typography.bodyMedium)

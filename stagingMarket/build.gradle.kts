@@ -7,7 +7,7 @@ plugins {
 
 // Single source of truth for user-visible version labels.
 // Next release: update this number only; both header and launcher follow it.
-val marketProDisplayVersion = "4.0.1-staging"
+val marketProDisplayVersion = "4.0.2-staging"
 
 android {
     namespace = "lk.peliyagoda.marketpro"
@@ -19,12 +19,13 @@ android {
         buildConfigField("boolean", "MARKETPRO_LOCAL_PREVIEW", "false")
         buildConfigField("boolean", "MARKETPRO_REQUIRE_CLOUD_ROLE", "true")
         // Remains FALSE until server v2, staff enrollment and two-phone QA are approved.
-        buildConfigField("boolean", "MARKETPRO_TEAM_PULL_RPC_DEPLOYED", "false")
+        buildConfigField("boolean", "MARKETPRO_TEAM_PULL_RPC_DEPLOYED", "true")
         // Explicitly blocked until verified, complete staged pull and
         // all catalog/financial UUID reconciliation are signed off.
         buildConfigField("boolean", "MARKETPRO_TEAM_DOMAIN_MERGE_DEPLOYED", "false")
         // Preview fields are disabled; no Owner/Staff password collection or network login.
         buildConfigField("boolean", "MARKETPRO_STAFF_LOGIN_ENABLED", "true")
+        buildConfigField("boolean", "MARKETPRO_PHONE_REGISTRY_RPC_DEPLOYED", "true")
         buildConfigField("boolean", "MARKETPRO_STAFF_KEY_ENROLLMENT_DEPLOYED", "false")
         buildConfigField("boolean", "MARKETPRO_OWNER_TOTP_MFA_AUTH_DEPLOYED", "true")
         buildConfigField("boolean", "MARKETPRO_STAFF_FINANCE_RPC_DEPLOYED", "false")
@@ -48,7 +49,7 @@ android {
         applicationId = "lk.peliyagoda.marketpro.staging.fullapp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 401
+        versionCode = 402
         versionName = marketProDisplayVersion
         // Generated from the SAME version as the APK metadata. Never hardcode
         // versions separately in AndroidManifest or a Compose text component.

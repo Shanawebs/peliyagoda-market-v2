@@ -1,0 +1,67 @@
+name: Market Pro Cloud Sync — Staging Phone Approval and Pull v1
+
+on:
+  push:
+    branches:
+      - feature/marketpro-cloudsync-device-and-pull-staging-v1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cloud-sync-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Freeze Production app and business data
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Only new Staging SQL/tests/CI; no live Android app or Production changes.
+          BASE=0cc5398be258e5cd8bbdc106664724a7d31ee68e
+          git diff --exit-code "$BASE" HEAD -- app/src/main/java/lk/peliyagoda/marketpro/data/ app/src/main/AndroidManifest.xml stagingOwner/ web/
+          git diff --exit-code "$BASE" HEAD -- supabase/functions/ supabase/migrations/ supabase/proposals/
+          python3 - <<'PY'
+          from pathlib import Path
+          sql=Path('supabase/staging/marketpro_cloud_sync_device_pull_v1.sql').read_text()
+          assert "qqiheexpbuzohllugxrk" in sql and "lkoptqhodgjeuwwfihfr" not in sql
+          assert "intake_enabled boolean NOT NULL DEFAULT false" in sql
+          assert "pull_enabled boolean NOT NULL DEFAULT false" in sql
+          assert "p_entity_type NOT IN (" in sql
+          assert "'daily_other_expenses'" in sql
+          assert "s.not_after>clock_timestamp()" in sql
+          assert "WHERE m.workspace_id=p_workspace_id AND m.user_id=v_uid" in sql
+          assert "AND d.id=p_device_id AND d.enabled" in sql
+          assert "m.role='editor'" in sql and "m.role='owner'" in sql
+          assert "can_write=false" in sql
+          assert "can_write',false" in sql
+          assert "TO authenticated" in sql
+          assert "REVOKE ALL ON FUNCTION" in sql
+          assert sql.rstrip().endswith("COMMIT;")
+          print("PASS: staged phone/pull only, no financial writer or production change")
+          PY
+      - name: Start fully disposable PostgreSQL 17
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm -d --name marketpro_cloud_v1_pg17 \
+            -e POSTGRES_PASSWORD=disposable-only -v "$PWD":/work:ro \
+            -w /work postgres:17
+          for i in $(seq 1 50); do
+            if docker exec marketpro_cloud_v1_pg17 pg_isready -U postgres; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Execute real Postgres role, device and cloud pull tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker exec marketpro_cloud_v1_pg17 psql -X -v ON_ERROR_STOP=1 \
+            -U postgres -d postgres -f supabase/tests/marketpro_cloud_sync_pg17_v1.sql
+      - name: Stop disposable test DB
+        if: always()
+        run: docker stop marketpro_cloud_v1_pg17 || true
