@@ -41,6 +41,7 @@ export function normalizeDailyRow(row) {
     total_expenses_cents: exactCents(row.total_expenses_cents),
     initial_purchase_expenses_cents: exactCents(row.initial_purchase_expenses_cents),
     additional_purchase_expenses_cents: exactCents(row.additional_purchase_expenses_cents),
+    other_expenses_cents: exactCents(row.other_expenses_cents),
     cash_received_cents: exactCents(row.cash_received_cents),
     cash_balance_cents: exactCents(row.cash_balance_cents)
   };
