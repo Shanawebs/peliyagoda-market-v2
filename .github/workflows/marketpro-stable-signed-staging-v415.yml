@@ -38,7 +38,7 @@ jobs:
           grep -Fq 'versionName = marketProDisplayVersion' stagingMarket/build.gradle.kts
           grep -Fq 'create("stableStaging")' stagingMarket/build.gradle.kts
           grep -Fq 'MARKETPRO_REQUIRE_STABLE_SIGNING' stagingMarket/build.gradle.kts
-          grep -Fq 'val marketProDisplayVersion = "4.1.4-staging"' stagingMarket/build.gradle.kts
+          grep -Fq 'val marketProDisplayVersion = "4.1.5-staging"' stagingMarket/build.gradle.kts
           grep -Fq '"MARKETPRO_STAGING_QA_FINANCE_RPC", "true"' stagingMarket/build.gradle.kts
           grep -Fq '"MARKETPRO_TWO_PHONE_AUTO_SYNC", "true"' stagingMarket/build.gradle.kts
           grep -Fq '"MARKETPRO_TEAM_DOMAIN_MERGE_DEPLOYED", "true"' stagingMarket/build.gradle.kts
@@ -207,18 +207,18 @@ jobs:
           echo 'Verified permanent STAGING signing certificate fingerprint'
           sha256sum "$APK"
 
-      - name: Assert this APK can update the published v4.1.3 baseline
+      - name: Assert this APK can update the published v4.1.4 baseline
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           mkdir -p /tmp/marketpro-baseline
-          gh release download marketpro-stable-signed-v4.1.3 \
+          gh release download marketpro-stable-signed-v4.1.4 \
             --repo Shanawebs/peliyagoda-market-v2 \
-            --pattern 'MarketPro-Staging-StableUpdate-v4.1.3-signed.apk' \
+            --pattern 'MarketPro-Staging-StableUpdate-v4.1.4-signed.apk' \
             --dir /tmp/marketpro-baseline
-          OLD=/tmp/marketpro-baseline/MarketPro-Staging-StableUpdate-v4.1.3-signed.apk
+          OLD=/tmp/marketpro-baseline/MarketPro-Staging-StableUpdate-v4.1.4-signed.apk
           NEW=MarketPro-Staging-StableUpdate-v4.1.5-signed.apk
           test -s "$OLD"
           test -s "$NEW"
@@ -228,7 +228,7 @@ jobs:
           "$AAPT" dump badging "$NEW" > /tmp/marketpro_new_badging
           grep -Fq "package: name='lk.peliyagoda.marketpro.staging.fullapp'" /tmp/marketpro_old_badging
           grep -Fq "package: name='lk.peliyagoda.marketpro.staging.fullapp'" /tmp/marketpro_new_badging
-          grep -Fq "versionCode='413'" /tmp/marketpro_old_badging
+          grep -Fq "versionCode='414'" /tmp/marketpro_old_badging
           grep -Fq "versionCode='415'" /tmp/marketpro_new_badging
           "$SIGNER" verify --print-certs "$OLD" > /tmp/marketpro_old_signer
           "$SIGNER" verify --print-certs "$NEW" > /tmp/marketpro_new_signer
@@ -236,7 +236,7 @@ jobs:
           NEW_CERT="$(grep -m1 'Signer #1 certificate SHA-256 digest:' /tmp/marketpro_new_signer | sed 's/.*: //')"
           test -n "$OLD_CERT"
           test "$OLD_CERT" = "$NEW_CERT"
-          echo 'v4.1.5 matches v4.1.3 app ID + signing certificate, with higher versionCode.'
+          echo 'v4.1.5 matches v4.1.4 app ID + signing certificate, with higher versionCode.'
 
       - uses: actions/upload-artifact@v4
         with:
