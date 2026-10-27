@@ -105,12 +105,40 @@ class TeamAccessPolicyTest {
         ).allowed)
     }
 
-    @Test fun staffStillCannotDeleteChangeCatalogOrManageDevices() {
+    @Test fun teamSharesCatalogFeaturesButCannotManagePhonesOrProtectedArchive() {
         val staff=ctx(role=TeamRole.PURCHASING_STAFF,userId=staffId,pin=true)
+        assertTrue(TeamAccessPolicy.authorize(staff,TeamAction.MODIFY_CATALOG).allowed)
         for (action in listOf(
-            TeamAction.MODIFY_CATALOG,TeamAction.DELETE_RECORD,
+            TeamAction.DELETE_RECORD,
             TeamAction.REGISTER_DEVICE,TeamAction.REVOKE_DEVICE
         )) assertFalse(TeamAccessPolicy.authorize(staff,action).allowed)
+    }
+
+    @Test fun multipleTeamPhonesHaveIdenticalTodayRightsWithoutDifferentApks() {
+        val teamUsers=listOf(
+            "33333333-3333-4333-8333-333333333333",
+            "44444444-4444-4444-8444-444444444444",
+            "55555555-5555-4555-8555-555555555555"
+        )
+        for (user in teamUsers) {
+            val phone=ctx(role=TeamRole.PURCHASING_STAFF,userId=user)
+            assertTrue(TeamAccessPolicy.authorize(phone,TeamAction.CREATE_PURCHASE).allowed)
+            repeat(12) {
+                assertTrue(TeamAccessPolicy.authorize(phone,TeamAction.CORRECT_CASH).allowed)
+            }
+            val previous=phone.copy(businessDate="2026-10-23")
+            for(action in listOf(TeamAction.CORRECT_PURCHASE,TeamAction.CORRECT_REQUISITION,
+                TeamAction.CORRECT_CASH,TeamAction.CORRECT_OTHER_EXPENSES)) {
+                assertFalse(TeamAccessPolicy.authorize(previous,action).allowed)
+            }
+            assertTrue(TeamAccessPolicy.authorize(previous,TeamAction.VIEW).allowed)
+            assertFalse(TeamAccessPolicy.authorize(
+                phone.copy(deviceEnabled=false),TeamAction.CORRECT_PURCHASE
+            ).allowed)
+        }
+        assertTrue(TeamAccessPolicy.authorize(
+            ctx(role=TeamRole.OWNER,date="2026-10-23"),TeamAction.CORRECT_PURCHASE
+        ).allowed)
     }
 
     @Test fun ownerPinNeededOnlyForHighRiskActions() {
