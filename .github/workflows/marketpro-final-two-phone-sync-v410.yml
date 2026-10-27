@@ -52,8 +52,11 @@ jobs:
           node --check web/marketpro-dashboard/core.mjs
           node --check web/marketpro-dashboard/auth-client.mjs
           node --check web/marketpro-dashboard/app.mjs
+          node --test web/tests/marketpro-dashboard.test.mjs
           grep -Fq 'https://qqiheexpbuzohllugxrk.supabase.co' web/marketpro-dashboard/config.mjs
           grep -Fq 'REFRESH_INTERVAL_MS = 5000' web/marketpro-dashboard/config.mjs
+          grep -Fq 'connect-src https://qqiheexpbuzohllugxrk.supabase.co' web/marketpro-dashboard/vercel.json
+          ! grep -Fq 'connect-src https://lkoptqhodgjeuwwfihfr.supabase.co' web/marketpro-dashboard/vercel.json
           grep -Fq 'other_expenses_cents' supabase/staging/marketpro_staging_dashboard_other_expenses_v410.sql
           grep -Fq 'security_invoker=true' supabase/staging/marketpro_staging_dashboard_other_expenses_v410.sql
 
