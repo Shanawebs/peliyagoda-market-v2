@@ -20,8 +20,16 @@ class MarketRepository(private val db: MarketDatabase, private val appContext: C
             MarketProActiveRole.requireBusinessDateEditable(roleContext(), date)
     }
     private fun requireCatalogWrite() {
+        check(!lk.peliyagoda.marketpro.cloud.StagingTwoPhoneSyncScheduler.enabled()) {
+            "Master Catalog edits are locked in final two-phone staging because catalog write sync is not enabled."
+        }
         if (BuildConfig.MARKETPRO_REQUIRE_CLOUD_ROLE)
             MarketProActiveRole.requireCatalogEditable(roleContext())
+    }
+    private fun requireFinancialDeleteSupported() {
+        check(!lk.peliyagoda.marketpro.cloud.StagingTwoPhoneSyncScheduler.enabled()) {
+            "Financial delete is locked in final two-phone staging because safe Cloud tombstone merge is not enabled."
+        }
     }
     private fun requireOwnerWrite() {
         if (BuildConfig.MARKETPRO_REQUIRE_CLOUD_ROLE)
@@ -197,6 +205,7 @@ class MarketRepository(private val db: MarketDatabase, private val appContext: C
      * Reject incorrect approval codes before opening the write transaction.
      */
     suspend fun archiveItem(id: Long, approvalCode: String, appContext: Context): Boolean {
+        requireCatalogWrite()
         requireOwnerWrite()
         // No universal secret in the APK. Owner configures their own Keystore
         // 6-digit PIN; failed attempts have a persisted timed lockout.
@@ -244,6 +253,7 @@ class MarketRepository(private val db: MarketDatabase, private val appContext: C
 
     suspend fun deleteRequirement(date: String, kitchen: String, id: Long) {
         requireDayWrite(date)
+        requireFinancialDeleteSupported()
         db.withTransaction {
             dao.deleteRequisition(date, kitchen, id)
             journal.record(
@@ -256,6 +266,9 @@ class MarketRepository(private val db: MarketDatabase, private val appContext: C
     suspend fun savePurchase(date: String, id: Long, grams: Long, centsPerKg: Long) {
         requireDayWrite(date)
         require(grams in 0..1_000_000_000 && centsPerKg in 0..1_000_000_000)
+        if (grams == 0L && centsPerKg == 0L) {
+            requireFinancialDeleteSupported()
+        }
         db.withTransaction {
             if (grams == 0L && centsPerKg == 0L) {
                 // Empty purchase is a real delete, not a completed transaction.
