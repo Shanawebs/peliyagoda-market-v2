@@ -280,7 +280,7 @@ internal class CloudDomainMergeEngine(private val db: MarketDatabase) {
                     remoteQty = 0L
                     remotePrice = 0L
                     remoteKitchen = null
-                    localKey = CloudRecordKey.cash(date)
+                    localKey = CloudRecordKey.otherExpense(date)
                     otherExpenses = DailyOtherExpenseEntity(
                         date,transport,labor,meals,others,remarks
                     )
@@ -312,6 +312,75 @@ internal class CloudDomainMergeEngine(private val db: MarketDatabase) {
                 existingHash != null && existingHash == fingerprint(localSignature)
             val hasPending = inbox.pendingForLocalKey(type,localKey) > 0 ||
                 inbox.hasPendingLocalEditForCloudId(type,remoteUuid) > 0
+
+            /*
+             * Cash Received and Other Expenses have a server UNIQUE key of
+             * (workspace_id, business_date). A newly linked phone can create a
+             * provisional local UUID before it learns that the other approved
+             * phone already owns the canonical Cloud UUID for that date.
+             *
+             * Never overwrite the pending local value. If and only if that old
+             * UUID is provably local-only and never ACKed/pulled, atomically
+             * rebind the local business key to the canonical remote UUID and
+             * baseline the remote revision. The uploader can then perform an
+             * ordinary revision-safe UPDATE instead of a duplicate INSERT.
+             */
+            if (mappedCloud != null && mappedCloud != remoteUuid &&
+                type in setOf("daily_cash_received","daily_other_expenses")
+            ) {
+                val oldPullRaw = cloud.state("pull_applied_rev|$type|$mappedCloud")
+                val oldAckRaw = cloud.state("staff_last_ack_rev|$type|$mappedCloud")
+                val oldPull = oldPullRaw?.toLongOrNull()
+                val oldAck = oldAckRaw?.toLongOrNull()
+                if ((oldPullRaw != null && (oldPull == null || oldPull <= 0L)) ||
+                    (oldAckRaw != null && (oldAck == null || oldAck <= 0L))
+                ) {
+                    return@withTransaction Result(
+                        DomainMergeDecision.BLOCK_UNTRUSTED,shadow.revision
+                    )
+                }
+                val staffOrigin =
+                    cloud.state("staff_fresh_origin|$type|$mappedCloud") == mappedCloud
+                val attachOrigin =
+                    cloud.state(FreshAttachState.originKey(type,localKey)) == mappedCloud
+                val canAdopt = DailySingletonIdentityPolicy.canAdoptCanonicalRemote(
+                    DailySingletonIdentityEvidence(
+                        type=type,
+                        localRowExists=localSignature != null,
+                        hasPendingLocalEdit=hasPending,
+                        remoteTombstone=remoteTombstone,
+                        localKey=localKey,
+                        mappedCloudId=mappedCloud,
+                        remoteCloudId=remoteUuid,
+                        reverseLocalKey=reverseKey,
+                        provisionalOriginMatches=staffOrigin || attachOrigin,
+                        oldMappedPullRevision=oldPull,
+                        oldMappedAckRevision=oldAck
+                    )
+                )
+                if (canAdopt) {
+                    check(cloud.rebindIdentity(
+                        type=type,
+                        key=localKey,
+                        expectedOldCloudId=mappedCloud,
+                        newCloudId=remoteUuid
+                    ) == 1) { "Canonical daily UUID rebind lost a race" }
+                    check(cloud.cloudId(type,localKey) == remoteUuid &&
+                        inbox.localKeyForCloudId(type,remoteUuid) == localKey) {
+                        "Canonical daily UUID rebind did not verify"
+                    }
+                    cloud.setState(CloudSyncStateEntity(
+                        lastRevisionKey,shadow.revision.toString()
+                    ))
+                    cloud.setState(CloudSyncStateEntity(
+                        lastSignatureKey,fingerprint(remoteSignature)
+                    ))
+                    return@withTransaction Result(
+                        DomainMergeDecision.CONFLICT_LOCAL_PENDING,shadow.revision
+                    )
+                }
+            }
+
             val decision = DomainMergePolicy.evaluate(
                 DomainMergeEvidence(
                     workspaceMatches=true,
