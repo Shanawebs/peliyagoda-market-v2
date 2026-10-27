@@ -68,13 +68,13 @@ internal object MarketProActiveRole {
         if (!BuildConfig.MARKETPRO_REQUIRE_CLOUD_ROLE) return
         val target = LocalDate.parse(date)
         val today = LocalDate.now(COLOMBO)
-        check(!target.isAfter(today)) { "Future dates cannot be edited" }
-        when(current(app)) {
-            TeamRole.OWNER -> Unit
-            TeamRole.PURCHASING_STAFF -> check(target==today) {
-                "Team can edit today's records only. Earlier dates are Owner-only."
+        val role=current(app)
+        check(LocalBusinessDateEditPolicy.mayEdit(role,target,today)) {
+            when {
+                role==null -> "Sign in as Owner or Team before editing records"
+                target.isAfter(today) -> "Future dates cannot be edited"
+                else -> "Team can edit today's records only. Earlier dates are Owner-only."
             }
-            else -> error("Sign in as Owner or Team before editing records")
         }
     }
 
