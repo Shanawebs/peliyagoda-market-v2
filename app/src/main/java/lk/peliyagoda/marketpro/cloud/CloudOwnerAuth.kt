@@ -156,8 +156,16 @@ class CloudOwnerAuth(private val app: Context) {
         // Revalidate JWT with Supabase before storing any session on device.
         val profile = request("/auth/v1/user", "GET", accessToken = tokens.accessToken)
         check(normalizedEmail(profile.getString("email")) == email) { "Account email mismatch." }
+        val userId=profile.getString("id")
+        if (BuildConfig.MARKETPRO_REQUIRE_CLOUD_ROLE) {
+            require(userId==CloudSyncConfig.OWNER_USER_ID) {
+                "Use Team Login for the purchasing team account"
+            }
+        }
         remember(tokens)
-        Account(email, profile.getString("id"))
+        if (BuildConfig.MARKETPRO_REQUIRE_CLOUD_ROLE)
+            MarketProActiveRole.activateOwner(app,userId)
+        Account(email, userId)
     } }
 
     suspend fun currentAccount(): Account? = withContext(Dispatchers.IO) { authMutex.withLock {
@@ -378,6 +386,8 @@ class CloudOwnerAuth(private val app: Context) {
             // Remote tokens expire according to the project's Auth settings.
         } finally {
             prefs.edit().remove(KEY).commit()
+            if (BuildConfig.MARKETPRO_REQUIRE_CLOUD_ROLE)
+                MarketProActiveRole.clearIfActive(app,"owner")
         }
     } }
 }
