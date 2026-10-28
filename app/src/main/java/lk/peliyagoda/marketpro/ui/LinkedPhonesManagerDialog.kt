@@ -24,10 +24,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import lk.peliyagoda.marketpro.cloud.CloudPhoneRegistryClient
+import lk.peliyagoda.marketpro.data.CloudDeviceIdentity
 import kotlinx.coroutines.launch
 
 /**
@@ -41,6 +43,8 @@ internal fun LinkedPhonesManagerDialog(
     onClose: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current.applicationContext
+    val currentDeviceId = remember(context) { CloudDeviceIdentity.get(context) }
     var snapshot by remember { mutableStateOf<CloudPhoneRegistryClient.Snapshot?>(null) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
@@ -119,6 +123,7 @@ internal fun LinkedPhonesManagerDialog(
                         approved.forEach { phone ->
                             LinkedDeviceRow(
                                 phone = phone,
+                                isThisPhone = phone.id == currentDeviceId,
                                 ownerCanManage = data.role == "owner",
                                 busy = busy,
                                 onRemove = { toRemove = phone }
@@ -130,6 +135,7 @@ internal fun LinkedPhonesManagerDialog(
                         pending.forEach { phone ->
                             LinkedDeviceRow(
                                 phone = phone,
+                                isThisPhone = phone.id == currentDeviceId,
                                 ownerCanManage = data.role == "owner",
                                 busy = busy,
                                 onRemove = { toRemove = phone },
@@ -155,6 +161,7 @@ internal fun LinkedPhonesManagerDialog(
                         if (showOldOwners) oldOwners.forEach { phone ->
                             LinkedDeviceRow(
                                 phone = phone,
+                                isThisPhone = phone.id == currentDeviceId,
                                 ownerCanManage = true,
                                 busy = busy,
                                 onRemove = { toRemove = phone }
@@ -243,6 +250,7 @@ internal fun LinkedPhonesManagerDialog(
 @Composable
 private fun LinkedDeviceRow(
     phone: CloudPhoneRegistryClient.Phone,
+    isThisPhone: Boolean,
     ownerCanManage: Boolean,
     busy: Boolean,
     onRemove: () -> Unit,
@@ -258,6 +266,7 @@ private fun LinkedDeviceRow(
             verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             Text(phone.label, fontWeight = FontWeight.Bold)
+            if (isThisPhone) Text("THIS PHONE", fontWeight = FontWeight.Bold, color = ProColors.teal)
             Text(
                 (if (phone.role == "owner") "Owner" else "Team") +
                     "  /  " + (if (phone.enabled) "APPROVED" else "PENDING / UNLINKED"),
