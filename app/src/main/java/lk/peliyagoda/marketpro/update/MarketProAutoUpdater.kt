@@ -191,8 +191,8 @@ internal object MarketProAutoUpdater {
                 "Accept", if (cloudMetadata) "application/json"
                 else "application/vnd.github+json")
             if (cloudMetadata) {
-                // Only public publishable key; no service_role, user JWT or
-                // login session is sent to the update metadata endpoint.
+                // Public publishable key ONLY. Never send privileged
+                // credentials or user login sessions to update metadata.
                 connection.setRequestProperty(
                     "apikey", BuildConfig.MARKETPRO_SUPABASE_PUBLISHABLE_KEY)
             }
