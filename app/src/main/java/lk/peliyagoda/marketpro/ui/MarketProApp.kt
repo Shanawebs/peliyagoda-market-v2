@@ -199,12 +199,15 @@ fun MarketProApp(vm: MarketViewModel) {
             mutableStateOf<MarketProAutoUpdater.Ready?>(null)
         }
         var checkingAppUpdate by remember { mutableStateOf(false) }
+        var updateDialogStatus by remember { mutableStateOf<UpdateStatus?>(null) }
         LaunchedEffect(context) {
             if (BuildConfig.MARKETPRO_AUTO_UPDATE) {
                 MarketProAutoUpdater.schedule(context.applicationContext)
                 when (val result = MarketProAutoUpdater.check(context.applicationContext)) {
-                    is MarketProAutoUpdater.Outcome.Downloaded ->
+                    is MarketProAutoUpdater.Outcome.Downloaded -> {
                         pendingVerifiedUpdate = result.ready
+                        updateDialogStatus = UpdateStatus.Ready(result.ready.version)
+                    }
                     else -> Unit // A background check never interrupts normal work.
                 }
             }
@@ -227,6 +230,58 @@ fun MarketProApp(vm: MarketViewModel) {
         var restoreText by remember { mutableStateOf<String?>(null) }
 
         fun message(value: String) { scope.launch { snackbar.showSnackbar(value) } }
+
+        fun checkForUpdatesWithProgress() {
+            if (checkingAppUpdate) return
+            menuOpen = false
+            pendingVerifiedUpdate = null
+            checkingAppUpdate = true
+            updateDialogStatus = UpdateStatus.Checking
+            scope.launch {
+                val result = MarketProAutoUpdater.check(
+                    context.applicationContext,
+                    force = true,
+                    onProgress = { progress ->
+                        // Progress comes from verified bytes transferred on the IO
+                        // worker, marshalled to main by the updater.
+                        // A hidden dialog stays hidden while download continues.
+                        if (updateDialogStatus != null) {
+                            updateDialogStatus = when (progress) {
+                                MarketProAutoUpdater.Progress.Checking ->
+                                    UpdateStatus.Checking
+                                is MarketProAutoUpdater.Progress.Downloading ->
+                                    UpdateStatus.Downloading(
+                                        progress.version,
+                                        progress.downloadedBytes,
+                                        progress.totalBytes
+                                    )
+                                MarketProAutoUpdater.Progress.Verifying ->
+                                    UpdateStatus.Verifying
+                            }
+                        }
+                    }
+                )
+                checkingAppUpdate = false
+                when (result) {
+                    is MarketProAutoUpdater.Outcome.Downloaded -> {
+                        pendingVerifiedUpdate = result.ready
+                        updateDialogStatus = UpdateStatus.Ready(result.ready.version)
+                    }
+                    is MarketProAutoUpdater.Outcome.NoUpdate -> {
+                        if (updateDialogStatus != null) {
+                            updateDialogStatus = UpdateStatus.UpToDate
+                        }
+                    }
+                    is MarketProAutoUpdater.Outcome.Failure -> {
+                        if (updateDialogStatus != null) {
+                            updateDialogStatus = UpdateStatus.Failed(result.reason)
+                        } else {
+                            message("Update Check Failed: " + result.reason.take(110))
+                        }
+                    }
+                }
+            }
+        }
 
         val excelSaver = rememberLauncherForActivityResult(
             ActivityResultContracts.CreateDocument(
@@ -426,36 +481,29 @@ fun MarketProApp(vm: MarketViewModel) {
             }
         )
 
-        if (pendingVerifiedUpdate != null &&
-            BuildConfig.MARKETPRO_AUTO_UPDATE) {
-            val verified = requireNotNull(pendingVerifiedUpdate)
-            AlertDialog(
-                containerColor = Color.White,
-                onDismissRequest = { pendingVerifiedUpdate = null },
-                title = { Text("Market Pro Update Ready") },
-                text = {
-                    Text(
-                        "Version ${verified.version} was downloaded and its " +
-                        "APK signature, package ID and SHA-256 were verified. " +
-                        "Android will request your approval before installing. " +
-                        "Existing app data will be retained."
-                    )
-                },
-                confirmButton = {
-                    Button(onClick = {
-                        runCatching {
-                            MarketProAutoUpdater.installWithAndroidApproval(
-                                context, verified)
-                        }.onFailure { message("Update installer unavailable: " +
-                            (it.message ?: "Unknown error")) }
-                    }) { Text("Install Update") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { pendingVerifiedUpdate = null }) {
-                        Text("Later")
-                    }
-                }
-            )
+        if (BuildConfig.MARKETPRO_AUTO_UPDATE) {
+            updateDialogStatus?.let { stage ->
+                MarketUpdateProgressDialog(
+                    status = stage,
+                    onDismiss = {
+                        updateDialogStatus = null
+                        if (!checkingAppUpdate) pendingVerifiedUpdate = null
+                    },
+                    onInstall = {
+                        val ready = pendingVerifiedUpdate
+                        if (stage is UpdateStatus.Ready && ready != null) {
+                            runCatching {
+                                MarketProAutoUpdater.installWithAndroidApproval(context, ready)
+                            }.onFailure {
+                                updateDialogStatus = UpdateStatus.Failed(
+                                    "Android installer unavailable: " +
+                                        (it.message ?: "Unknown error"))
+                            }
+                        }
+                    },
+                    onRetry = { checkForUpdatesWithProgress() }
+                )
+            }
         }
 
         if (catalogOpen) CatalogSheet(
@@ -588,24 +636,7 @@ fun MarketProApp(vm: MarketViewModel) {
                                             )
                                         },
                                         enabled = !checkingAppUpdate,
-                                        onClick = {
-                                            menuOpen = false
-                                            checkingAppUpdate = true
-                                            scope.launch {
-                                                val result = MarketProAutoUpdater.check(
-                                                    context.applicationContext, force = true)
-                                                checkingAppUpdate = false
-                                                when (result) {
-                                                    is MarketProAutoUpdater.Outcome.Downloaded ->
-                                                        pendingVerifiedUpdate = result.ready
-                                                    is MarketProAutoUpdater.Outcome.NoUpdate ->
-                                                        message("Market Pro Is Up To Date")
-                                                    is MarketProAutoUpdater.Outcome.Failure ->
-                                                        message("Update Check Failed: " +
-                                                            result.reason.take(110))
-                                                }
-                                            }
-                                        }
+                                        onClick = { checkForUpdatesWithProgress() }
                                     )
                                 }
                                 DropdownMenuItem(
