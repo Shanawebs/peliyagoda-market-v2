@@ -173,8 +173,11 @@ internal object MarketProAutoUpdater {
             connection.connectTimeout = 15_000
             connection.readTimeout = 45_000
             connection.setRequestProperty("User-Agent", "MarketPro-Android-Updater")
-            connection.setRequestProperty("Accept", "application/vnd.github+json")
-            if (Uri.parse(next).host == CLOUD_HOST) {
+            val cloudMetadata = Uri.parse(next).host == CLOUD_HOST
+            connection.setRequestProperty(
+                "Accept", if (cloudMetadata) "application/json"
+                else "application/vnd.github+json")
+            if (cloudMetadata) {
                 // Only public publishable key; no service_role, user JWT or
                 // login session is sent to the update metadata endpoint.
                 connection.setRequestProperty(
