@@ -41,7 +41,7 @@ internal fun CloudPhoneManagementPanel() {
     var busy by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf("") }
     var snapshot by remember { mutableStateOf<CloudPhoneRegistryClient.Snapshot?>(null) }
-    var confirmOwnerRecovery by remember { mutableStateOf(false) }
+    var showPhoneManager by remember { mutableStateOf(false) }
 
     fun runRequest(job:suspend () -> Unit) {
         if(busy)return
@@ -124,38 +124,14 @@ internal fun CloudPhoneManagementPanel() {
                 Text("Download Cloud Updates (Safe Stage)")
             }
         }
-        val data=snapshot
-        if(data!=null) {
-            Text(if(data.role=="owner") "Owner — Manage Team Phones"
-                else "Team — This Phone's Approval Status",fontWeight=FontWeight.Bold)
-            if(data.role=="owner") {
-                Text(
-                    "Owner Phone reinstalled? If approval says 'Owner phone is not active', " +
-                        "verify a fresh Owner Authenticator code under the Owner Login tab first. " +
-                        "Then recover THIS phone. The previously approved Owner UUID is revoked."
-                )
-                Button(
-                    enabled=!busy,
-                    onClick={ confirmOwnerRecovery=true }
-                ) { Text("Secure Re-Link Owner Phone") }
-            }
-            if(data.phones.isEmpty()) Text("No Phone Requests Yet")
-            data.phones.forEach { device ->
-                val state=if(device.enabled) "APPROVED" else "PENDING / UNLINKED"
-                Text("${device.label} • ${device.role} • $state")
-                Text("ID ...${device.id.takeLast(8)}")
-                if(data.role=="owner" && device.role=="editor") {
-                    Button(enabled=!busy,onClick={runRequest {
-                        client.decideTeamPhone(device.id,!device.enabled)
-                        snapshot=client.listPhones()
-                        notice=if(device.enabled) "Team phone unlinked" else
-                            "Team phone approved. Open that phone and tap Activate / Sync Two-Phone."
-                    }}) {
-                        Text(if(device.enabled) "Unlink Team Phone" else "Approve Team Phone")
-                    }
-                }
-            }
-        }
+        Button(
+            enabled = !busy,
+            onClick = { showPhoneManager = true }
+        ) { Text("Manage Linked Phones") }
+        Text(
+            "Owner සහ Team Phone එකම APK එක භාවිත කරනවා. " +
+                "එක් Device ID එක බැගින් Manage Linked Phones තුළ පාලනය කරන්න."
+        )
         if(notice.isNotBlank()) Text(notice)
         Text(
             if (BuildConfig.MARKETPRO_STAGING_QA_FINANCE_RPC &&
@@ -170,32 +146,10 @@ internal fun CloudPhoneManagementPanel() {
         )
         HorizontalDivider()
     }
-    if(confirmOwnerRecovery) {
-        AlertDialog(
-            onDismissRequest={ confirmOwnerRecovery=false },
-            title={ Text("Recover This Owner Phone?") },
-            text={
-                Text(
-                    "Only continue on your actual Owner Phone. Verify your Owner " +
-                        "Authenticator 6-digit code first (within 5 minutes). " +
-                        "The old Owner installation's Cloud access will be revoked " +
-                        "and this phone will become the sole approved Owner device. " +
-                        "No local JSON backup or unsynced records are transferred. " +
-                        "Pending Team phone approval is NOT automatic."
-                )
-            },
-            dismissButton={
-                TextButton(onClick={confirmOwnerRecovery=false}) { Text("Cancel") }
-            },
-            confirmButton={
-                Button(enabled=!busy,onClick={
-                    confirmOwnerRecovery=false
-                    runRequest {
-                        notice=client.secureRelinkThisOwnerPhone()
-                        snapshot=client.listPhones()
-                    }
-                }) { Text("Confirm Secure Re-Link") }
-            }
+    if (showPhoneManager) {
+        LinkedPhonesManagerDialog(
+            client = client,
+            onClose = { showPhoneManager = false }
         )
     }
 }
