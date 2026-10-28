@@ -25,6 +25,7 @@ android {
         buildConfigField("boolean", "MARKETPRO_STAGING_QA_FINANCE_RPC", "false")
         buildConfigField("boolean", "MARKETPRO_TWO_PHONE_AUTO_SYNC", "false")
         buildConfigField("boolean", "MARKETPRO_REQUISITION_DELETE_RPC", "false")
+        buildConfigField("boolean", "MARKETPRO_AUTO_UPDATE", "false")
         // Preview fields are disabled; no Owner/Staff password collection or network login.
         buildConfigField("boolean", "MARKETPRO_STAFF_LOGIN_ENABLED", "false")
         buildConfigField("boolean", "MARKETPRO_PHONE_REGISTRY_RPC_DEPLOYED", "false")
