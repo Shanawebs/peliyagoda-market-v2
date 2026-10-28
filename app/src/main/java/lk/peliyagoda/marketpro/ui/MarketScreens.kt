@@ -620,7 +620,8 @@ fun KitchensScreen(
                                 vm.removeRequirement(kitchen, item.id) { result ->
                                     message(
                                         if (result.isSuccess) "Item Removed"
-                                        else "Could Not Remove Item"
+                                        else result.exceptionOrNull()?.message
+                                            ?.take(110) ?: "Could Not Remove Item"
                                     )
                                 }
                             }
