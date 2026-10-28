@@ -313,6 +313,42 @@ internal class CloudDomainMergeEngine(private val db: MarketDatabase) {
             val hasPending = inbox.pendingForLocalKey(type,localKey) > 0 ||
                 inbox.hasPendingLocalEditForCloudId(type,remoteUuid) > 0
 
+            // Soft-deleted Cloud requisitions are removed ONLY when their UUID,
+            // revision, pending outbox and prior contents are independently safe.
+            if (type == "requisition" && remoteTombstone) {
+                val lastAck = cloud.state(
+                    "staff_last_ack_rev|requisition|$remoteUuid")?.toLongOrNull()
+                val decision = RequisitionTombstonePolicy.evaluate(
+                    mappedCloud = mappedCloud,
+                    reverseLocalKey = reverseKey,
+                    localKey = localKey,
+                    remoteUuid = remoteUuid,
+                    hasPending = hasPending,
+                    localRowExists = localSignature != null,
+                    localMatchesCheckpoint = localMatchesPrevious,
+                    localMatchesRemote = localSignature == remoteSignature,
+                    lastAppliedRevision = oldRevision,
+                    lastAckRevision = lastAck,
+                    remoteRevision = shadow.revision
+                )
+                if (decision == DomainMergeDecision.REMOVE_DELETED_REQUISITION) {
+                    if (localSignature != null) records.deleteRequisition(
+                        date, requireNotNull(remoteKitchen), requireNotNull(itemId))
+                    if (mappedCloud == null) {
+                        check(cloud.insertIdentity(
+                            CloudIdentityEntity(type, localKey, remoteUuid)) > 0L)
+                    }
+                    cloud.setState(CloudSyncStateEntity(
+                        lastRevisionKey, shadow.revision.toString()))
+                    cloud.setState(CloudSyncStateEntity(
+                        lastSignatureKey, fingerprint(remoteSignature)))
+                    cloud.setState(CloudSyncStateEntity(
+                        "tombstone_applied|requisition|$remoteUuid",
+                        shadow.revision.toString()))
+                }
+                return@withTransaction Result(decision, shadow.revision)
+            }
+
             /*
              * Cash Received and Other Expenses have a server UNIQUE key of
              * (workspace_id, business_date). A newly linked phone can create a
@@ -381,7 +417,18 @@ internal class CloudDomainMergeEngine(private val db: MarketDatabase) {
                 }
             }
 
-            val decision = DomainMergePolicy.evaluate(
+            // A deleted requisition may later be re-added by an authorized
+            // phone using the SAME Cloud UUID and a strictly newer revision.
+            val deletedRevision = if (type == "requisition")
+                cloud.state("tombstone_applied|requisition|$remoteUuid")?.toLongOrNull()
+                else null
+            val safeReactivation = type == "requisition" && !remoteTombstone &&
+                localSignature == null && !hasPending &&
+                mappedCloud == remoteUuid && reverseKey == localKey &&
+                oldRevision != null && deletedRevision == oldRevision &&
+                shadow.revision > oldRevision
+            val decision = if (safeReactivation) DomainMergeDecision.INSERT_NEW
+                else DomainMergePolicy.evaluate(
                 DomainMergeEvidence(
                     workspaceMatches=true,
                     recordIdentityIsValid=true,
