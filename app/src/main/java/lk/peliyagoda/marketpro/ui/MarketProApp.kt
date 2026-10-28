@@ -57,6 +57,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -84,6 +85,7 @@ import lk.peliyagoda.marketpro.util.ConsolidatedRow
 import lk.peliyagoda.marketpro.util.DevicePerformancePolicy
 import lk.peliyagoda.marketpro.data.CloudDeviceIdentity
 import lk.peliyagoda.marketpro.security.RestorePinGuard
+import lk.peliyagoda.marketpro.update.MarketProAutoUpdater
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -193,6 +195,20 @@ fun MarketProApp(vm: MarketViewModel) {
         var chartOpen by remember { mutableStateOf(false) }
         val priceHistory by vm.chartHistory.collectAsState()
         var menuOpen by remember { mutableStateOf(false) }
+        var pendingVerifiedUpdate by remember {
+            mutableStateOf<MarketProAutoUpdater.Ready?>(null)
+        }
+        var checkingAppUpdate by remember { mutableStateOf(false) }
+        LaunchedEffect(context) {
+            if (BuildConfig.MARKETPRO_AUTO_UPDATE) {
+                MarketProAutoUpdater.schedule(context.applicationContext)
+                when (val result = MarketProAutoUpdater.check(context.applicationContext)) {
+                    is MarketProAutoUpdater.Outcome.Downloaded ->
+                        pendingVerifiedUpdate = result.ready
+                    else -> Unit // A background check never interrupts normal work.
+                }
+            }
+        }
         var cloudStatusOpen by remember { mutableStateOf(false) }
         var ownerLoginOpen by remember { mutableStateOf(false) }
         var helpOpen by remember { mutableStateOf(false) }
@@ -410,6 +426,38 @@ fun MarketProApp(vm: MarketViewModel) {
             }
         )
 
+        if (pendingVerifiedUpdate != null &&
+            BuildConfig.MARKETPRO_AUTO_UPDATE) {
+            val verified = requireNotNull(pendingVerifiedUpdate)
+            AlertDialog(
+                containerColor = Color.White,
+                onDismissRequest = { pendingVerifiedUpdate = null },
+                title = { Text("Market Pro Update Ready") },
+                text = {
+                    Text(
+                        "Version ${verified.version} was downloaded and its " +
+                        "APK signature, package ID and SHA-256 were verified. " +
+                        "Android will request your approval before installing. " +
+                        "Existing app data will be retained."
+                    )
+                },
+                confirmButton = {
+                    Button(onClick = {
+                        runCatching {
+                            MarketProAutoUpdater.installWithAndroidApproval(
+                                context, verified)
+                        }.onFailure { message("Update installer unavailable: " +
+                            (it.message ?: "Unknown error")) }
+                    }) { Text("Install Update") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingVerifiedUpdate = null }) {
+                        Text("Later")
+                    }
+                }
+            )
+        }
+
         if (catalogOpen) CatalogSheet(
             // Catalog shows active records only. Full items flow remains for
             // historical reports, requisitions, charts and invoice references.
@@ -461,6 +509,38 @@ fun MarketProApp(vm: MarketViewModel) {
                                 shape = RoundedCornerShape(20.dp),
                                 containerColor = Color(0xFFF9F7FD)
                             ) {
+                                if (BuildConfig.MARKETPRO_AUTO_UPDATE) {
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                if (checkingAppUpdate) "Checking For Updates..."
+                                                else "Check For Updates",
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF605B88),
+                                                style = MaterialTheme.typography.bodyLarge
+                                            )
+                                        },
+                                        enabled = !checkingAppUpdate,
+                                        onClick = {
+                                            menuOpen = false
+                                            checkingAppUpdate = true
+                                            scope.launch {
+                                                val result = MarketProAutoUpdater.check(
+                                                    context.applicationContext, force = true)
+                                                checkingAppUpdate = false
+                                                when (result) {
+                                                    is MarketProAutoUpdater.Outcome.Downloaded ->
+                                                        pendingVerifiedUpdate = result.ready
+                                                    is MarketProAutoUpdater.Outcome.NoUpdate ->
+                                                        message("Market Pro Is Up To Date")
+                                                    is MarketProAutoUpdater.Outcome.Failure ->
+                                                        message("Update Check Failed: " +
+                                                            result.reason.take(110))
+                                                }
+                                            }
+                                        }
+                                    )
+                                }
                                 DropdownMenuItem(text = { Text("Items Price Chart", color = Color(0xFF605B88), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
                                     menuOpen = false
                                     vm.selectChartItem(null)
