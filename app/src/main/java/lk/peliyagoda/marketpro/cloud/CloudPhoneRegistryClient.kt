@@ -57,6 +57,8 @@ internal class CloudPhoneRegistryClient(context: Context) {
                 "marketpro_qa_cloud_request_phone",
                 "marketpro_qa_cloud_decide_team_phone",
                 "marketpro_qa_cloud_list_phones",
+                "marketpro_qa_list_visible_phones_v428",
+                "marketpro_qa_retire_phone_v428",
                 "marketpro_qa_owner_secure_relink_v1"
             ))
             val origin=URL(BuildConfig.MARKETPRO_SUPABASE_URL)
@@ -117,7 +119,7 @@ internal class CloudPhoneRegistryClient(context: Context) {
 
     suspend fun listPhones():Snapshot {
         allowed()
-        val response=rpc("marketpro_qa_cloud_list_phones",JSONObject()
+        val response=rpc("marketpro_qa_list_visible_phones_v428",JSONObject()
             .put("p_workspace_id",workspace))
         check(response.optBoolean("ok"))
         val role=response.getString("role")
@@ -167,6 +169,37 @@ internal class CloudPhoneRegistryClient(context: Context) {
             "relinked" -> "Owner phone securely re-linked. Old device revoked. You may approve the pending Team phone."
             else -> error("Unexpected Owner recovery response")
         }
+    }
+
+    /**
+     * Non-destructive server-side retirement. No Android client can directly
+     * delete phone rows or bypass the verified active Owner session.
+     * This immediately revokes the selected Team phone (if approved), or
+     * archives a previously unlinked Owner phone. Active Owner is protected.
+     */
+    suspend fun removePhoneFromList(deviceId:String):String {
+        allowed()
+        require(MarketProActiveRole.current(app)==TeamRole.OWNER) {
+            "Only Owner can remove linked phone records"
+        }
+        UUID.fromString(deviceId)
+        val ownerDeviceId=CloudDeviceIdentity.get(app)
+        UUID.fromString(ownerDeviceId)
+        check(deviceId != ownerDeviceId) {
+            "Current Owner phone cannot be removed"
+        }
+        val result=rpc("marketpro_qa_retire_phone_v428",JSONObject()
+            .put("p_workspace_id",workspace)
+            .put("p_owner_device_id",ownerDeviceId)
+            .put("p_target_device_id",deviceId)
+            .put("p_confirm",true))
+        check(result.optBoolean("ok") &&
+            result.optString("device_id")==deviceId &&
+            !result.optBoolean("enabled",true) &&
+            !result.optBoolean("can_write",true)) {
+            "Server did not confirm phone removal"
+        }
+        return "Phone access revoked and record removed from the visible list"
     }
 
     suspend fun decideTeamPhone(deviceId:String,approve:Boolean) {
