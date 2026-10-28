@@ -26,6 +26,13 @@ class MarketRepository(private val db: MarketDatabase, private val appContext: C
         if (BuildConfig.MARKETPRO_REQUIRE_CLOUD_ROLE)
             MarketProActiveRole.requireCatalogEditable(roleContext())
     }
+    private fun requireRequisitionDeleteSupported() {
+        check(BuildConfig.MARKETPRO_REQUISITION_DELETE_RPC &&
+            lk.peliyagoda.marketpro.cloud.StagingTwoPhoneSyncScheduler.enabled()) {
+            "Kitchen item removal needs updated Cloud support."
+        }
+    }
+
     private fun requireFinancialDeleteSupported() {
         check(!lk.peliyagoda.marketpro.cloud.StagingTwoPhoneSyncScheduler.enabled()) {
             "Financial delete is locked in final two-phone staging because safe Cloud tombstone merge is not enabled."
@@ -253,13 +260,25 @@ class MarketRepository(private val db: MarketDatabase, private val appContext: C
 
     suspend fun deleteRequirement(date: String, kitchen: String, id: Long) {
         requireDayWrite(date)
-        requireFinancialDeleteSupported()
+        requireRequisitionDeleteSupported()
+        require(kitchen in MarketConstants.kitchens)
+        val key = CloudRecordKey.requisition(date, kitchen, id)
         db.withTransaction {
+            val item = cloudDao.findRequisition(date, kitchen, id)
+                ?: return@withTransaction
+            // Never drop an in-flight fresh UPSERT: a remote ghost may result.
+            val cloudId = cloudDao.cloudId("requisition", key)
+                ?: error("Item not linked to Cloud. Sync before deleting.")
+            val ack = cloudDao.state("staff_last_ack_rev|requisition|$cloudId")
+                ?.toLongOrNull() ?: 0L
+            val pulled = cloudDao.state("pull_applied_rev|requisition|$cloudId")
+                ?.toLongOrNull() ?: 0L
+            check(ack > 0L || pulled > 0L) {
+                "First Cloud upload is pending. Sync before deleting."
+            }
+            check(item.businessDate == date && item.kitchen == kitchen && item.itemId == id)
             dao.deleteRequisition(date, kitchen, id)
-            journal.record(
-                CloudRecordType.REQUISITION, CloudRecordKey.requisition(date, kitchen, id),
-                CloudAction.DELETE
-            )
+            journal.record(CloudRecordType.REQUISITION, key, CloudAction.DELETE)
         }
     }
 
