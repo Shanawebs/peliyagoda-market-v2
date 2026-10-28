@@ -46,6 +46,7 @@ internal fun LinkedPhonesManagerDialog(
     var message by remember { mutableStateOf("") }
     var showOldOwners by remember { mutableStateOf(false) }
     var toRemove by remember { mutableStateOf<CloudPhoneRegistryClient.Phone?>(null) }
+    var confirmOwnerRecovery by remember { mutableStateOf(false) }
 
     fun execute(operation: suspend () -> Unit) {
         if (busy) return
@@ -160,6 +161,11 @@ internal fun LinkedPhonesManagerDialog(
                             )
                         }
                     }
+                    if (data.role == "owner") {
+                        Button(enabled = !busy, onClick = { confirmOwnerRecovery = true }) {
+                            Text("Secure Re-Link Owner Phone")
+                        }
+                    }
                     if (data.phones.isEmpty()) Text("No linked phone records")
                 }
                 if (message.isNotBlank()) Text(message, color = ProColors.teal)
@@ -204,6 +210,31 @@ internal fun LinkedPhonesManagerDialog(
                         message = client.removePhoneFromList(id)
                     }
                 }) { Text("Remove Phone") }
+            }
+        )
+    }
+    if (confirmOwnerRecovery) {
+        AlertDialog(
+            onDismissRequest = { if (!busy) confirmOwnerRecovery = false },
+            containerColor = Color.White,
+            title = { Text("Recover This Owner Phone?") },
+            text = {
+                Text(
+                    "Only use this on your real Owner phone. Verify a fresh Owner " +
+                        "Authenticator code first. The previously approved Owner UUID " +
+                        "will be revoked. No local or unsynced data is transferred."
+                )
+            },
+            dismissButton = {
+                TextButton(enabled = !busy, onClick = {
+                    confirmOwnerRecovery = false
+                }) { Text("Cancel") }
+            },
+            confirmButton = {
+                Button(enabled = !busy, onClick = {
+                    confirmOwnerRecovery = false
+                    execute { message = client.secureRelinkThisOwnerPhone() }
+                }) { Text("Confirm Secure Re-Link") }
             }
         )
     }
