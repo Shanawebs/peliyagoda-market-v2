@@ -72,7 +72,7 @@ android {
         // Generated from the SAME version as the APK metadata. Never hardcode
         // versions separately in AndroidManifest or a Compose text component.
         resValue("string", "marketpro_version_caption", "• v$marketProDisplayVersion")
-        resValue("string", "marketpro_launcher_name", "Market Pro Stable ✦ v$marketProDisplayVersion")
+        resValue("string", "marketpro_launcher_name", "Market Pro")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
