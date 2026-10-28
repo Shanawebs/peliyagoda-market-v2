@@ -509,38 +509,6 @@ fun MarketProApp(vm: MarketViewModel) {
                                 shape = RoundedCornerShape(20.dp),
                                 containerColor = Color(0xFFF9F7FD)
                             ) {
-                                if (BuildConfig.MARKETPRO_AUTO_UPDATE) {
-                                    DropdownMenuItem(
-                                        text = {
-                                            Text(
-                                                if (checkingAppUpdate) "Checking For Updates..."
-                                                else "Check For Updates",
-                                                fontWeight = FontWeight.Bold,
-                                                color = Color(0xFF605B88),
-                                                style = MaterialTheme.typography.bodyLarge
-                                            )
-                                        },
-                                        enabled = !checkingAppUpdate,
-                                        onClick = {
-                                            menuOpen = false
-                                            checkingAppUpdate = true
-                                            scope.launch {
-                                                val result = MarketProAutoUpdater.check(
-                                                    context.applicationContext, force = true)
-                                                checkingAppUpdate = false
-                                                when (result) {
-                                                    is MarketProAutoUpdater.Outcome.Downloaded ->
-                                                        pendingVerifiedUpdate = result.ready
-                                                    is MarketProAutoUpdater.Outcome.NoUpdate ->
-                                                        message("Market Pro Is Up To Date")
-                                                    is MarketProAutoUpdater.Outcome.Failure ->
-                                                        message("Update Check Failed: " +
-                                                            result.reason.take(110))
-                                                }
-                                            }
-                                        }
-                                    )
-                                }
                                 DropdownMenuItem(text = { Text("Items Price Chart", color = Color(0xFF605B88), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) }, onClick = {
                                     menuOpen = false
                                     vm.selectChartItem(null)
@@ -608,6 +576,38 @@ fun MarketProApp(vm: MarketViewModel) {
                                         securityStatusOpen = true
                                     }
                                 )
+                                if (BuildConfig.MARKETPRO_AUTO_UPDATE) {
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                if (checkingAppUpdate) "Checking For Updates..."
+                                                else "Check For Updates",
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF605B88),
+                                                style = MaterialTheme.typography.bodyLarge
+                                            )
+                                        },
+                                        enabled = !checkingAppUpdate,
+                                        onClick = {
+                                            menuOpen = false
+                                            checkingAppUpdate = true
+                                            scope.launch {
+                                                val result = MarketProAutoUpdater.check(
+                                                    context.applicationContext, force = true)
+                                                checkingAppUpdate = false
+                                                when (result) {
+                                                    is MarketProAutoUpdater.Outcome.Downloaded ->
+                                                        pendingVerifiedUpdate = result.ready
+                                                    is MarketProAutoUpdater.Outcome.NoUpdate ->
+                                                        message("Market Pro Is Up To Date")
+                                                    is MarketProAutoUpdater.Outcome.Failure ->
+                                                        message("Update Check Failed: " +
+                                                            result.reason.take(110))
+                                                }
+                                            }
+                                        }
+                                    )
+                                }
                                 DropdownMenuItem(
                                     text = {
                                         Text(
