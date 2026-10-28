@@ -99,7 +99,8 @@ internal class TeamInboxDownloadCoordinator(
                     DomainMergeDecision.INSERT_NEW,
                     DomainMergeDecision.UPDATE_EXISTING,
                     DomainMergeDecision.ACK_MATCHING_EXISTING,
-                    DomainMergeDecision.ALREADY_CURRENT
+                    DomainMergeDecision.ALREADY_CURRENT,
+                    DomainMergeDecision.REMOVE_DELETED_REQUISITION
                 )) merged++ else held++
                 afterId=candidate.cloudId
             }
