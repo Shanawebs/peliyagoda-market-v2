@@ -15,6 +15,8 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import lk.peliyagoda.marketpro.BuildConfig
 import org.json.JSONArray
@@ -52,6 +54,9 @@ internal object MarketProAutoUpdater {
     private const val MIN_INTERVAL_MS = 2L * 60 * 60 * 1000
     private const val MAX_APK_BYTES = 50L * 1024 * 1024
     private const val MAX_JSON_BYTES = 650 * 1024
+    // Startup UI and WorkManager can run at the same instant: never let
+    // two fetchers write the same staging file or race the cached manifest.
+    private val downloadLock = Mutex()
     private val versionRegex = Regex("""v(\d+)\.(\d+)\.(\d+)(?!\d)""")
     private val hashRegex = Regex("^[a-f0-9]{64}$")
 
@@ -221,6 +226,7 @@ internal object MarketProAutoUpdater {
     }
 
     suspend fun check(context: Context, force: Boolean = false): Outcome =
+        downloadLock.withLock {
         withContext(Dispatchers.IO) {
             if (!BuildConfig.MARKETPRO_AUTO_UPDATE) return@withContext Outcome.NoUpdate
             try {
@@ -238,7 +244,7 @@ internal object MarketProAutoUpdater {
 
                 val dir = File(context.cacheDir, "apk_updates")
                 require(dir.isDirectory || dir.mkdirs())
-                val temp = File(dir, "pending-download.part")
+                val temp = File(dir, "pending-download.apk")
                 val finish = File(dir, "MarketPro-${candidate.version}-signed.apk")
                 temp.delete()
                 val connection = openSafe(candidate.url)
@@ -274,6 +280,7 @@ internal object MarketProAutoUpdater {
             } catch (e: Exception) {
                 Outcome.Failure(e.message ?: "Update check failed")
             }
+        }
         }
 
     fun installWithAndroidApproval(context: Context, update: Ready) {
