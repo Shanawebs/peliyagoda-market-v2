@@ -7,7 +7,7 @@ plugins {
 
 // Single source of truth for user-visible version labels.
 // Next release: update this number only; both header and launcher follow it.
-val marketProDisplayVersion = "4.2.0"
+val marketProDisplayVersion = "4.2.1"
 
 // STAGING ONLY: protected persistent signing key comes from GitHub Actions secrets.
 // Do not commit .jks files or credentials to this public repository.
@@ -40,6 +40,7 @@ android {
         // Explicit QA-only writer; never used by the production app module.
         buildConfigField("boolean", "MARKETPRO_STAGING_QA_FINANCE_RPC", "true")
         buildConfigField("boolean", "MARKETPRO_TWO_PHONE_AUTO_SYNC", "true")
+        buildConfigField("boolean", "MARKETPRO_REQUISITION_DELETE_RPC", "true")
         // Preview fields are disabled; no Owner/Staff password collection or network login.
         buildConfigField("boolean", "MARKETPRO_STAFF_LOGIN_ENABLED", "true")
         buildConfigField("boolean", "MARKETPRO_PHONE_REGISTRY_RPC_DEPLOYED", "true")
@@ -66,7 +67,7 @@ android {
         applicationId = "lk.peliyagoda.marketpro.staging.fullapp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 420
+        versionCode = 421
         versionName = marketProDisplayVersion
         // Generated from the SAME version as the APK metadata. Never hardcode
         // versions separately in AndroidManifest or a Compose text component.
