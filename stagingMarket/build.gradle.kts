@@ -5,8 +5,8 @@ plugins {
     id("org.jetbrains.kotlin.kapt")
 }
 
-// Single source of truth for user-visible version labels.
-// Next release: update this number only; both header and launcher follow it.
+// Android package version is intentionally separate from the launcher label.
+// Keep the home-screen name as "Market Pro" regardless of the release version.
 val marketProDisplayVersion = "4.2.1"
 
 // STAGING ONLY: protected persistent signing key comes from GitHub Actions secrets.
@@ -69,8 +69,8 @@ android {
         targetSdk = 35
         versionCode = 421
         versionName = marketProDisplayVersion
-        // Generated from the SAME version as the APK metadata. Never hardcode
-        // versions separately in AndroidManifest or a Compose text component.
+        // Version metadata remains in the APK for Android Settings > App Info.
+        // The launcher title below must NEVER include a version or build channel.
         resValue("string", "marketpro_version_caption", "• v$marketProDisplayVersion")
         resValue("string", "marketpro_launcher_name", "Market Pro")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
