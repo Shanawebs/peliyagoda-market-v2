@@ -71,7 +71,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.stringResource
 import lk.peliyagoda.marketpro.BuildConfig
 import lk.peliyagoda.marketpro.R
 import lk.peliyagoda.marketpro.data.OtherExpenseAmounts
@@ -448,11 +447,6 @@ fun MarketProApp(vm: MarketViewModel) {
                                 color = ProColors.teal, fontWeight = FontWeight.Bold)
                             Text(if (BuildConfig.MARKETPRO_LOCAL_PREVIEW) "Market Pro · Preview" else "Market Pro", style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.ExtraBold, color = ProVisual.itemInk)
-                            // Generated from the same Gradle displayVersion as
-                            // the APK versionName and launcher label.
-                            Text(stringResource(R.string.marketpro_version_caption),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = ProColors.muted)
                         }
                         IconButton(onClick = { catalogOpen = true }) {
                             Icon(Icons.Filled.Inventory2, contentDescription = "Item Catalog", tint = ProColors.teal)
