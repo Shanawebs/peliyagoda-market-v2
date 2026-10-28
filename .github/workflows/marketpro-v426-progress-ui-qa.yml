@@ -313,7 +313,7 @@ jobs:
           grep -Fq 'private fun readCloudLatest()' "$FILE"
           grep -Fq 'networkRetry { readGithubLatest() }' "$FILE"
           grep -Fq 'networkRetry { readCloudLatest() }' "$FILE"
-          grep -Fq 'private fun downloadResumable' "$FILE"
+          grep -Fq 'private suspend fun downloadResumable' "$FILE"
           grep -Fq 'connection.setRequestProperty("Range",' "$FILE"
           grep -Fq 'FileOutputStream(file, canResume)' "$FILE"
           grep -Fq 'MARKETPRO_SUPABASE_PUBLISHABLE_KEY' "$FILE"
