@@ -44,6 +44,19 @@ import java.util.concurrent.TimeUnit
  */
 internal object MarketProAutoUpdater {
     data class Ready(val version: String, val file: File, val versionCode: Long)
+
+    // The UI receives actual transferred bytes, not a simulated timer.
+    // Existing automatic background workers do not request progress events.
+    sealed class Progress {
+        object Checking : Progress()
+        data class Downloading(
+            val version: String,
+            val downloadedBytes: Long,
+            val totalBytes: Long
+        ) : Progress()
+        object Verifying : Progress()
+    }
+
     sealed class Outcome {
         data class Downloaded(val ready: Ready) : Outcome()
         object NoUpdate : Outcome()
@@ -287,13 +300,39 @@ internal object MarketProAutoUpdater {
             "Try Wi-Fi or check the mobile network connection.")
     }
 
+    private suspend fun notifyProgress(
+        listener: ((Progress) -> Unit)?,
+        value: Progress
+    ) {
+        if (listener != null) withContext(Dispatchers.Main.immediate) {
+            listener(value)
+        }
+    }
+
     // Continue partial downloads using HTTP Range instead of downloading an
     // entire 13 MB+ APK again after every intermittent mobile-data abort.
-    private fun downloadResumable(candidate: Candidate, file: File) {
+    private suspend fun downloadResumable(
+        candidate: Candidate,
+        file: File,
+        onProgress: ((Progress) -> Unit)?
+    ) {
+        var lastPercent = -1
+        suspend fun report(bytes: Long) {
+            val percent = (bytes * 100 / candidate.bytes).toInt()
+            if (percent != lastPercent) {
+                lastPercent = percent
+                notifyProgress(
+                    onProgress,
+                    Progress.Downloading(candidate.version.toString(), bytes, candidate.bytes)
+                )
+            }
+        }
+        report(0L)
         file.delete()
         var previousFailure: IOException? = null
         repeat(4) { attempt ->
             val received = if (file.exists()) file.length() else 0L
+            report(received)
             if (received == candidate.bytes) return
             require(received in 0L until candidate.bytes) {
                 "Downloaded APK exceeds expected size"
@@ -304,7 +343,10 @@ internal object MarketProAutoUpdater {
                     val contentRange = connection.getHeaderField("Content-Range")
                     val canResume = received > 0L && connection.responseCode == 206 &&
                         contentRange?.startsWith("bytes $received-") == true
-                    if (received > 0L && !canResume) file.delete()
+                    if (received > 0L && !canResume) {
+                        file.delete()
+                        report(0L)
+                    }
                     var total = if (canResume) received else 0L
                     connection.inputStream.use { input ->
                         FileOutputStream(file, canResume).buffered().use { output ->
@@ -318,6 +360,7 @@ internal object MarketProAutoUpdater {
                                     "Update download exceeds verified release size"
                                 }
                                 output.write(buffer, 0, n)
+                                report(total)
                             }
                         }
                     }
@@ -348,11 +391,16 @@ internal object MarketProAutoUpdater {
         }.getOrNull()
     }
 
-    suspend fun check(context: Context, force: Boolean = false): Outcome =
+    suspend fun check(
+        context: Context,
+        force: Boolean = false,
+        onProgress: ((Progress) -> Unit)? = null
+    ): Outcome =
         downloadLock.withLock {
         withContext(Dispatchers.IO) {
             if (!BuildConfig.MARKETPRO_AUTO_UPDATE) return@withContext Outcome.NoUpdate
             try {
+                notifyProgress(onProgress, Progress.Checking)
                 val cached = storedReady(context)
                 if (cached != null) return@withContext Outcome.Downloaded(cached)
                 val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -369,7 +417,8 @@ internal object MarketProAutoUpdater {
                 require(dir.isDirectory || dir.mkdirs())
                 val temp = File(dir, "pending-download.apk")
                 val finish = File(dir, "MarketPro-${candidate.version}-signed.apk")
-                downloadResumable(candidate, temp)
+                downloadResumable(candidate, temp, onProgress)
+                notifyProgress(onProgress, Progress.Verifying)
                 require(sha256(temp) == candidate.sha256) {
                     "APK SHA-256 did not match the published GitHub release"
                 }
