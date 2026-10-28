@@ -7,7 +7,7 @@ plugins {
 
 // Android package version is intentionally separate from the launcher label.
 // Keep the home-screen name as "Market Pro" regardless of the release version.
-val marketProDisplayVersion = "4.2.1"
+val marketProDisplayVersion = "4.2.2"
 
 // STAGING ONLY: protected persistent signing key comes from GitHub Actions secrets.
 // Do not commit .jks files or credentials to this public repository.
@@ -41,6 +41,7 @@ android {
         buildConfigField("boolean", "MARKETPRO_STAGING_QA_FINANCE_RPC", "true")
         buildConfigField("boolean", "MARKETPRO_TWO_PHONE_AUTO_SYNC", "true")
         buildConfigField("boolean", "MARKETPRO_REQUISITION_DELETE_RPC", "true")
+        buildConfigField("boolean", "MARKETPRO_AUTO_UPDATE", "true")
         // Preview fields are disabled; no Owner/Staff password collection or network login.
         buildConfigField("boolean", "MARKETPRO_STAFF_LOGIN_ENABLED", "true")
         buildConfigField("boolean", "MARKETPRO_PHONE_REGISTRY_RPC_DEPLOYED", "true")
@@ -67,7 +68,7 @@ android {
         applicationId = "lk.peliyagoda.marketpro.staging.fullapp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 421
+        versionCode = 422
         versionName = marketProDisplayVersion
         // Version metadata remains in the APK for Android Settings > App Info.
         // The launcher title below must NEVER include a version or build channel.
