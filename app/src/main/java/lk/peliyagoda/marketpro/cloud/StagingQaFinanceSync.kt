@@ -78,7 +78,10 @@ internal class StagingQaFinanceHttpTransport {
         require(CloudInboxPagePolicy.uuid(cloudId))
         require(CloudInboxPagePolicy.uuid(row.operationId))
         require(expectedRevision in 0L..2_147_483_647L)
-        require(row.action == "upsert")
+        require(row.action == "upsert" ||
+            (row.action == "delete" && row.entityType == "requisition" &&
+                BuildConfig.MARKETPRO_REQUISITION_DELETE_RPC))
+        if (row.action == "delete") require(expectedRevision > 0L)
 
         val base = URL(BuildConfig.MARKETPRO_SUPABASE_URL)
         require(
@@ -103,7 +106,10 @@ internal class StagingQaFinanceHttpTransport {
             .put("p_expected_revision", expectedRevision)
             .put("p_payload", payload)
 
-        val target = URL(base, "/rest/v1/rpc/marketpro_qa_finance_apply_v1")
+        val rpc = if (row.action == "delete")
+            "/rest/v1/rpc/marketpro_qa_requisition_delete_v421"
+            else "/rest/v1/rpc/marketpro_qa_finance_apply_v1"
+        val target = URL(base, rpc)
         val connection = (target.openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             doOutput = true
@@ -261,7 +267,15 @@ internal class StagingQaFinancialOutboxCoordinator(
     }
 
     private suspend fun payload(row: CloudOutboxEntity): Pair<String, JSONObject> =
-        when (row.entityType) {
+        if (row.entityType == "requisition" && row.action == "delete") {
+            // Removed Room row is gone; reconstruct the trusted business key.
+            val key = split(row.entityKey, 3)
+            require(key[1] in lk.peliyagoda.marketpro.data.MarketConstants.kitchens)
+            key[0] to JSONObject()
+                .put("business_date", key[0])
+                .put("kitchen", key[1])
+                .put("item_id", itemUuid(key[2].toLong()))
+        } else when (row.entityType) {
             "purchase" -> {
                 val key = split(row.entityKey, 2)
                 val itemId = key[1].toLong()
@@ -355,9 +369,11 @@ internal class StagingQaFinancialOutboxCoordinator(
         var held = 0
         for (row in pending) {
             try {
-                if (row.action != "upsert") throw StagingQaHeld(
-                    "Delete is retained for Owner review in this staging API"
-                )
+                if (row.action != "upsert" &&
+                    !(row.action == "delete" && row.entityType == "requisition" &&
+                        BuildConfig.MARKETPRO_REQUISITION_DELETE_RPC)) {
+                    throw StagingQaHeld("Financial delete type is not supported")
+                }
                 val cloudId = cloud.cloudId(row.entityType, row.entityKey)
                     ?: throw StagingQaHeld("Financial row has no durable Cloud UUID")
                 UUID.fromString(cloudId)
@@ -420,6 +436,15 @@ internal class StagingQaFinancialOutboxCoordinator(
                             receipt.revision.toString()
                         )
                     )
+                    if (row.entityType == "requisition" && row.action == "delete") {
+                        // Persist tombstone state atomically with conditional ACK.
+                        cloud.setState(CloudSyncStateEntity(
+                            "pull_applied_rev|requisition|$cloudId",
+                            receipt.revision.toString()))
+                        cloud.setState(CloudSyncStateEntity(
+                            "tombstone_applied|requisition|$cloudId",
+                            receipt.revision.toString()))
+                    }
                     singletonAckHash(row.entityType, body)?.let { acceptedHash ->
                         cloud.setState(
                             CloudSyncStateEntity(
