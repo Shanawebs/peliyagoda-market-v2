@@ -22,6 +22,8 @@ import lk.peliyagoda.marketpro.BuildConfig
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
@@ -49,7 +51,14 @@ internal object MarketProAutoUpdater {
     }
 
     private const val API =
-        "https://api.github.com/repos/Shanawebs/peliyagoda-market-v2/releases?per_page=30"
+        "https://api.github.com/repos/Shanawebs/peliyagoda-market-v2/releases?per_page=10"
+    // Independent metadata fallback: this public, read-only row contains
+    // NO account, purchase, device, staff, finance, or private information.
+    private const val CLOUD_CHANNEL =
+        "https://qqiheexpbuzohllugxrk.supabase.co/rest/v1/" +
+        "marketpro_public_update_channel?select=version_name,version_code,apk_url," +
+        "sha256,size_bytes&channel=eq.marketpro-staging&limit=1"
+    private const val CLOUD_HOST = "qqiheexpbuzohllugxrk.supabase.co"
     private const val PREFS = "marketpro_signed_updates_v1"
     private const val MIN_INTERVAL_MS = 2L * 60 * 60 * 1000
     private const val MAX_APK_BYTES = 50L * 1024 * 1024
@@ -128,7 +137,7 @@ internal object MarketProAutoUpdater {
         return hex(digest.digest())
     }
 
-    private fun allowedSource(url: String): Boolean {
+    private fun allowedGithub(url: String): Boolean {
         val uri = Uri.parse(url)
         val host = uri.host?.lowercase() ?: return false
         return uri.scheme == "https" && uri.port == -1 &&
@@ -138,7 +147,24 @@ internal object MarketProAutoUpdater {
                 host == "github-releases.githubusercontent.com")
     }
 
-    private fun openSafe(url: String): HttpURLConnection {
+    private fun allowedSource(url: String): Boolean =
+        allowedGithub(url) || (Uri.parse(url).scheme == "https" &&
+            Uri.parse(url).host == CLOUD_HOST && Uri.parse(url).port == -1)
+
+    // Handle intermittent 4G TCP aborts without repeating validation errors.
+    private fun <T> networkRetry(block: () -> T): T {
+        var last: IOException? = null
+        repeat(3) { attempt ->
+            try { return block() }
+            catch (e: IOException) {
+                last = e
+                if (attempt < 2) Thread.sleep(450L * (attempt + 1))
+            }
+        }
+        throw last ?: IOException("Network connection unavailable")
+    }
+
+    private fun openSafe(url: String, rangeStart: Long = 0L): HttpURLConnection {
         var next = url
         repeat(7) {
             require(allowedSource(next)) { "Update URL is not on a trusted GitHub host" }
@@ -148,6 +174,15 @@ internal object MarketProAutoUpdater {
             connection.readTimeout = 45_000
             connection.setRequestProperty("User-Agent", "MarketPro-Android-Updater")
             connection.setRequestProperty("Accept", "application/vnd.github+json")
+            if (Uri.parse(next).host == CLOUD_HOST) {
+                // Only public publishable key; no service_role, user JWT or
+                // login session is sent to the update metadata endpoint.
+                connection.setRequestProperty(
+                    "apikey", BuildConfig.MARKETPRO_SUPABASE_PUBLISHABLE_KEY)
+            }
+            if (rangeStart > 0) {
+                connection.setRequestProperty("Range", "bytes=$rangeStart-")
+            }
             val code = connection.responseCode
             if (code in 300..399) {
                 val destination = connection.getHeaderField("Location")
@@ -164,7 +199,7 @@ internal object MarketProAutoUpdater {
         error("Too many update server redirects")
     }
 
-    private fun readLatest(): Candidate? {
+    private fun readGithubLatest(): Candidate? {
         val connection = openSafe(API)
         val data = try {
             connection.inputStream.use { input ->
@@ -201,12 +236,97 @@ internal object MarketProAutoUpdater {
                 val size = asset.optLong("size")
                 val download = asset.optString("browser_download_url")
                 if (!hashRegex.matches(sum) || size !in 1L..MAX_APK_BYTES ||
-                    !allowedSource(download)) continue
+                    !allowedGithub(download)) continue
                 best = Candidate(releaseVersion, download, sum, size)
                 break
             }
         }
         return best
+    }
+
+    // Supabase fallback is invoked if the phone's network aborts GitHub API
+    // access. The fetched APK must STILL pass the installed signer and SHA256
+    // verification before Android's installer can be opened.
+    private fun readCloudLatest(): Candidate? {
+        val connection = openSafe(CLOUD_CHANNEL)
+        val body = try {
+            connection.inputStream.bufferedReader().use { reader ->
+                val body = reader.readText()
+                require(body.length <= 4096) { "Cloud update metadata is oversized" }
+                body
+            }
+        } finally { connection.disconnect() }
+        val entries = JSONArray(body)
+        if (entries.length() == 0) return null
+        val item = entries.getJSONObject(0)
+        val newest = version("v" + item.getString("version_name"))
+            ?: error("Invalid Cloud version")
+        val installed = version("v" + BuildConfig.VERSION_NAME)
+            ?: error("Unknown installed Market Pro version")
+        if (newest <= installed) return null
+        val code = item.getLong("version_code")
+        require(code > 0L) { "Invalid Cloud version code" }
+        val url = item.getString("apk_url")
+        val sha = item.getString("sha256").lowercase()
+        val bytes = item.getLong("size_bytes")
+        require(allowedGithub(url) && hashRegex.matches(sha) &&
+            bytes in 1L..MAX_APK_BYTES) { "Invalid Cloud update metadata" }
+        return Candidate(newest, url, sha, bytes)
+    }
+
+    private fun readLatest(): Candidate? {
+        val github = runCatching { networkRetry { readGithubLatest() } }
+        if (github.isSuccess) return github.getOrNull()
+        val cloud = runCatching { networkRetry { readCloudLatest() } }
+        if (cloud.isSuccess) return cloud.getOrNull()
+        throw IOException(
+            "Both GitHub and Cloud update checks failed. " +
+            "Try Wi-Fi or check the mobile network connection.")
+    }
+
+    // Continue partial downloads using HTTP Range instead of downloading an
+    // entire 13 MB+ APK again after every intermittent mobile-data abort.
+    private fun downloadResumable(candidate: Candidate, file: File) {
+        file.delete()
+        var previousFailure: IOException? = null
+        repeat(4) { attempt ->
+            val received = if (file.exists()) file.length() else 0L
+            if (received == candidate.bytes) return
+            require(received in 0L until candidate.bytes) {
+                "Downloaded APK exceeds expected size"
+            }
+            try {
+                val connection = openSafe(candidate.url, rangeStart = received)
+                try {
+                    val contentRange = connection.getHeaderField("Content-Range")
+                    val canResume = received > 0L && connection.responseCode == 206 &&
+                        contentRange?.startsWith("bytes $received-") == true
+                    if (received > 0L && !canResume) file.delete()
+                    var total = if (canResume) received else 0L
+                    connection.inputStream.use { input ->
+                        FileOutputStream(file, canResume).buffered().use { output ->
+                            val buffer = ByteArray(64 * 1024)
+                            while (true) {
+                                val n = input.read(buffer)
+                                if (n < 0) break
+                                total += n
+                                require(total <= candidate.bytes &&
+                                    total <= MAX_APK_BYTES) {
+                                    "Update download exceeds verified release size"
+                                }
+                                output.write(buffer, 0, n)
+                            }
+                        }
+                    }
+                    if (total == candidate.bytes) return
+                    throw IOException("Incomplete APK download")
+                } finally { connection.disconnect() }
+            } catch (e: IOException) {
+                previousFailure = e
+                if (attempt < 3) Thread.sleep(500L * (attempt + 1))
+            }
+        }
+        throw previousFailure ?: IOException("Update download did not complete")
     }
 
     private fun storedReady(context: Context): Ready? {
@@ -246,26 +366,7 @@ internal object MarketProAutoUpdater {
                 require(dir.isDirectory || dir.mkdirs())
                 val temp = File(dir, "pending-download.apk")
                 val finish = File(dir, "MarketPro-${candidate.version}-signed.apk")
-                temp.delete()
-                val connection = openSafe(candidate.url)
-                try {
-                    connection.inputStream.use { input ->
-                        temp.outputStream().buffered().use { output ->
-                            val buffer = ByteArray(64 * 1024)
-                            var count = 0L
-                            while (true) {
-                                val n = input.read(buffer)
-                                if (n < 0) break
-                                count += n
-                                require(count <= MAX_APK_BYTES && count <= candidate.bytes) {
-                                    "Update download exceeds advertised size"
-                                }
-                                output.write(buffer, 0, n)
-                            }
-                            require(count == candidate.bytes) { "Incomplete update download" }
-                        }
-                    }
-                } finally { connection.disconnect() }
+                downloadResumable(candidate, temp)
                 require(sha256(temp) == candidate.sha256) {
                     "APK SHA-256 did not match the published GitHub release"
                 }
