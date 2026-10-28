@@ -283,8 +283,32 @@ jobs:
           set -euo pipefail
           grep -Fq '"MARKETPRO_REQUISITION_DELETE_RPC", "true"' stagingMarket/build.gradle.kts
           grep -Fq '"MARKETPRO_REQUISITION_DELETE_RPC", "false"' app/build.gradle.kts
-          grep -Fq 'marketpro_qa_requisition_delete_v422' app/src/main/java/lk/peliyagoda/marketpro/cloud/StagingQaFinanceSync.kt
+          grep -Fq 'marketpro_qa_requisition_delete_v421' app/src/main/java/lk/peliyagoda/marketpro/cloud/StagingQaFinanceSync.kt
           grep -Fq 'REMOVE_DELETED_REQUISITION' app/src/main/java/lk/peliyagoda/marketpro/cloud/CloudDomainMergeEngine.kt
-          grep -Fq 'TO authenticated' supabase/staging/marketpro_requisition_delete_v422.sql
-          grep -Fq 'revision=revision+1' supabase/staging/marketpro_requisition_delete_v422.sql
+          grep -Fq 'TO authenticated' supabase/staging/marketpro_requisition_delete_v421.sql
+          grep -Fq 'revision=revision+1' supabase/staging/marketpro_requisition_delete_v421.sql
           test -s app/src/test/java/lk/peliyagoda/marketpro/cloud/RequisitionTombstonePolicyTest.kt
+
+      - name: Publish v4.2.2 signed QA release for in-app automatic updates
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="marketpro-auto-update-qa-v4.2.2"
+          APK="MarketPro-v4.2.2-AutoUpdate-QA-signed.apk"
+          test -s "$APK"
+          if gh release view "$TAG" --repo Shanawebs/peliyagoda-market-v2 >/dev/null 2>&1; then
+            echo "::error::QA release exists already; never overwrite a published signed APK"
+            exit 1
+          fi
+          gh release create "$TAG" "$APK" \
+            --repo Shanawebs/peliyagoda-market-v2 \
+            --target "$GITHUB_SHA" --prerelease \
+            --title "Market Pro v4.2.2 Auto Update QA" \
+            --notes "Signed QA release. Launcher name is Market Pro. Android versionCode 422. Includes verified in-app update checker (QA, Stable and Hotfix releases), background download, pinned package/signature and SHA-256 checks, and Android user-approved installation. Cloud/Owner/Team sync and v4.2.1 requisition deletion are unchanged. Install over existing Market Pro without uninstalling or clearing app data. This is a QA build pending real-device updater validation."
+          DIGEST="$(sha256sum "$APK" | awk '{print $1}')"
+          gh api "repos/Shanawebs/peliyagoda-market-v2/releases/tags/$TAG" \
+            --jq '.assets[] | select(.name == "MarketPro-v4.2.2-AutoUpdate-QA-signed.apk") | .digest' \
+            | grep -Fx "sha256:$DIGEST"
+          echo "Published signed QA release with verified asset digest"
