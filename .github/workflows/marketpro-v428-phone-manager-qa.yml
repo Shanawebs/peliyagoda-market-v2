@@ -76,7 +76,7 @@ jobs:
           set -euo pipefail
           SQL=supabase/staging/marketpro_staging_owner_secure_relink_v413.sql
           C=app/src/main/java/lk/peliyagoda/marketpro/cloud/CloudPhoneRegistryClient.kt
-          P=app/src/main/java/lk/peliyagoda/marketpro/ui/CloudPhoneManagementPanel.kt
+          P=app/src/main/java/lk/peliyagoda/marketpro/ui/LinkedPhonesManagerDialog.kt
           T=app/src/main/java/lk/peliyagoda/marketpro/ui/TeamAccessSetupDialog.kt
           grep -Fq 'marketpro_qa_owner_secure_relink_v1' "$SQL"
           grep -Fq 'auth.jwt()' "$SQL"
