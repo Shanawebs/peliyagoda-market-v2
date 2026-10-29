@@ -9,7 +9,12 @@ internal object MarketPhotoUploadPolicy {
         val d=LocalDate.parse(day)
         val current=LocalDate.parse(today)
         d.toString()==day && current.toString()==today &&
-            !d.isAfter(current) && (owner || d==current)
+            !d.isAfter(current) && (owner || !d.isBefore(current.minusDays(7)))
+    }.getOrDefault(false)
+    fun capturedOnDay(day: String, timestampMs: Long): Boolean = runCatching {
+        java.time.Instant.ofEpochMilli(timestampMs)
+            .atZone(java.time.ZoneId.of("Asia/Colombo"))
+            .toLocalDate().toString()==day
     }.getOrDefault(false)
     fun allowedLength(bytes: Long) = bytes in 100L..MAX_CLOUD_BYTES
 }
