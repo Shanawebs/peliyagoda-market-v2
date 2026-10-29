@@ -40,6 +40,7 @@ internal class MarketPhotoSyncWorker(context:Context,parameters:WorkerParameters
         val role=MarketProActiveRole.current(app) ?: return@withContext Result.success()
         val owner=role==TeamRole.OWNER
         val today=LocalDate.now(ZoneId.of("Asia/Colombo")).toString()
+        val cutoff=LocalDate.parse(today).minusDays(7).toString()
         val db=MarketDatabase.get(app)
         val dao=db.photoDao()
         val identity=db.cloudDao()
@@ -56,7 +57,7 @@ internal class MarketPhotoSyncWorker(context:Context,parameters:WorkerParameters
         val items=db.dao().allItems().associate { it.id to it.name }
         var retry=false
 
-        for(photo in dao.waitingItemLinkEligible(today,owner,20)) {
+        for(photo in dao.waitingItemLinkEligible(today,cutoff,owner,20)) {
             val name=items[photo.itemId] ?: continue
             val journalId=runCatching {
                 identity.cloudId("item",photo.itemId.toString())
@@ -76,8 +77,10 @@ internal class MarketPhotoSyncWorker(context:Context,parameters:WorkerParameters
         }
 
         var claimed=0
-        for(photo in dao.pendingUploadEligible(today,owner,MarketPhotoUploadPolicy.BATCH)){
-            if(!MarketPhotoUploadPolicy.eligible(photo.businessDate,today,owner)) continue
+        for(photo in dao.pendingUploadEligible(today,cutoff,owner,MarketPhotoUploadPolicy.BATCH)){
+            if(!MarketPhotoUploadPolicy.eligible(photo.businessDate,today,owner) ||
+                (!owner && !MarketPhotoUploadPolicy.capturedOnDay(
+                    photo.businessDate,photo.capturedAtMs))) continue
             val original=File(photo.localOriginalPath)
             val valid=runCatching {
                 original.isFile &&
@@ -106,15 +109,16 @@ internal class MarketPhotoSyncWorker(context:Context,parameters:WorkerParameters
         }
         // Exponential WorkManager backoff avoids a busy retry loop.
         if(retry || (claimed==MarketPhotoUploadPolicy.BATCH &&
-            dao.pendingEligibleCount(today,owner)>0)) Result.retry()
+            dao.pendingEligibleCount(today,cutoff,owner)>0)) Result.retry()
         else Result.success()
     }
 
     private suspend fun registerRecentOriginals(
         app:Context,db:MarketDatabase,today:String,owner:Boolean
     ){
-        val days=if(owner)listOf(today,LocalDate.parse(today).minusDays(1).toString())
-            else listOf(today)
+        val days=(0L..7L).map {
+            LocalDate.parse(today).minusDays(it).toString()
+        }
         val validItems=db.dao().allItems().map { it.id }.toSet()
         val photoDao=db.photoDao()
         var examined=0
