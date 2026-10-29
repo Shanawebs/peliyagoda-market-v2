@@ -50,6 +50,7 @@ internal fun LinkedPhonesManagerDialog(
     var message by remember { mutableStateOf("") }
     var showOldOwners by remember { mutableStateOf(false) }
     var toRemove by remember { mutableStateOf<CloudPhoneRegistryClient.Phone?>(null) }
+    var toApprove by remember { mutableStateOf<CloudPhoneRegistryClient.Phone?>(null) }
     var confirmOwnerRecovery by remember { mutableStateOf(false) }
 
     fun execute(operation: suspend () -> Unit) {
@@ -126,7 +127,11 @@ internal fun LinkedPhonesManagerDialog(
                                 isThisPhone = phone.id == currentDeviceId,
                                 ownerCanManage = data.role == "owner",
                                 busy = busy,
-                                onRemove = { toRemove = phone }
+                                onRemove = { toRemove = phone },
+                                onVerifyPhotoKey = if (data.role == "owner" &&
+                                    phone.role == "editor") {
+                                    { toApprove = phone }
+                                } else null
                             )
                         }
                     }
@@ -140,12 +145,7 @@ internal fun LinkedPhonesManagerDialog(
                                 busy = busy,
                                 onRemove = { toRemove = phone },
                                 onApprove = if (data.role == "owner") {
-                                    {
-                                        execute {
-                                            client.decideTeamPhone(phone.id, true)
-                                            message = "Team approved. Activate / Sync on that phone."
-                                        }
-                                    }
+                                    { toApprove = phone }
                                 } else null
                             )
                         }
@@ -182,6 +182,50 @@ internal fun LinkedPhonesManagerDialog(
             TextButton(enabled = !busy, onClick = onClose) { Text("Close") }
         }
     )
+
+    val selectedApproval = toApprove
+    if (selectedApproval != null) {
+        AlertDialog(
+            onDismissRequest = { if (!busy) toApprove = null },
+            containerColor = Color.White,
+            title = { Text("Approve Team Phone + Photo Key?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Text(selectedApproval.label, fontWeight = FontWeight.Bold)
+                    Text("New Device ID ..." + selectedApproval.id.takeLast(8))
+                    Text(
+                        "Verify this request came from the Team phone you recognize. " +
+                        "A NEW Android Keystore Photo Key must first be registered " +
+                        "by the Team phone. Fresh Owner Authenticator MFA is required."
+                    )
+                    Text(
+                        "If another approved phone has the SAME Team account and " +
+                        "phone model label, this approval REVOKES that old phone's " +
+                        "Cloud and Photo access. Unsynced data on the old install " +
+                        "is NOT transferred. Cloud purchase records and Box photos " +
+                        "are never deleted.",
+                        color = Color(0xFF975420)
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(enabled = !busy, onClick = { toApprove = null }) {
+                    Text("Cancel")
+                }
+            },
+            confirmButton = {
+                Button(enabled = !busy, onClick = {
+                    val id = selectedApproval.id
+                    toApprove = null
+                    execute {
+                        client.decideTeamPhone(id, true)
+                        message = "Owner-approved Team Phone + Photo Key. " +
+                            "Run Activate / Sync Two-Phone on the Team phone."
+                    }
+                }) { Text("Approve Both Securely") }
+            }
+        )
+    }
 
     val selected = toRemove
     if (selected != null) {
@@ -254,7 +298,8 @@ private fun LinkedDeviceRow(
     ownerCanManage: Boolean,
     busy: Boolean,
     onRemove: () -> Unit,
-    onApprove: (() -> Unit)? = null
+    onApprove: (() -> Unit)? = null,
+    onVerifyPhotoKey: (() -> Unit)? = null
 ) {
     Surface(
         color = Color(0xFFF5FAFB),
@@ -282,7 +327,12 @@ private fun LinkedDeviceRow(
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (onApprove != null) {
                         OutlinedButton(enabled = !busy, onClick = onApprove) {
-                            Text("Approve")
+                            Text("Approve Phone + Key")
+                        }
+                    }
+                    if (onVerifyPhotoKey != null) {
+                        OutlinedButton(enabled = !busy, onClick = onVerifyPhotoKey) {
+                            Text("Verify Photo Key")
                         }
                     }
                     OutlinedButton(enabled = !busy, onClick = onRemove) {
