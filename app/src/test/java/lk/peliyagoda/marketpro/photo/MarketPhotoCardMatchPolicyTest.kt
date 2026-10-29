@@ -52,7 +52,7 @@ class MarketPhotoCardMatchPolicyTest {
             "p1", "a".repeat(64), 3502,
             "2026-10-29T10:23:08.618Z", "remote-a", "අඟුණ කොල"
         )
-        val timestamp = MarketPhotoCardMatchPolicy.latestCapturedAtMs(listOf(remotePhoto))
+        val timestamp = requireNotNull(MarketPhotoCardMatchPolicy.latestCapturedAtMs(listOf(remotePhoto)))
         assertEquals(java.time.Instant.parse(remotePhoto.capturedAt).toEpochMilli(), timestamp)
         val row = lk.peliyagoda.marketpro.util.consolidate(
             items = listOf(lk.peliyagoda.marketpro.data.ItemEntity(4L, "අඟුණ කොල", "Vegetables")),
@@ -60,7 +60,7 @@ class MarketPhotoCardMatchPolicyTest {
             purchases = listOf(lk.peliyagoda.marketpro.data.PurchaseEntity(date,4L,10000,20000))
         ).single()
         assertEquals(
-            true, lk.peliyagoda.marketpro.util.isArchivedForMarket(row,timestamp,timestamp!!+60000L)
+            true, lk.peliyagoda.marketpro.util.isArchivedForMarket(row,timestamp,timestamp+60000L)
         )
         assertEquals(
             false,lk.peliyagoda.marketpro.util.isArchivedForMarket(row,timestamp,timestamp+59999L)
