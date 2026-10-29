@@ -6,13 +6,13 @@ import java.time.LocalDate
 import java.util.UUID
 
 internal object MarketPhotoIdentity {
- fun day(input:String):String {
+ fun validateDay(input:String):String {
    val parsed=LocalDate.parse(input)
    require(parsed.year in 2000..2100 && parsed.toString()==input)
    return input
  }
  fun id(original:File,day:String,itemId:Long):String {
-   day(day);require(itemId>0 && original.extension.equals("jpg",true))
+   validateDay(day);require(itemId>0 && original.extension.equals("jpg",true))
    val canonical="marketpro-local-jpeg-v1|$day|$itemId|"+original.canonicalPath
    return UUID.nameUUIDFromBytes(canonical.toByteArray(StandardCharsets.UTF_8)).toString()
  }
@@ -26,7 +26,7 @@ internal object MarketPhotoIdentity {
    return digest.digest().joinToString(""){"%02x".format(it)}
  }
  fun filename(day:String,itemId:Long,id:String):String {
-   day(day);require(itemId>0 && UUID.fromString(id).toString()==id)
+   validateDay(day);require(itemId>0 && UUID.fromString(id).toString()==id)
    return "MarketPro_"+day.replace("-","")+"_Item"+itemId+"_"+id+".jpg"
  }
 }
