@@ -185,9 +185,17 @@ internal class CloudPhoneRegistryClient(context: Context) {
             result.optBoolean("enabled") && result.optBoolean("can_write")) {
             "Owner device recovery did not return an approved Owner state"
         }
+        // The trusted Owner just completed fresh AAL2 MFA. Register the NEW
+        // non-exportable Keystore proof while the same short MFA window is
+        // still fresh. Avoid a redundant second manual Photo Key setup after
+        // an Owner app reinstall.
+        val photoKey = runCatching { MarketPhotoGatewayClient(app).enrollThisPhone() }
         return when(result.optString("status")) {
-            "already_active" -> "This Owner phone is already approved."
-            "relinked" -> "Owner phone securely re-linked. Old device revoked. You may approve the pending Team phone."
+            "already_active", "relinked" ->
+                if (photoKey.isSuccess)
+                    "Owner phone linked and Photo Key approved securely. Existing Cloud photos remain available."
+                else
+                    "Owner phone linked; Photo Key not yet enrolled. Open Photo Cloud Security to retry."
             else -> error("Unexpected Owner recovery response")
         }
     }
