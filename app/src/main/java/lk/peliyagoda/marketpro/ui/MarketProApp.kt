@@ -86,6 +86,7 @@ import lk.peliyagoda.marketpro.util.DevicePerformancePolicy
 import lk.peliyagoda.marketpro.data.CloudDeviceIdentity
 import lk.peliyagoda.marketpro.security.RestorePinGuard
 import lk.peliyagoda.marketpro.update.MarketProAutoUpdater
+import lk.peliyagoda.marketpro.photo.MarketPhotoSyncScheduler
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -116,6 +117,9 @@ fun MarketProApp(vm: MarketViewModel) {
         // physically covered by the keyboard. Hide it from the layout while
         // typing so the empty ~80dp strip above the IME disappears.
         val density = LocalDensity.current
+        LaunchedEffect(context) {
+            MarketPhotoSyncScheduler.schedule(context.applicationContext)
+        }
         val keyboardVisible = WindowInsets.ime.getBottom(density) >
             with(density) { 90.dp.roundToPx() }
         // 4 GB devices often struggle to render two complex lists at once
