@@ -1,0 +1,111 @@
+name: Publish Market Pro v4.3.2 Read-Only Cloud Photo Gallery QA
+
+on:
+  push:
+    branches:
+      - feature/marketpro-v432-cloud-photo-gallery-qa
+    paths:
+      - .github/workflows/marketpro-v432-photo-gallery-publish.yml
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: marketpro-v432-photo-gallery-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: marketpro-photogallery-qa-v4.3.2
+      APK: MarketPro-v4.3.2-PhotoGallery-QA-signed.apk
+      SOURCE_RUN: '40893114277'
+      SOURCE_ARTIFACT: MarketPro-v4.3.2-PhotoGallery-Signed-QA-NOT-RELEASE
+      EXPECTED_CERT: 0a617edb7520deb0255cfc13ee0b2ee8382e2d8e6cb7f8e1dff68b4fbd130c4a
+      EXPECTED_PACKAGE: lk.peliyagoda.marketpro.staging.fullapp
+    steps:
+      - name: Download existing signed verified candidate, never rebuild for release
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" --name "$SOURCE_ARTIFACT" --dir .
+          test -s "$APK"
+          sha256sum "$APK"
+      - name: Install Android APK inspection utilities
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" --install "build-tools;35.0.0"
+      - name: Verify signed APK is a normal update to both v4.3.0 and Samsung v4.3.1
+        shell: bash
+        run: |
+          set -euo pipefail
+          AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          SIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          "$AAPT" dump badging "$APK" > /tmp/newbadging
+          grep -Fq "package: name='$EXPECTED_PACKAGE'" /tmp/newbadging
+          grep -Fq "versionCode='432'" /tmp/newbadging
+          grep -Fq "versionName='4.3.2'" /tmp/newbadging
+          ! grep -Fq 'application-debuggable' /tmp/newbadging
+          "$SIGNER" verify --print-certs "$APK" > /tmp/newsigner
+          grep -Fqi "$EXPECTED_CERT" /tmp/newsigner
+          mkdir -p /tmp/older
+          gh release download marketpro-photocloud-qa-v4.3.0 --repo "$GITHUB_REPOSITORY" --pattern 'MarketPro-v4.3.0-PhotoCloud-QA-signed.apk' --dir /tmp/older
+          gh release download marketpro-samsung-recovery-only-v4.3.1 --repo "$GITHUB_REPOSITORY" --pattern 'MarketProRecovery-v4.3.1-Samsung-QA-signed.apk' --dir /tmp/older
+          NEW_CERT="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' /tmp/newsigner | head -n1)"
+          test -n "$NEW_CERT"
+          for name in MarketPro-v4.3.0-PhotoCloud-QA-signed.apk MarketProRecovery-v4.3.1-Samsung-QA-signed.apk; do
+            "$AAPT" dump badging "/tmp/older/$name" > /tmp/oldbadging
+            grep -Fq "package: name='$EXPECTED_PACKAGE'" /tmp/oldbadging
+            "$SIGNER" verify --print-certs "/tmp/older/$name" > /tmp/oldsigner
+            OLD_CERT="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' /tmp/oldsigner | head -n1)"
+            test -n "$OLD_CERT" && test "$OLD_CERT" = "$NEW_CERT"
+          done
+          echo 'PASS: version 432 has same package and signing cert as 430 and 431'
+      - name: Publish approved read-only QA Gallery as normal in-app update
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::QA release already exists, refusing overwrite"
+            exit 1
+          fi
+          cat > /tmp/release-notes.md <<'NOTES'
+          # Market Pro v4.3.2 — Cross-Phone Cloud Photo Gallery QA
+
+          **Install only via the existing App:** Menu → Check For Updates.
+          Normal in-place signed update from v4.3.0 (Huawei/HONOR) or v4.3.1 (Samsung). Do not uninstall, clear storage, or restore backups.
+
+          Changes:
+          - Menu → View Cloud Photos: date-indexed Box photo browser, independent of local Room numeric item IDs.
+          - Item Photo popup → View All Cloud Photos For This Date when a local/cloud UUID mapping is absent.
+          - Authenticated, signed photo list_day endpoint, still requiring approved Photo Key and active linked device.
+          - Verified SHA-256 of downloaded Box original before preview. No Photo Cloud tokens reach phones.
+          - Recovery safeguards from v4.3.1 remain; **automatic photo uploads remain temporarily PAUSED** on this QA build while the Samsung issue is investigated. This release is for viewing existing Box uploads, not testing new capture/upload.
+
+          Backend read-only list_day action deployed; prior list/upload/download routes retained. Full signed Android QA compile/test is verified, but live photo viewing on Huawei/Samsung is still to be tested.
+          NOTES
+          gh release create "$TAG" "$APK" --repo "$GITHUB_REPOSITORY" \
+            --target 06bb602c27734f5609e4dc25c15eb5a0d9840583 \
+            --prerelease --title 'Market Pro v4.3.2 — Cloud Photo Gallery QA' \
+            --notes-file /tmp/release-notes.md
+      - name: Confirm published APK digest and byte length
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED="sha256:$(sha256sum "$APK" | cut -d' ' -f1)"
+          ACTUAL="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" \
+            --jq '.assets[] | select(.name=="MarketPro-v4.3.2-PhotoGallery-QA-signed.apk") | .digest')"
+          SIZE="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" \
+            --jq '.assets[] | select(.name=="MarketPro-v4.3.2-PhotoGallery-QA-signed.apk") | .size')"
+          test -n "$ACTUAL" && test "$ACTUAL" = "$EXPECTED"
+          test "$SIZE" = "$(stat -c%s "$APK")"
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" \
+            --jq '{tag:.tag_name,prerelease:.prerelease,draft:.draft,assets:[.assets[]|{name,size,digest}]}'
