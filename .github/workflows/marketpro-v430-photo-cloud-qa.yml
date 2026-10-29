@@ -1,0 +1,57 @@
+name: Market Pro v4.3.0 Photo Cloud QA Build
+
+on:
+  push:
+    branches:
+      - feature/marketpro-v430-photo-cloud-qa
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: marketpro-v430-photo-cloud-qa
+  cancel-in-progress: true
+
+jobs:
+  photo-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0"
+      - name: Verify QA version, migration and no sensitive token in APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'val marketProDisplayVersion = "4.3.0"' stagingMarket/build.gradle.kts
+          grep -Fq 'versionCode = 430' stagingMarket/build.gradle.kts
+          grep -Fq 'applicationId = "lk.peliyagoda.marketpro.staging.fullapp"' stagingMarket/build.gradle.kts
+          grep -Fq 'version = 8,' app/src/main/java/lk/peliyagoda/marketpro/data/MarketDatabase.kt
+          grep -Fq 'MIGRATION_7_8' app/src/main/java/lk/peliyagoda/marketpro/data/MarketDatabase.kt
+          grep -Fq 'MarketPhotoLocalStore' app/src/main/java/lk/peliyagoda/marketpro/ui/InvoicePhotoControl.kt
+          ! grep -R -E 'BOX_CLIENT_SECRET|SUPABASE_SERVICE_ROLE_KEY' app/src/main/java/lk/peliyagoda/marketpro/photo
+      - name: Compile local photo Room migration and staging debug APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug :stagingMarket:assembleDebug
+      - name: Upload DEBUG QA artifact for internal inspection only
+        uses: actions/upload-artifact@v4
+        with:
+          name: MarketPro-v4.3.0-PhotoLocal-QA-DEBUG-NOT-RELEASE
+          path: stagingMarket/build/outputs/apk/debug/*.apk
+          retention-days: 2
+          if-no-files-found: error
