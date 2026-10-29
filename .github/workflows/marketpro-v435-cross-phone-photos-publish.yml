@@ -1,0 +1,136 @@
+name: Publish Market Pro v4.3.5 Cross Phone Photo Status QA Update
+
+on:
+  push:
+    branches:
+      - feature/marketpro-v435-cross-phone-photo-status-qa
+    paths:
+      - .github/workflows/marketpro-v435-cross-phone-photos-publish.yml
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: marketpro-v435-photo-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_RUN: '40920976377'
+      SOURCE_SHA: c555b7eadcaa72f6fbb44a443fe810c22a8012f4
+      SOURCE_ARTIFACT: MarketPro-v4.3.5-CrossPhonePhotos-Signed-QA-NOT-RELEASE
+      SOURCE_APK: MarketPro-v4.3.5-CrossPhonePhotos-QA-signed.apk
+      APK: MarketPro-v4.3.5-signed.apk
+      TAG: marketpro-cross-phone-photos-v4.3.5
+      OLD_TAG: marketpro-itemcard-photos-v4.3.4
+      OLD_APK: MarketPro-v4.3.4-signed.apk
+      EXPECTED_PACKAGE: lk.peliyagoda.marketpro.staging.fullapp
+      EXPECTED_CERT: 0a617edb7520deb0255cfc13ee0b2ee8382e2d8e6cb7f8e1dff68b4fbd130c4a
+
+    steps:
+      - name: Wait for the pinned signed QA run and check it passed
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run watch "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" --exit-status --interval 10
+          ACTUAL_SHA="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" --jq '.head_sha')"
+          CONCLUSION="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" --jq '.conclusion')"
+          test "$ACTUAL_SHA" = "$SOURCE_SHA"
+          test "$CONCLUSION" = success
+
+      - name: Obtain exact QA-verified signed APK (never rebuild it)
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" --name "$SOURCE_ARTIFACT" --dir .
+          test -s "$SOURCE_APK"
+          cp "$SOURCE_APK" "$APK"
+
+      - name: Install APK verification tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" --install "build-tools;35.0.0"
+
+      - name: Verify v4.3.5 APK certificate, identity and in-place version upgrade
+        shell: bash
+        run: |
+          set -euo pipefail
+          AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          SIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          "$AAPT" dump badging "$APK" > /tmp/mp-new-badging
+          grep -Fq "package: name='$EXPECTED_PACKAGE'" /tmp/mp-new-badging
+          grep -Fq "versionCode='435'" /tmp/mp-new-badging
+          grep -Fq "versionName='4.3.5'" /tmp/mp-new-badging
+          ! grep -Fq 'application-debuggable' /tmp/mp-new-badging
+          "$SIGNER" verify --print-certs "$APK" > /tmp/mp-new-cert
+          grep -Fqi "$EXPECTED_CERT" /tmp/mp-new-cert
+          mkdir -p /tmp/marketpro-previous
+          gh release download "$OLD_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$OLD_APK" --dir /tmp/marketpro-previous
+          "$AAPT" dump badging "/tmp/marketpro-previous/$OLD_APK" > /tmp/mp-old-badging
+          grep -Fq "package: name='$EXPECTED_PACKAGE'" /tmp/mp-old-badging
+          grep -Fq "versionCode='434'" /tmp/mp-old-badging
+          "$SIGNER" verify --print-certs "/tmp/marketpro-previous/$OLD_APK" > /tmp/mp-old-cert
+          NEW_CERT="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' /tmp/mp-new-cert | head -n1)"
+          OLD_CERT="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' /tmp/mp-old-cert | head -n1)"
+          test -n "$NEW_CERT" && test "$NEW_CERT" = "$OLD_CERT"
+          sha256sum "$APK"
+
+      - name: Publish a new immutable-name v4.3.5 release for in-app updates
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Release tag already exists; refusing overwrite"
+            exit 1
+          fi
+          cat > /tmp/marketpro-v435-release-notes.md <<'NOTES'
+          # Market Pro v4.3.5 — Cross-Phone Item Photos and Completion Sorting QA
+
+          Update only inside the installed app: Menu → Check For Updates.
+          **Do NOT uninstall Market Pro or clear its storage.** App ID,
+          stable signing certificate, local purchases, existing device keys,
+          owner MFA and approved team phone associations are unchanged.
+
+          - Restores Camera icon for items without any Local/Cloud photo.
+          - Image icon for the same item/date when a verified Local/Cloud photo exists.
+          - Purchase Card photo popup reads signed cloud date gallery FIRST.
+            Failure of a device-specific local Room UUID lookup cannot block
+            photo browsing; the popup includes manual Refresh and safe error reason.
+          - Selected Market date fetches read-only cloud photo metadata as one
+            batched request per minute (not per card) while Market is visible.
+          - Completing Quantity + Price + photo moves a card below pending work
+            after the same 60-second settle window, including Cloud photos.
+          - Exact server UUID matching wins; ambiguous cloud-name collisions are
+            rejected rather than displaying the wrong item's image.
+          - Background photo UPLOAD is still PAUSED on v4.3.5. This QA release
+            fixes viewing and completion for photos ALREADY in Box Cloud, but
+            does not promise a newly captured photo is synced to another phone.
+            This remains a separately gated Samsung crash-regression task.
+
+          Signed Android CI build, unit tests, certificate identity and version
+          increment are checked before publishing. Live Owner/Team Samsung and
+          Huawei tests are needed before declaring multi-phone photo QA complete.
+          NOTES          gh release create "$TAG" "$APK" --repo "$GITHUB_REPOSITORY" \
+            --target "$SOURCE_SHA" --prerelease \
+            --title 'Market Pro v4.3.5 — Purchase Card Photos QA' \
+            --notes-file /tmp/marketpro-v435-release-notes.md
+
+      - name: Verify uploaded APK digest and length against signed QA original
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED="sha256:$(sha256sum "$APK" | cut -d' ' -f1)"
+          ACTUAL="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '.assets[] | select(.name=="MarketPro-v4.3.5-signed.apk") | .digest')"
+          SIZE="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '.assets[] | select(.name=="MarketPro-v4.3.5-signed.apk") | .size')"
+          test -n "$ACTUAL" && test "$ACTUAL" = "$EXPECTED"
+          test "$SIZE" = "$(stat -c%s "$APK")"
+          echo "Verified APK: $EXPECTED"
