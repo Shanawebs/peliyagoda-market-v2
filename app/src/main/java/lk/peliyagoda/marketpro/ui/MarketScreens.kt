@@ -111,7 +111,6 @@ import lk.peliyagoda.marketpro.util.sortedMarketPurchases
 import lk.peliyagoda.marketpro.util.nextMarketSortRefreshMs
 import kotlinx.coroutines.launch
 import java.time.LocalDate
-import java.time.Instant
 
 @Composable
 private fun SectionCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
@@ -1156,10 +1155,7 @@ fun MarketScreen(
     val photoTimesAcrossPhones = remember(latestPhotoByItem, matchedCloudByItem) {
         val result = latestPhotoByItem.toMutableMap()
         matchedCloudByItem.forEach { (itemId, photos) ->
-            val newest = photos.mapNotNull { photo ->
-                runCatching { Instant.parse(photo.capturedAt).toEpochMilli() }
-                    .getOrNull()
-            }.maxOrNull()
+            val newest = MarketPhotoCardMatchPolicy.latestCapturedAtMs(photos)
             if (newest != null) {
                 result[itemId] = maxOf(result[itemId] ?: 0L, newest)
             }
