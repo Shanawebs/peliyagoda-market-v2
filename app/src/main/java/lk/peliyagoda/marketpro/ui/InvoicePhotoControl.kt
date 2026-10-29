@@ -218,7 +218,11 @@ internal fun InvoicePhotoControl(
                         message("Original Saved; Gallery Copy Unavailable")
                     }
                 }.onFailure {
-                    message("Original Photo Saved; Gallery Registration Pending")
+                    // The original JPEG remains safe even when optional
+                    // Android Gallery registration fails. Worker will
+                    // discover and queue it from app-private storage.
+                    MarketPhotoSyncScheduler.onPhotoSaved(context)
+                    message("Original Saved; Cloud Sync Will Retry")
                 }
             }
         } else {
