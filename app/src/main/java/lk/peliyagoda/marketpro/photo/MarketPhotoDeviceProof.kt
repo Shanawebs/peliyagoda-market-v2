@@ -39,7 +39,7 @@ internal object MarketPhotoDeviceProof {
                      val nonce:String,val bodySha256:String,val signature:String)
 
     fun sign(action:String,deviceId:String,body:ByteArray):Proof {
-        require(action in setOf("upload","list","download","enroll","approve"))
+        require(action in setOf("upload","list","list_day","download","enroll","approve"))
         require(UUID.fromString(deviceId).toString()==deviceId)
         val timestamp=System.currentTimeMillis()/1000
         val nonce=encode(ByteArray(20).also {SecureRandom().nextBytes(it)})
