@@ -47,7 +47,7 @@ jobs:
           printf '%s' "$MARKETPRO_STAGING_KEYSTORE_BASE64" | base64 --decode > "$MARKETPRO_STAGING_SIGNING_STORE_PATH"
           chmod 600 "$MARKETPRO_STAGING_SIGNING_STORE_PATH"
           test -s "$MARKETPRO_STAGING_SIGNING_STORE_PATH"
-      - name: Build tests and signed photo gallery candidate without public release
+      - name: Build tests and signed device recovery candidate without public release
         shell: bash
         run: |
           set -euo pipefail
@@ -65,7 +65,7 @@ jobs:
           grep -Fq "package: name='lk.peliyagoda.marketpro.staging.fullapp'" /tmp/marketpro-v433-badging
           grep -Fq "versionCode='433'" /tmp/marketpro-v433-badging
           grep -Fq 'lk.peliyagoda.marketpro.staging.fullapp' /tmp/marketpro-v433-badging
-          grep -Fq "versionName='4.3.2'" /tmp/marketpro-v433-badging
+          grep -Fq "versionName='4.3.3'" /tmp/marketpro-v433-badging
           ! grep -Fq 'application-debuggable' /tmp/marketpro-v433-badging
           "$SIGNER" verify --print-certs "$APK" > /tmp/marketpro-v433-signers
           grep -Fqi '0a617edb7520deb0255cfc13ee0b2ee8382e2d8e6cb7f8e1dff68b4fbd130c4a' /tmp/marketpro-v433-signers
