@@ -131,6 +131,7 @@ internal fun InvoicePhotoControl(
     var refresh by remember(businessDate, itemId) { mutableIntStateOf(0) }
     var cloudRefresh by remember(businessDate, itemId) { mutableIntStateOf(0) }
     var photoDialog by remember(businessDate, itemId) { mutableStateOf(false) }
+    var cloudBrowseOpen by remember(businessDate, itemId) { mutableStateOf(false) }
     var fullPreview by remember(businessDate, itemId) { mutableStateOf<File?>(null) }
     var pendingPath by rememberSaveable(businessDate, itemId) { mutableStateOf("") }
 
@@ -360,6 +361,15 @@ internal fun InvoicePhotoControl(
                             }
                         }
                     }
+                    OutlinedButton(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = {
+                            photoDialog = false
+                            cloudBrowseOpen = true
+                        }
+                    ) {
+                        Text("View All Cloud Photos For This Date")
+                    }
                     Text("Note: JSON Backup Does Not Include Invoice Images.",
                         color = ProColors.muted,
                         style = MaterialTheme.typography.labelSmall)
@@ -368,6 +378,15 @@ internal fun InvoicePhotoControl(
             confirmButton = {
                 TextButton(onClick = { photoDialog = false }) { Text("Close") }
             }
+        )
+    }
+
+    // Restore the original date-wise, read-only Box gallery from this card.
+    // Its signed Cloud API and previous/next day navigation stay unchanged.
+    if (cloudBrowseOpen) {
+        CloudPhotoGalleryDialog(
+            initialDate = businessDate,
+            onDismiss = { cloudBrowseOpen = false }
         )
     }
 
