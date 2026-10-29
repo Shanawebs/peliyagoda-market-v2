@@ -1,0 +1,70 @@
+name: Market Pro Samsung Android 11 Crash Reproduction QA
+
+on:
+  push:
+    branches:
+      - feature/marketpro-v430-photo-cloud-qa
+    paths:
+      - .github/workflows/marketpro-v430-emulator-crash-qa.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reproduce-startup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PACKAGE: lk.peliyagoda.marketpro.staging.fullapp
+    steps:
+      - name: Obtain signed v4.2.9 and signed v4.3.0 from official GitHub releases
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/marketpro-apks
+          gh release download marketpro-box-connect-qa-v4.2.9 --repo "$GITHUB_REPOSITORY" --pattern '*v4.2.9*signed.apk' --dir /tmp/marketpro-apks
+          gh release download marketpro-photocloud-qa-v4.3.0 --repo "$GITHUB_REPOSITORY" --pattern '*v4.3.0*signed.apk' --dir /tmp/marketpro-apks
+          test -s /tmp/marketpro-apks/MarketPro-v4.2.9-BoxConnect-QA-signed.apk
+          test -s /tmp/marketpro-apks/MarketPro-v4.3.0-PhotoCloud-QA-signed.apk
+      - uses: actions/checkout@v4
+      - name: Reproduce in-place update on Android 11 emulator and collect crash trace
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          profile: pixel_2
+          target: google_apis
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect
+          disable-animations: true
+          script: |
+            set -euo pipefail
+            PACKAGE=lk.peliyagoda.marketpro.staging.fullapp
+            OLD=/tmp/marketpro-apks/MarketPro-v4.2.9-BoxConnect-QA-signed.apk
+            NEW=/tmp/marketpro-apks/MarketPro-v4.3.0-PhotoCloud-QA-signed.apk
+            adb install "$OLD"
+            adb shell am start -n "$PACKAGE/.MainActivity"
+            sleep 12
+            adb shell pidof "$PACKAGE"
+            adb shell am force-stop "$PACKAGE"
+            adb install -r "$NEW"
+            adb logcat -c
+            adb shell am start -n "$PACKAGE/.MainActivity"
+            sleep 16
+            adb shell pidof "$PACKAGE"
+            adb logcat -d -v brief -s AndroidRuntime:E > /tmp/marketpro-android11-crash.txt
+            if grep -Eq 'FATAL EXCEPTION|Process: lk.peliyagoda.marketpro.staging.fullapp' /tmp/marketpro-android11-crash.txt; then
+              cat /tmp/marketpro-android11-crash.txt
+              exit 1
+            fi
+            adb shell am force-stop "$PACKAGE"
+            adb shell am start -n "$PACKAGE/.MainActivity"
+            sleep 12
+            adb shell pidof "$PACKAGE"
+            adb logcat -d -v brief -s AndroidRuntime:E > /tmp/marketpro-android11-crash.txt
+            if grep -Eq 'FATAL EXCEPTION|Process: lk.peliyagoda.marketpro.staging.fullapp' /tmp/marketpro-android11-crash.txt; then
+              cat /tmp/marketpro-android11-crash.txt
+              exit 1
+            fi
+            echo 'Android 11 clean-data in-place update and two startups passed; Samsung user data/state remains untested.'
