@@ -13,6 +13,16 @@ internal data class PhotoCardMatchResult(
 )
 
 internal object MarketPhotoCardMatchPolicy {
+    fun hasAnyPhoto(localCount: Int, cloudCount: Int): Boolean =
+        localCount > 0 || cloudCount > 0
+
+    /** Timestamp of the latest signed Cloud original; never changes purchases. */
+    fun latestCapturedAtMs(photos: List<MarketPhotoGatewayClient.CloudPhoto>): Long? =
+        photos.mapNotNull { photo ->
+            runCatching { java.time.Instant.parse(photo.capturedAt).toEpochMilli() }
+                .getOrNull()?.takeIf { it > 0L }
+        }.maxOrNull()
+
     fun match(
         dayPhotos: List<MarketPhotoGatewayClient.CloudPhoto>,
         linkedCloudItemId: String?,
