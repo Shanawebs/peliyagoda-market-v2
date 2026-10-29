@@ -1,0 +1,101 @@
+name: Publish Market Pro v4.3.0 Signed QA Update
+
+on:
+  push:
+    branches:
+      - feature/marketpro-v430-photo-cloud-qa
+    paths:
+      - .github/workflows/marketpro-v430-publish-update.yml
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: marketpro-v430-qa-update-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: marketpro-photocloud-qa-v4.3.0
+      PREVIOUS_TAG: marketpro-box-connect-qa-v4.2.9
+      APK: MarketPro-v4.3.0-PhotoCloud-QA-signed.apk
+      EXPECTED_CERT: 0a617edb7520deb0255cfc13ee0b2ee8382e2d8e6cb7f8e1dff68b4fbd130c4a
+    steps:
+      - name: Retrieve already-verified signed QA artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download 40850335830 --repo "$GITHUB_REPOSITORY" --name MarketPro-v4.3.0-PhotoCloud-Signed-QA-NOT-RELEASE --dir .
+          test -s "$APK"
+          sha256sum "$APK"
+
+      - name: Install Android verification tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" --install "build-tools;35.0.0" "platform-tools"
+
+      - name: Verify signed v4.3.0 updates signed v4.2.9 in place
+        shell: bash
+        run: |
+          set -euo pipefail
+          AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          SIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          "$AAPT" dump badging "$APK" > /tmp/new_badging
+          grep -Fq "package: name='lk.peliyagoda.marketpro.staging.fullapp'" /tmp/new_badging
+          grep -Fq "versionCode='430'" /tmp/new_badging
+          grep -Fq "versionName='4.3.0'" /tmp/new_badging
+          ! grep -Fq 'application-debuggable' /tmp/new_badging
+          "$SIGNER" verify --print-certs "$APK" > /tmp/new_signing
+          grep -Fqi "$EXPECTED_CERT" /tmp/new_signing
+          mkdir -p /tmp/marketpro-prev
+          gh release download "$PREVIOUS_TAG" --repo "$GITHUB_REPOSITORY" --pattern 'MarketPro-v4.2.9-BoxConnect-QA-signed.apk' --dir /tmp/marketpro-prev
+          OLD=/tmp/marketpro-prev/MarketPro-v4.2.9-BoxConnect-QA-signed.apk
+          test -s "$OLD"
+          "$AAPT" dump badging "$OLD" > /tmp/old_badging
+          grep -Fq "package: name='lk.peliyagoda.marketpro.staging.fullapp'" /tmp/old_badging
+          grep -Fq "versionCode='429'" /tmp/old_badging
+          "$SIGNER" verify --print-certs "$OLD" > /tmp/old_signing
+          OLD_CERT="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' /tmp/old_signing | head -n1)"
+          NEW_CERT="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' /tmp/new_signing | head -n1)"
+          test -n "$OLD_CERT" && test "$OLD_CERT" = "$NEW_CERT"
+          echo 'PASS: in-place signing/package/version compatibility'
+
+      - name: Publish approved QA prerelease
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Release already exists. Refusing overwrite.'
+            exit 1
+          fi
+          cat > /tmp/notes.md <<'NOTES'
+          Market Pro v4.3.0 Photo Cloud QA — approved test release.
+
+          Install ONLY from Market Pro → Menu → Check For Updates.
+          Same package name and certificate as v4.2.9; never uninstall or clear data.
+
+          QA additions: Room photo journal v8; original-quality local Gallery copy; Owner/Team key approval; Box Upload/List/Download and Photo Gallery; offline retry queue. Old-day photo editing remains Owner-only.
+
+          Full Android compile and signing passed. Live two-phone photo sync, Box token refresh, installation/migration on physical devices are not yet verified. Back up important files before first install; JSON backup does not include original photos.
+          NOTES
+          gh release create "$TAG" "$APK" --repo "$GITHUB_REPOSITORY" --target 6c525f142e993780d3aa62313f6659b05ffffb1c --prerelease --title 'Market Pro v4.3.0 Photo Cloud QA' --notes-file /tmp/notes.md
+
+      - name: Verify GitHub digest, byte length and prerelease visibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED="sha256:$(sha256sum "$APK" | cut -d' ' -f1)"
+          ACTUAL="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '.assets[] | select(.name=="MarketPro-v4.3.0-PhotoCloud-QA-signed.apk") | .digest')"
+          SIZE="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '.assets[] | select(.name=="MarketPro-v4.3.0-PhotoCloud-QA-signed.apk") | .size')"
+          test -n "$ACTUAL" && test "$EXPECTED" = "$ACTUAL"
+          test "$SIZE" = "$(stat -c%s "$APK")"
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '{tag: .tag_name, prerelease: .prerelease, draft: .draft, assets: [.assets[] | {name, digest, size}]}'
