@@ -26,4 +26,15 @@ data class MarketPhotoEntity(
  suspend fun waitingItemLink(maxRows:Int):List<MarketPhotoEntity>
  @Query("SELECT * FROM market_photos WHERE syncState='PENDING_UPLOAD' ORDER BY capturedAtMs,photoId LIMIT :maxRows")
  suspend fun pendingUpload(maxRows:Int):List<MarketPhotoEntity>
+
+ @Query("UPDATE market_photos SET cloudItemId=:cloudId,originDeviceId=:deviceId,syncState='PENDING_UPLOAD',updatedAtMs=:now WHERE photoId=:photoId AND syncState='WAITING_ITEM_LINK' AND cloudItemId IS NULL")
+ suspend fun bindVerifiedCloudItem(photoId:String,cloudId:String,deviceId:String,now:Long):Int
+ @Query("UPDATE market_photos SET syncState='UPLOADING',updatedAtMs=:now WHERE photoId=:photoId AND syncState='PENDING_UPLOAD'")
+ suspend fun claimUpload(photoId:String,now:Long):Int
+ @Query("UPDATE market_photos SET syncState='UPLOADED',boxFileId=:boxId,lastError=NULL,updatedAtMs=:now WHERE photoId=:photoId AND syncState='UPLOADING'")
+ suspend fun confirmUploaded(photoId:String,boxId:String?,now:Long):Int
+ @Query("UPDATE market_photos SET syncState='PENDING_UPLOAD',retryCount=retryCount+1,lastError=:reason,updatedAtMs=:now WHERE photoId=:photoId AND syncState='UPLOADING'")
+ suspend fun retryUpload(photoId:String,reason:String,now:Long):Int
+ @Query("UPDATE market_photos SET syncState='PENDING_UPLOAD',updatedAtMs=:now WHERE syncState='UPLOADING' AND updatedAtMs<:beforeMs")
+ suspend fun recoverInterruptedUploads(beforeMs:Long,now:Long):Int
 }
