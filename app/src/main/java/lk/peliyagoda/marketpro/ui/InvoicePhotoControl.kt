@@ -262,9 +262,9 @@ fun InvoicePhotoControl(
         }
     ) {
         Icon(
-            if (photos.isNullOrEmpty() && knownCloudPhotos.isEmpty() &&
-                cloudPhotos.isEmpty()) Icons.Default.CameraAlt
-            else Icons.Default.PhotoLibrary,
+            if (MarketPhotoCardMatchPolicy.hasAnyPhoto(
+                photos?.size ?: 0, maxOf(knownCloudPhotos.size, cloudPhotos.size)
+            )) Icons.Default.PhotoLibrary else Icons.Default.CameraAlt,
             contentDescription = "Invoice Photos (${photos?.size ?: 0} local, ${cloudPhotos.size} cloud) For $itemName",
             tint = ProColors.teal
         )
