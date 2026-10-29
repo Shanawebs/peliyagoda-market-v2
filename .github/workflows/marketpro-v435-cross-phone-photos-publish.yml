@@ -119,9 +119,10 @@ jobs:
           Signed Android CI build, unit tests, certificate identity and version
           increment are checked before publishing. Live Owner/Team Samsung and
           Huawei tests are needed before declaring multi-phone photo QA complete.
-          NOTES          gh release create "$TAG" "$APK" --repo "$GITHUB_REPOSITORY" \
+          NOTES
+          gh release create "$TAG" "$APK" --repo "$GITHUB_REPOSITORY" \
             --target "$SOURCE_SHA" --prerelease \
-            --title 'Market Pro v4.3.5 — Purchase Card Photos QA' \
+            --title 'Market Pro v4.3.5 — Cross-Phone Photos QA' \
             --notes-file /tmp/marketpro-v435-release-notes.md
 
       - name: Verify uploaded APK digest and length against signed QA original
