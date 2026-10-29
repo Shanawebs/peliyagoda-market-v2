@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Build
 import lk.peliyagoda.marketpro.BuildConfig
 import lk.peliyagoda.marketpro.data.CloudDeviceIdentity
+import lk.peliyagoda.marketpro.photo.MarketPhotoGatewayClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -59,7 +60,8 @@ internal class CloudPhoneRegistryClient(context: Context) {
                 "marketpro_qa_cloud_list_phones",
                 "marketpro_qa_list_visible_phones_v428",
                 "marketpro_qa_retire_phone_v428",
-                "marketpro_qa_owner_secure_relink_v1"
+                "marketpro_qa_owner_secure_relink_v1",
+                "marketpro_qa_approve_team_phone_and_photo_v433"
             ))
             val origin=URL(BuildConfig.MARKETPRO_SUPABASE_URL)
             require(origin.protocol=="https" &&
@@ -111,10 +113,29 @@ internal class CloudPhoneRegistryClient(context: Context) {
             .put("p_device_id",deviceId)
             .put("p_device_label",label))
         check(result.optBoolean("ok")) { "Phone request was not accepted" }
+        if(MarketProActiveRole.current(app)==TeamRole.PURCHASING_STAFF) {
+            // This is explicit enrollment, not performed at every app start.
+            // A same-cert APK update preserves both the ID and the Keystore key;
+            // after uninstall, this fresh UUID and key require one Owner approval.
+            // The server can pin the signed key while this Team device is PENDING,
+            // but grants no photo/download permissions until Owner approval.
+            val key = runCatching {
+                MarketPhotoGatewayClient(app).enrollThisPhone()
+            }
+            val enrolled = key.getOrNull()
+            if (enrolled != null) return when (result.optString("status")) {
+                "approved" -> "Phone already linked. Photo Key: $enrolled. If pending, ask Owner to verify/approve the Photo Key."
+                else -> "Recovery request ready: Phone PENDING + Photo Key $enrolled. Owner approves both together."
+            }
+            return if(result.optString("status")=="approved")
+                "Phone linked; Photo Key needs enrollment. Open Photo Cloud Security and register it."
+            else
+                "Phone PENDING but Photo Key registration failed. Retry Request This Phone before Owner approval."
+        }
         return if(result.optString("status")=="approved")
-            "Owner phone approved for Cloud READ. Financial sync is not enabled yet."
+            "Owner phone already approved. Existing device security keys are preserved."
         else
-            "Team phone PENDING. Owner must approve this phone before Cloud access."
+            "Owner phone requires Secure Re-Link with fresh MFA."
     }
 
     suspend fun listPhones():Snapshot {
@@ -211,15 +232,33 @@ internal class CloudPhoneRegistryClient(context: Context) {
         check(deviceId!=CloudDeviceIdentity.get(app)) {
             "Owner phone cannot be changed through Team management"
         }
-        val result=rpc("marketpro_qa_cloud_decide_team_phone",JSONObject()
+        if (!approve) {
+            // Keep existing explicit Owner revocation semantics unchanged.
+            val result=rpc("marketpro_qa_cloud_decide_team_phone",JSONObject()
+                .put("p_workspace_id",workspace)
+                .put("p_owner_device_id",CloudDeviceIdentity.get(app))
+                .put("p_team_device_id",deviceId)
+                .put("p_approve",false))
+            check(result.optBoolean("ok") && !result.optBoolean("enabled",true)) {
+                "Phone revocation not confirmed"
+            }
+            return
+        }
+        // Fresh TOTP Owner verification is checked by the new server RPC.
+        // The Owner's ONE approval atomically enables this new Team UUID
+        // AND its pinned Photo Key. When this is a reinstall with the same
+        // Team user/label, only then the old UUID is retired (never deleted).
+        val result=rpc("marketpro_qa_approve_team_phone_and_photo_v433",JSONObject()
             .put("p_workspace_id",workspace)
             .put("p_owner_device_id",CloudDeviceIdentity.get(app))
             .put("p_team_device_id",deviceId)
-            .put("p_approve",approve))
+            .put("p_confirm",true))
         check(result.optBoolean("ok") &&
-            result.optBoolean("enabled") == approve &&
+            result.optString("device_id")==deviceId &&
+            result.optBoolean("enabled") &&
+            result.optString("photo_key_status")=="approved" &&
             !result.optBoolean("can_write",true)) {
-            "Owner approval did not return the expected safe state"
+            "Phone + Photo Key approval was not confirmed"
         }
     }
 }
