@@ -90,6 +90,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import lk.peliyagoda.marketpro.BuildConfig
+import lk.peliyagoda.marketpro.cloud.MarketProActiveRole
+import lk.peliyagoda.marketpro.data.MarketDatabase
+import lk.peliyagoda.marketpro.photo.MarketPhotoGatewayClient
+import lk.peliyagoda.marketpro.photo.MarketPhotoCardMatchPolicy
 import lk.peliyagoda.marketpro.data.ItemEntity
 import lk.peliyagoda.marketpro.data.OtherExpenseAmounts
 import lk.peliyagoda.marketpro.data.OtherExpenseField
@@ -106,6 +111,7 @@ import lk.peliyagoda.marketpro.util.sortedMarketPurchases
 import lk.peliyagoda.marketpro.util.nextMarketSortRefreshMs
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.Instant
 
 @Composable
 private fun SectionCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
@@ -1105,24 +1111,76 @@ fun MarketScreen(
             }.toMap()
         }
     }
-    LaunchedEffect(businessDate, rows, latestPhotoByItem) {
-        // No background service/polling: schedule only the next 60-second
-        // threshold, then update the order while the screen is active.
+    // Read ONLY photo metadata for the selected date. Keep one signed cloud
+    // request per minute while Market is visible, never one request per card.
+    // This supports Owner and Team phones with different local Room item IDs.
+    var cloudDayPhotos by remember(businessDate) {
+        mutableStateOf<List<MarketPhotoGatewayClient.CloudPhoto>>(emptyList())
+    }
+    LaunchedEffect(businessDate, photoVersion) {
+        val app = context.applicationContext
+        if (!BuildConfig.MARKETPRO_LOCAL_PREVIEW &&
+            MarketProActiveRole.current(app) != null) {
+            val gateway = MarketPhotoGatewayClient(app)
+            while (true) {
+                runCatching { gateway.listDay(businessDate) }
+                    .onSuccess { cloudDayPhotos = it }
+                delay(60_000L)
+            }
+        }
+    }
+    // Catalog UUIDs are device-specific mappings. A failed local Room lookup
+    // must NEVER prevent the signed Cloud date gallery from loading.
+    val cloudItemIds by produceState(
+        initialValue = emptyMap<Long, String>(),
+        context, photoItemIds
+    ) {
+        value = withContext(Dispatchers.IO) {
+            val dao = MarketDatabase.get(context).cloudDao()
+            photoItemIds.mapNotNull { itemId ->
+                runCatching { dao.cloudId("item", itemId.toString()) }
+                    .getOrNull()?.let { itemId to it }
+            }.toMap()
+        }
+    }
+    val matchedCloudByItem = remember(rows, cloudDayPhotos, cloudItemIds) {
+        rows.associate { row ->
+            row.item.id to MarketPhotoCardMatchPolicy.match(
+                cloudDayPhotos, cloudItemIds[row.item.id], row.item.name
+            ).photos
+        }
+    }
+    // A remote photo counts for the same original 60-second settle rule.
+    // The quantity and price must still be complete; photo alone does not
+    // change an item's status or financial records.
+    val photoTimesAcrossPhones = remember(latestPhotoByItem, matchedCloudByItem) {
+        val result = latestPhotoByItem.toMutableMap()
+        matchedCloudByItem.forEach { (itemId, photos) ->
+            val newest = photos.mapNotNull { photo ->
+                runCatching { Instant.parse(photo.capturedAt).toEpochMilli() }
+                    .getOrNull()
+            }.maxOrNull()
+            if (newest != null) {
+                result[itemId] = maxOf(result[itemId] ?: 0L, newest)
+            }
+        }
+        result
+    }
+    LaunchedEffect(businessDate, rows, photoTimesAcrossPhones) {
         while (true) {
             val current = System.currentTimeMillis()
             nowMs = current
-            val due = nextMarketSortRefreshMs(rows, latestPhotoByItem, current)
+            val due = nextMarketSortRefreshMs(rows, photoTimesAcrossPhones, current)
                 ?: break
             delay((due - current).coerceAtLeast(1L))
         }
     }
-    // Only reorder visible cards, not totals, source records, or other tabs.
-    // Unfinished/awaiting-invoice rows stay on top; fully verified rows move
-    // to the bottom after the one-minute delay. Both sections stay A–Z.
-    val shown = remember(rows, filter, latestPhotoByItem, nowMs) {
+    // Completed / priced / photographed items settle below pending rows.
+    // All rows remain sorted alphabetically inside their respective group.
+    val shown = remember(rows, filter, photoTimesAcrossPhones, nowMs) {
         sortedMarketPurchases(
             rows.filter { filter == "All" || it.item.category == filter },
-            latestPhotoByItem,
+            photoTimesAcrossPhones,
             nowMs
         )
     }
@@ -1285,6 +1343,7 @@ fun MarketScreen(
                     }
                 },
                 onPhotoSaved = { photoVersion++ },
+                knownCloudPhotos = matchedCloudByItem[row.item.id].orEmpty(),
                 message = message
             )
         }
@@ -1300,6 +1359,7 @@ private fun PurchaseCard(
     onAdd: (Long, Long, (Result<Unit>) -> Unit) -> Unit,
     onEdit: (Long, Long, Long) -> Unit,
     onPhotoSaved: () -> Unit,
+    knownCloudPhotos: List<MarketPhotoGatewayClient.CloudPhoto>,
     message: (String) -> Unit
 ) {
     var purchased by remember(date, row.item.id) {
@@ -1562,6 +1622,7 @@ private fun PurchaseCard(
                     businessDate = date,
                     itemId = row.item.id,
                     itemName = row.item.name,
+                    knownCloudPhotos = knownCloudPhotos,
                     onPhotoSaved = onPhotoSaved,
                     message = message
                 )

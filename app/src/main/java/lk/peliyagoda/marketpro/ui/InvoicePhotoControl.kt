@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -118,6 +119,7 @@ fun InvoicePhotoControl(
     businessDate: String,
     itemId: Long,
     itemName: String,
+    knownCloudPhotos: List<MarketPhotoGatewayClient.CloudPhoto> = emptyList(),
     onPhotoSaved: () -> Unit = {},
     message: (String) -> Unit
 ) {
@@ -127,6 +129,7 @@ fun InvoicePhotoControl(
         MarketPhotoLocalStore(context.applicationContext, MarketDatabase.get(context))
     }
     var refresh by remember(businessDate, itemId) { mutableIntStateOf(0) }
+    var cloudRefresh by remember(businessDate, itemId) { mutableIntStateOf(0) }
     var photoDialog by remember(businessDate, itemId) { mutableStateOf(false) }
     var fullPreview by remember(businessDate, itemId) { mutableStateOf<File?>(null) }
     var pendingPath by rememberSaveable(businessDate, itemId) { mutableStateOf("") }
@@ -141,46 +144,52 @@ fun InvoicePhotoControl(
         }
     }
 
-    var cloudPhotos by remember(businessDate,itemId) {
-        mutableStateOf<List<MarketPhotoGatewayClient.CloudPhoto>>(emptyList())
+    var cloudPhotos by remember(businessDate, itemId) {
+        mutableStateOf(knownCloudPhotos)
     }
-    var loadingCloud by remember(businessDate,itemId) { mutableStateOf(false) }
-    var cloudNotice by remember(businessDate,itemId) { mutableStateOf("") }
-    val gateway=remember(context) {MarketPhotoGatewayClient(context.applicationContext)}
+    var loadingCloud by remember(businessDate, itemId) { mutableStateOf(false) }
+    var cloudNotice by remember(businessDate, itemId) { mutableStateOf("") }
+    val gateway = remember(context) { MarketPhotoGatewayClient(context.applicationContext) }
 
-    // Signed Cloud date view carries server item UUIDs and names. Room item IDs
-    // are local device numbers and must never be used as remote photo filters.
-    // Exact name fallback is read only and rejects ambiguous Cloud item UUIDs.
-    LaunchedEffect(photoDialog, businessDate, itemId, itemName, refresh) {
+    // Photo Card uses the same authenticated server date-gallery as the menu
+    // previously did. Local UUID lookup is OPTIONAL; if Room lookup fails on a
+    // Samsung/Team phone, it may not block secure read-only cloud browsing.
+    LaunchedEffect(photoDialog, businessDate, itemId, itemName, cloudRefresh) {
         if (photoDialog) {
             loadingCloud = true
             cloudNotice = ""
-            cloudPhotos = emptyList()
+            if (knownCloudPhotos.isNotEmpty()) cloudPhotos = knownCloudPhotos
             runCatching {
-                val linkedId = withContext(Dispatchers.IO) {
-                    MarketDatabase.get(context).cloudDao().cloudId("item", itemId.toString())
-                }
                 val dayPhotos = gateway.listDay(businessDate)
-                val match = MarketPhotoCardMatchPolicy.match(dayPhotos, linkedId, itemName)
-                val found = if (match.photos.isEmpty() && linkedId != null) {
-                    // Date gallery limits 200 entries; retry known canonical UUID.
-                    val byId = gateway.list(linkedId, businessDate)
-                    if (byId.isNotEmpty()) byId else match.photos
-                } else match.photos
-                Pair(found, match.status)
-            }.onSuccess { (found, status) ->
-                cloudPhotos = found
-                cloudNotice = when {
-                    found.isEmpty() && status == PhotoCardMatchStatus.AMBIGUOUS ->
-                        "Multiple Cloud items share this name. Ask Owner to verify the item link."
-                    found.isEmpty() -> "No Cloud photos found for this item and date."
-                    status == PhotoCardMatchStatus.UNIQUE_NAME ->
-                        "Cloud photos matched by exact item name (view only)."
-                    else -> ""
+                val linkedId = withContext(Dispatchers.IO) {
+                    runCatching {
+                        MarketDatabase.get(context).cloudDao()
+                            .cloudId("item", itemId.toString())
+                    }.getOrNull()
                 }
-            }.onFailure {
-                cloudPhotos = emptyList()
-                cloudNotice = "Cloud photos unavailable. Photos saved on this phone are still accessible."
+                MarketPhotoCardMatchPolicy.match(dayPhotos, linkedId, itemName)
+            }.onSuccess { match ->
+                cloudPhotos = match.photos
+                cloudNotice = when {
+                    match.photos.isNotEmpty() -> ""
+                    match.status == PhotoCardMatchStatus.AMBIGUOUS ->
+                        "More than one Cloud item uses this name. Owner must verify its identity."
+                    else -> "No Cloud photos found for this item on the selected date."
+                }
+            }.onFailure { error ->
+                // Preserve already fetched cloud metadata and all local photos.
+                // Never reveal authentication secrets, request bodies or tokens.
+                cloudNotice = if (cloudPhotos.isNotEmpty()) {
+                    "Showing last synced Cloud photo list. Refresh was unsuccessful."
+                } else {
+                    val detail = when (error) {
+                        is java.io.IOException ->
+                            error.message?.take(110) ?: "Connection problem"
+                        is org.json.JSONException -> "Unexpected Cloud response format"
+                        else -> error.javaClass.simpleName.take(48)
+                    }
+                    "Cloud photos could not load ($detail). Local photos remain safe."
+                }
             }
             loadingCloud = false
         }
@@ -253,8 +262,10 @@ fun InvoicePhotoControl(
         }
     ) {
         Icon(
-            Icons.Default.PhotoLibrary,
-            contentDescription = "Invoice Photos (${photos?.size ?: 0}) For $itemName",
+            if (photos.isNullOrEmpty() && knownCloudPhotos.isEmpty() &&
+                cloudPhotos.isEmpty()) Icons.Default.CameraAlt
+            else Icons.Default.PhotoLibrary,
+            contentDescription = "Invoice Photos (${photos?.size ?: 0} local, ${cloudPhotos.size} cloud) For $itemName",
             tint = ProColors.teal
         )
     }
@@ -270,6 +281,11 @@ fun InvoicePhotoControl(
                         style = MaterialTheme.typography.bodySmall)
                     if (loadingCloud) Text("Checking Cloud Photos...")
                     if (cloudNotice.isNotBlank()) Text(cloudNotice)
+                    if (!loadingCloud) {
+                        TextButton(onClick = { cloudRefresh++ }) {
+                            Text("Refresh Cloud Photos")
+                        }
+                    }
                     LazyColumn(
                         modifier = Modifier.fillMaxWidth().heightIn(max = 330.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
