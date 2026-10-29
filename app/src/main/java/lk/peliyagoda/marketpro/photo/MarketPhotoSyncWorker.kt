@@ -1,6 +1,7 @@
 package lk.peliyagoda.marketpro.photo
 
 import android.content.Context
+import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -10,11 +11,14 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import lk.peliyagoda.marketpro.BuildConfig
 import lk.peliyagoda.marketpro.cloud.MarketProActiveRole
 import lk.peliyagoda.marketpro.cloud.TeamRole
 import lk.peliyagoda.marketpro.data.CloudDeviceIdentity
 import lk.peliyagoda.marketpro.data.MarketDatabase
+import lk.peliyagoda.marketpro.data.MarketPhotoEntity
 import java.io.File
 import java.time.Instant
 import java.time.LocalDate
@@ -23,87 +27,154 @@ import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 /**
- * Recovery mitigation: automatic photo worker is temporarily suspended.
- * This never deletes an original image or local metadata. Photo Cloud can be
- * safely re-enabled only after Samsung runtime diagnostics and migration QA.
+ * Staging, bounded, offline-first Cloud Photo Sync.
+ * Never deletes photos, changes financial rows, or copies Android Gallery files.
+ * Idempotent original registration -> canonical ID -> signed upload.
  */
-private const val PHOTO_WORKER_PAUSED_FOR_SAMSUNG_RECOVERY = true
-
-/** Separate photo queue. Never modifies the financial sync journal or original files. */
 internal class MarketPhotoSyncWorker(context:Context,parameters:WorkerParameters):
-    CoroutineWorker(context,parameters){
-    override suspend fun doWork():Result{
-        if (PHOTO_WORKER_PAUSED_FOR_SAMSUNG_RECOVERY) return Result.success()
+    CoroutineWorker(context,parameters) {
+    override suspend fun doWork():Result = withContext(Dispatchers.IO) {
         val app=applicationContext
         if(BuildConfig.MARKETPRO_LOCAL_PREVIEW || !BuildConfig.MARKETPRO_REQUIRE_CLOUD_ROLE)
-            return Result.success()
-        val role=MarketProActiveRole.current(app) ?: return Result.success()
-        val database=MarketDatabase.get(app)
-        val dao=database.photoDao()
-        val identity=database.cloudDao()
-        val device=CloudDeviceIdentity.get(app)
-        if(runCatching{UUID.fromString(device).toString()!=device}.getOrDefault(true))
-            return Result.failure()
-        val now=System.currentTimeMillis()
-        dao.recoverInterruptedUploads(now-5*60*1000L,now)
-        // Never use local Room item numbers as cloud identities.
-        for(photo in dao.waitingItemLink(20)){
-            val id=identity.cloudId("item",photo.itemId.toString())
-            if(id!=null && runCatching{UUID.fromString(id).toString()==id}.getOrDefault(false)){
-                dao.bindVerifiedCloudItem(photo.photoId,id,device,now)
-            }
-        }
+            return@withContext Result.success()
+        val role=MarketProActiveRole.current(app) ?: return@withContext Result.success()
+        val owner=role==TeamRole.OWNER
         val today=LocalDate.now(ZoneId.of("Asia/Colombo")).toString()
+        val db=MarketDatabase.get(app)
+        val dao=db.photoDao()
+        val identity=db.cloudDao()
+        val device=CloudDeviceIdentity.get(app)
+        if(!runCatching { UUID.fromString(device).toString()==device }.getOrDefault(false))
+            return@withContext Result.failure()
+
+        // Recover originals captured while cloud uploads were intentionally paused.
+        // Bounded to 40 files in recent app-private day folders only.
+        runCatching { registerRecentOriginals(app,db,today,owner) }
+        dao.recoverInterruptedUploads(System.currentTimeMillis()-300_000L,
+            System.currentTimeMillis())
         val gateway=MarketPhotoGatewayClient(app)
+        val items=db.dao().allItems().associate { it.id to it.name }
         var retry=false
-        for(photo in dao.pendingUpload(4)){
-            val original=File(photo.localOriginalPath)
-            // Team may capture/edit today's data only. Historical photos
-            // remain pending for owner approval; never silently change their date.
-            if(photo.businessDate>today ||
-                (role==TeamRole.PURCHASING_STAFF && photo.businessDate!=today))continue
-            val valid=runCatching{
-                original.isFile && original.length()==photo.bytes &&
-                MarketPhotoIdentity.sha256(original)==photo.sha256
-            }.getOrDefault(false)
-            if(!valid)continue
-            val cloudItem=photo.cloudItemId ?: continue
-            if(!runCatching{UUID.fromString(cloudItem).toString()==cloudItem}.getOrDefault(false))
-                continue
-            if(photo.originDeviceId!=device)continue
-            if(dao.claimUpload(photo.photoId,System.currentTimeMillis())==0)continue
-            try{
-                gateway.upload(original,photo.photoId,cloudItem,photo.businessDate,
-                    Instant.ofEpochMilli(photo.capturedAtMs).toString())
-                check(dao.confirmUploaded(photo.photoId,null,System.currentTimeMillis())==1)
-            }catch(e:Exception){
+
+        for(photo in dao.waitingItemLinkEligible(today,owner,20)) {
+            val name=items[photo.itemId] ?: continue
+            val journalId=runCatching {
+                identity.cloudId("item",photo.itemId.toString())
+            }.getOrNull()?.takeIf { id ->
+                runCatching { UUID.fromString(id).toString()==id }.getOrDefault(false)
+            }
+            val cloudId=if(journalId!=null) journalId else try {
+                gateway.resolveItemId(name)
+            } catch(e:Exception) {
                 retry=true
-                dao.retryUpload(photo.photoId,e.message?.take(140)?:"Cloud unavailable",
+                null
+            }
+            if(cloudId!=null) {
+                dao.bindVerifiedCloudItem(photo.photoId,cloudId,device,
                     System.currentTimeMillis())
             }
         }
-        return if(retry)Result.retry() else Result.success()
+
+        var claimed=0
+        for(photo in dao.pendingUploadEligible(today,owner,MarketPhotoUploadPolicy.BATCH)){
+            if(!MarketPhotoUploadPolicy.eligible(photo.businessDate,today,owner)) continue
+            val original=File(photo.localOriginalPath)
+            val valid=runCatching {
+                original.isFile &&
+                MarketPhotoUploadPolicy.allowedLength(original.length()) &&
+                original.length()==photo.bytes &&
+                original.canonicalPath.startsWith(
+                    File(app.filesDir,"invoices").canonicalPath+File.separator) &&
+                MarketPhotoIdentity.sha256(original)==photo.sha256
+            }.getOrDefault(false)
+            if(!valid)continue
+            val itemId=photo.cloudItemId ?: continue
+            if(!runCatching { UUID.fromString(itemId).toString()==itemId }
+                .getOrDefault(false))continue
+            if(photo.originDeviceId!=device)continue
+            if(dao.claimUpload(photo.photoId,System.currentTimeMillis())!=1)continue
+            claimed++
+            try {
+                gateway.upload(original,photo.photoId,itemId,photo.businessDate,
+                    Instant.ofEpochMilli(photo.capturedAtMs).toString())
+                check(dao.confirmUploaded(photo.photoId,null,System.currentTimeMillis())==1)
+            } catch(e:Exception) {
+                retry=true
+                dao.retryUpload(photo.photoId,e.message?.take(140)?:"Cloud unreachable",
+                    System.currentTimeMillis())
+            }
+        }
+        // Exponential WorkManager backoff avoids a busy retry loop.
+        if(retry || (claimed==MarketPhotoUploadPolicy.BATCH &&
+            dao.pendingEligibleCount(today,owner)>0)) Result.retry()
+        else Result.success()
+    }
+
+    private suspend fun registerRecentOriginals(
+        app:Context,db:MarketDatabase,today:String,owner:Boolean
+    ){
+        val days=if(owner)listOf(today,LocalDate.parse(today).minusDays(1).toString())
+            else listOf(today)
+        val validItems=db.dao().allItems().map { it.id }.toSet()
+        val photoDao=db.photoDao()
+        var examined=0
+        for(day in days){
+            val dateFolder=File(File(app.filesDir,"invoices"),day)
+            for(folder in dateFolder.listFiles().orEmpty().filter { it.isDirectory }){
+                val id=folder.name.removePrefix("item-").toLongOrNull() ?: continue
+                if(folder.name!="item-$id"||id !in validItems)continue
+                for(file in folder.listFiles().orEmpty()){
+                    if(examined++>=40)return
+                    if(!file.isFile || !file.extension.equals("jpg",true) ||
+                        !MarketPhotoUploadPolicy.allowedLength(file.length()))continue
+                    val safe=runCatching{
+                        folder.canonicalFile.parentFile==dateFolder.canonicalFile &&
+                        file.canonicalFile.parentFile==folder.canonicalFile &&
+                        file.inputStream().use{ it.read()==255 && it.read()==216 }
+                    }.getOrDefault(false)
+                    if(!safe)continue
+                    runCatching {
+                        val photoId=MarketPhotoIdentity.id(file,day,id)
+                        if(photoDao.byId(photoId)!=null)return@runCatching
+                        photoDao.insertIfAbsent(MarketPhotoEntity(
+                            photoId=photoId,businessDate=day,itemId=id,
+                            cloudItemId=null,originDeviceId=null,
+                            localOriginalPath=file.canonicalPath,galleryUri=null,
+                            sha256=MarketPhotoIdentity.sha256(file),bytes=file.length(),
+                            capturedAtMs=file.lastModified().takeIf{it>0}
+                                ?:System.currentTimeMillis(),
+                            syncState="WAITING_ITEM_LINK",boxFileId=null,retryCount=0,
+                            lastError=null,updatedAtMs=System.currentTimeMillis()
+                        ))
+                    }
+                }
+            }
+        }
     }
 }
 
-/** Network-constrained retry schedule. No permanent foreground service required. */
 internal object MarketPhotoSyncScheduler {
-    private fun enabled()=!PHOTO_WORKER_PAUSED_FOR_SAMSUNG_RECOVERY && !BuildConfig.MARKETPRO_LOCAL_PREVIEW &&
+    private fun enabled()=!BuildConfig.MARKETPRO_LOCAL_PREVIEW &&
         BuildConfig.MARKETPRO_REQUIRE_CLOUD_ROLE
     private val network=Constraints.Builder()
         .setRequiredNetworkType(NetworkType.CONNECTED).build()
+
     fun onPhotoSaved(context:Context){
         if(!enabled())return
-        val work=OneTimeWorkRequestBuilder<MarketPhotoSyncWorker>()
-            .setConstraints(network).build()
+        val request=OneTimeWorkRequestBuilder<MarketPhotoSyncWorker>()
+            .setConstraints(network)
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL,30L,TimeUnit.SECONDS)
+            .build()
         WorkManager.getInstance(context.applicationContext)
-            .enqueueUniqueWork("marketpro_photo_once",ExistingWorkPolicy.KEEP,work)
+            .enqueueUniqueWork("marketpro_photo_once",ExistingWorkPolicy.KEEP,request)
     }
     fun schedule(context:Context){
         if(!enabled())return
-        val request=PeriodicWorkRequestBuilder<MarketPhotoSyncWorker>(6,TimeUnit.HOURS)
+        val periodic=PeriodicWorkRequestBuilder<MarketPhotoSyncWorker>(6,TimeUnit.HOURS)
             .setConstraints(network).build()
         WorkManager.getInstance(context.applicationContext).enqueueUniquePeriodicWork(
-            "marketpro_photo_retry",ExistingPeriodicWorkPolicy.KEEP,request)
+            "marketpro_photo_retry",ExistingPeriodicWorkPolicy.KEEP,periodic)
+        // Immediate catch-up on app start, including older paused app versions.
+        onPhotoSaved(context)
     }
 }
