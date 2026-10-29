@@ -133,6 +133,17 @@ internal class MarketPhotoGatewayClient(context:Context) {
         return requireNotNull(request("approve",payload.toString().toByteArray(StandardCharsets.UTF_8),
             enrollment=true)).getString("code")
     }
+    /** Signed and authorized exact catalog lookup; rejects collisions. */
+    suspend fun resolveItemId(itemName:String):String? {
+        require(itemName.isNotBlank() && itemName==itemName.trim() &&
+            itemName.length<=250)
+        val payload=JSONObject().put("item_name",itemName)
+        val reply=requireNotNull(request("resolve_item",
+            payload.toString().toByteArray(StandardCharsets.UTF_8)))
+        val id=reply.optString("item_id")
+        return if(id.isBlank() || id=="null") null else uuid(id)
+    }
+
     suspend fun upload(original:File,photoId:String,cloudItemId:String,day:String,capturedAt:String):String{
         uuid(photoId);uuid(cloudItemId)
         require(original.isFile && original.length() in 100L..(16L*1024*1024))
