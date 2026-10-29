@@ -21,8 +21,8 @@ jobs:
     timeout-minutes: 40
     env:
       GH_TOKEN: ${{ github.token }}
-      SOURCE_RUN: '40920976377'
-      SOURCE_SHA: c555b7eadcaa72f6fbb44a443fe810c22a8012f4
+      SOURCE_RUN: '40921604548'
+      SOURCE_SHA: 079411b4adf15238af22d452693ab57aec89cf34
       SOURCE_ARTIFACT: MarketPro-v4.3.5-CrossPhonePhotos-Signed-QA-NOT-RELEASE
       SOURCE_APK: MarketPro-v4.3.5-CrossPhonePhotos-QA-signed.apk
       APK: MarketPro-v4.3.5-signed.apk
