@@ -32,6 +32,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -49,6 +51,9 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import lk.peliyagoda.marketpro.data.MarketDatabase
+import lk.peliyagoda.marketpro.photo.MarketPhotoLocalStore
 import java.io.File
 import java.time.LocalDate
 import java.text.SimpleDateFormat
@@ -112,6 +117,10 @@ fun InvoicePhotoControl(
     message: (String) -> Unit
 ) {
     val context = LocalContext.current
+    val photoScope = rememberCoroutineScope()
+    val photoStore = remember(context) {
+        MarketPhotoLocalStore(context.applicationContext, MarketDatabase.get(context))
+    }
     var refresh by remember(businessDate, itemId) { mutableIntStateOf(0) }
     var photoDialog by remember(businessDate, itemId) { mutableStateOf(false) }
     var fullPreview by remember(businessDate, itemId) { mutableStateOf<File?>(null) }
@@ -137,11 +146,37 @@ fun InvoicePhotoControl(
             refresh++
             photoDialog = true
             onPhotoSaved()
-            message("Full-Resolution Invoice Photo Saved")
+            message("Full-Resolution Original Photo Saved")
+            photoScope.launch {
+                runCatching {
+                    photoStore.registerCapturedOriginal(businessDate, itemId, file)
+                }.onSuccess { result ->
+                    if (result.gallerySaved) {
+                        message("Original And Gallery Copy Saved")
+                    } else {
+                        message("Original Saved; Gallery Copy Unavailable")
+                    }
+                }.onFailure {
+                    message("Original Photo Saved; Gallery Registration Pending")
+                }
+            }
         } else {
             // Camera cancellations must not leave empty placeholder JPEG files.
             file?.takeIf { it.length() == 0L }?.delete()
             message("Photo Was Not Captured")
+        }
+    }
+
+    // Lazy idempotent registration of older local photos; no global disk scan.
+    LaunchedEffect(photoDialog, businessDate, itemId) {
+        if (photoDialog) {
+            withContext(Dispatchers.IO) {
+                InvoicePhotoStore.photos(context, businessDate, itemId).forEach { original ->
+                    runCatching {
+                        photoStore.registerCapturedOriginal(businessDate, itemId, original)
+                    }
+                }
+            }
         }
     }
 
