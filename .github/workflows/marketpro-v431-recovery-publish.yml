@@ -1,0 +1,113 @@
+name: Publish Samsung v4.3.1 One-Time Recovery APK
+
+on:
+  push:
+    branches:
+      - feature/marketpro-v431-samsung-recovery-qa
+    paths:
+      - .github/workflows/marketpro-v431-recovery-publish.yml
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: marketpro-v431-one-time-samsung-recovery
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: marketpro-samsung-recovery-only-v4.3.1
+      OLD_TAG: marketpro-photocloud-qa-v4.3.0
+      EXPECTED_PACKAGE: lk.peliyagoda.marketpro.staging.fullapp
+      EXPECTED_CERT: 0a617edb7520deb0255cfc13ee0b2ee8382e2d8e6cb7f8e1dff68b4fbd130c4a
+      OLD: MarketPro-v4.3.0-PhotoCloud-QA-signed.apk
+      ARTIFACT: MarketPro-v4.3.1-SamsungRecovery-Signed-QA-NOT-RELEASE
+      NEW: MarketProRecovery-v4.3.1-Samsung-QA-signed.apk
+    steps:
+      - name: Fetch already-verified signed 4.3.1 QA artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download 40871126811 --repo "$GITHUB_REPOSITORY" --name "$ARTIFACT" --dir .
+          test -s MarketPro-v4.3.1-SamsungRecovery-QA-signed.apk
+          cp MarketPro-v4.3.1-SamsungRecovery-QA-signed.apk "$NEW"
+          sha256sum "$NEW"
+
+      - name: Install Android verification tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" --install "build-tools;35.0.0"
+
+      - name: Verify in-place update from v4.3.0, no downgrade or reinstall
+        shell: bash
+        run: |
+          set -euo pipefail
+          AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          SIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          mkdir -p /tmp/previous
+          gh release download "$OLD_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$OLD" --dir /tmp/previous
+          OLD_APK="/tmp/previous/$OLD"
+          test -s "$OLD_APK"
+          "$AAPT" dump badging "$OLD_APK" > /tmp/old_pkg
+          "$AAPT" dump badging "$NEW" > /tmp/new_pkg
+          grep -Fq "package: name='$EXPECTED_PACKAGE'" /tmp/old_pkg
+          grep -Fq "versionCode='430'" /tmp/old_pkg
+          grep -Fq "package: name='$EXPECTED_PACKAGE'" /tmp/new_pkg
+          grep -Fq "versionCode='431'" /tmp/new_pkg
+          grep -Fq "versionName='4.3.1'" /tmp/new_pkg
+          ! grep -Fq 'application-debuggable' /tmp/new_pkg
+          "$SIGNER" verify --print-certs "$OLD_APK" > /tmp/old_cert
+          "$SIGNER" verify --print-certs "$NEW" > /tmp/new_cert
+          OLD_CERT="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' /tmp/old_cert | head -1)"
+          NEW_CERT="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' /tmp/new_cert | head -1)"
+          test -n "$OLD_CERT" && test "$OLD_CERT" = "$NEW_CERT"
+          grep -Fqi "$EXPECTED_CERT" /tmp/new_cert
+          echo "PASS: same package and signer, version code 430 → 431"
+
+      - name: Release separately (never offer via normal Check For Updates)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Recovery release exists; no overwrite."
+            exit 1
+          fi
+          cat > /tmp/recovery_notes.md <<'NOTES'
+          # Market Pro v4.3.1 — Samsung Emergency Recovery ONLY
+
+          This is a one-time manual **in-place install** for an existing Samsung phone that crashes before Market Pro opens. The user explicitly authorized this one-off exception to the in-app-only update workflow.
+
+          Do NOT uninstall Market Pro, clear its storage, or downgrade. Select the downloaded signed recovery APK and confirm **Update / Install** over the existing Market Pro app. If Android asks to uninstall first, CANCEL and report it. VersionCode 431, same package ID and signing certificate as v4.3.0.
+
+          Recovery build temporarily pauses the photo background upload worker. Existing photos and database records are not intentionally deleted by the app. It also installs a crash handler and safe diagnostic recovery screen: if it still crashes on the first launch, reopen Market Pro to display Safe Recovery, then copy crash details. A successful Android build does NOT establish real-phone startup success.
+
+          Only this recovery release is intentionally EXCLUDED from normal Market Pro in-app update discovery by its special asset filename; v4.3.0 remains the normal update channel for other devices. After Samsung recovery verification, return to Check For Updates for all later versions.
+          NOTES
+          gh release create "$TAG" "$NEW" --repo "$GITHUB_REPOSITORY" \
+            --target e472425edbd7990350d1eaf567515a0f9d19fd15 \
+            --prerelease --title 'Market Pro v4.3.1 — Samsung one-time crash recovery' \
+            --notes-file /tmp/recovery_notes.md
+
+      - name: Verify release digest and ensure ignored by automatic updater
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED="sha256:$(sha256sum "$NEW" | cut -d' ' -f1)"
+          ACTUAL="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" \
+            --jq '.assets[] | select(.name=="MarketProRecovery-v4.3.1-Samsung-QA-signed.apk") | .digest')"
+          SIZE="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" \
+            --jq '.assets[] | select(.name=="MarketProRecovery-v4.3.1-Samsung-QA-signed.apk") | .size')"
+          test "$ACTUAL" = "$EXPECTED"
+          test "$SIZE" = "$(stat -c%s "$NEW")"
+          case "$NEW" in MarketPro-v*) echo 'ERROR: filename is eligible for automatic update discovery!'; exit 1;; esac
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" \
+            --jq '{tag: .tag_name, prerelease: .prerelease, draft: .draft, assets:[.assets[]|{name,size,digest}]}'
