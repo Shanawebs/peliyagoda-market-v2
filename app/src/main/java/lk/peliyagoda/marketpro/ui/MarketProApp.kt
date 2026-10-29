@@ -220,7 +220,6 @@ fun MarketProApp(vm: MarketViewModel) {
         var ownerLoginOpen by remember { mutableStateOf(false) }
         var boxConnectOpen by remember { mutableStateOf(false) }
         var photoSecurityOpen by remember { mutableStateOf(false) }
-        var cloudGalleryOpen by remember { mutableStateOf(false) }
         var helpOpen by remember { mutableStateOf(false) }
         var securityStatusOpen by remember { mutableStateOf(false) }
         var restorePinOpen by remember { mutableStateOf(false) }
@@ -473,12 +472,6 @@ fun MarketProApp(vm: MarketViewModel) {
         if (photoSecurityOpen) {
             MarketPhotoCloudSetupDialog(onDismiss = { photoSecurityOpen = false })
         }
-        if (cloudGalleryOpen) {
-            CloudPhotoGalleryDialog(
-                initialDate = date.toString(),
-                onDismiss = { cloudGalleryOpen = false }
-            )
-        }
         if (boxConnectOpen) {
             BoxCloudConnectDialog(onDismiss = { boxConnectOpen = false })
         }
@@ -636,20 +629,6 @@ fun MarketProApp(vm: MarketViewModel) {
                                         onClick = {
                                             menuOpen = false
                                             photoSecurityOpen = true
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = {
-                                            Text("View Cloud Photos",
-                                                color = Color(0xFF605B88),
-                                                fontWeight = FontWeight.Bold,
-                                                style = MaterialTheme.typography.bodyLarge)
-                                        },
-                                        enabled = lk.peliyagoda.marketpro.cloud.MarketProActiveRole
-                                            .current(context.applicationContext) != null,
-                                        onClick = {
-                                            menuOpen = false
-                                            cloudGalleryOpen = true
                                         }
                                     )
                                     DropdownMenuItem(
