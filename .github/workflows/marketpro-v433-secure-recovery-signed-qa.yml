@@ -6,6 +6,11 @@ on:
       - feature/marketpro-v433-stable-device-recovery-qa
     paths:
       - .github/workflows/marketpro-v433-secure-recovery-signed-qa.yml
+      - app/src/main/java/lk/peliyagoda/marketpro/cloud/CloudPhoneRegistryClient.kt
+      - app/src/main/java/lk/peliyagoda/marketpro/ui/LinkedPhonesManagerDialog.kt
+      - supabase/functions/marketpro-photo-key-enroll-v430/index.ts
+      - supabase/migrations/20261029_marketpro_secure_team_photo_recovery_v433.sql
+      - stagingMarket/build.gradle.kts
   workflow_dispatch:
 
 permissions:
