@@ -90,6 +90,7 @@ internal class CloudPhoneRegistryClient(context: Context) {
                     throw IOException(when(status) {
                         401,403 -> "Phone request denied. Check login, Owner MFA and approval."
                         404 -> "Cloud Phone API not deployed"
+                        409 -> "Phone/Photo Key approval conflict. Team: Request This Phone first. Owner: verify fresh MFA and review two-device limit."
                         429,500,502,503,504 -> "Cloud unavailable. Retry when connected."
                         else -> "Phone request rejected (HTTP $status)"
                     })
