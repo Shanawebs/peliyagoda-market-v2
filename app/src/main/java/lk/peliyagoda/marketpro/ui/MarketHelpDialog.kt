@@ -40,7 +40,7 @@ import lk.peliyagoda.marketpro.R
 
 // Sinhala: bundled Noto Sans Sinhala (SIL OFL). English: system sans-serif.
 // Google Sans is not redistributed because no redistribution license is provided.
-private val sinhalaGuideFont = FontFamily(Font(R.font.noto_sans_sinhala))
+private val sinhalaGuideFont = FontFamily.SansSerif
 private val ink = Color(0xFF102A37)
 private val dividerColor = Color(0xFFE1E5E7)
 
