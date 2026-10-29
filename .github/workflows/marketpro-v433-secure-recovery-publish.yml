@@ -1,0 +1,126 @@
+name: Publish Market Pro v4.3.3 Secure Stable Device Recovery QA
+
+on:
+  push:
+    branches:
+      - feature/marketpro-v433-stable-device-recovery-qa
+    paths:
+      - .github/workflows/marketpro-v433-secure-recovery-publish.yml
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: marketpro-v433-secure-recovery-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: marketpro-stable-device-recovery-qa-v4.3.3
+      APK: MarketPro-v4.3.3-SecureDeviceRecovery-QA-signed.apk
+      SOURCE_RUN: '40899976927'
+      SOURCE_ARTIFACT: MarketPro-v4.3.3-SecureDeviceRecovery-Signed-QA-NOT-RELEASE
+      EXPECTED_CERT: 0a617edb7520deb0255cfc13ee0b2ee8382e2d8e6cb7f8e1dff68b4fbd130c4a
+      EXPECTED_PACKAGE: lk.peliyagoda.marketpro.staging.fullapp
+    steps:
+      - name: Download existing signed verified candidate, never rebuild for release
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" --name "$SOURCE_ARTIFACT" --dir .
+          test -s "$APK"
+          sha256sum "$APK"
+      - name: Install Android APK inspection utilities
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" --install "build-tools;35.0.0"
+      - name: Verify signed APK is a normal update to v4.3.0, v4.3.1 and v4.3.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          SIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          "$AAPT" dump badging "$APK" > /tmp/newbadging
+          grep -Fq "package: name='$EXPECTED_PACKAGE'" /tmp/newbadging
+          grep -Fq "versionCode='433'" /tmp/newbadging
+          grep -Fq "versionName='4.3.3'" /tmp/newbadging
+          ! grep -Fq 'application-debuggable' /tmp/newbadging
+          "$SIGNER" verify --print-certs "$APK" > /tmp/newsigner
+          grep -Fqi "$EXPECTED_CERT" /tmp/newsigner
+          mkdir -p /tmp/older
+          gh release download marketpro-photocloud-qa-v4.3.0 --repo "$GITHUB_REPOSITORY" --pattern 'MarketPro-v4.3.0-PhotoCloud-QA-signed.apk' --dir /tmp/older
+          gh release download marketpro-samsung-recovery-only-v4.3.1 --repo "$GITHUB_REPOSITORY" --pattern 'MarketProRecovery-v4.3.1-Samsung-QA-signed.apk' --dir /tmp/older
+          gh release download marketpro-photogallery-qa-v4.3.2 --repo "$GITHUB_REPOSITORY" --pattern 'MarketPro-v4.3.2-PhotoGallery-QA-signed.apk' --dir /tmp/older
+          NEW_CERT="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' /tmp/newsigner | head -n1)"
+          test -n "$NEW_CERT"
+          for name in MarketPro-v4.3.0-PhotoCloud-QA-signed.apk MarketProRecovery-v4.3.1-Samsung-QA-signed.apk MarketPro-v4.3.2-PhotoGallery-QA-signed.apk; do
+            "$AAPT" dump badging "/tmp/older/$name" > /tmp/oldbadging
+            grep -Fq "package: name='$EXPECTED_PACKAGE'" /tmp/oldbadging
+            "$SIGNER" verify --print-certs "/tmp/older/$name" > /tmp/oldsigner
+            OLD_CERT="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' /tmp/oldsigner | head -n1)"
+            test -n "$OLD_CERT" && test "$OLD_CERT" = "$NEW_CERT"
+          done
+          echo 'PASS: version 433 same package and signer as 430/431/432'
+      - name: Publish approved secure recovery QA as normal in-app update
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::QA release already exists, refusing overwrite"
+            exit 1
+          fi
+          cat > /tmp/release-notes.md <<'NOTES'
+          # Market Pro v4.3.3 — Stable Device Identity & Secure Recovery QA
+
+          Install ONLY via Market Pro → Menu → Check For Updates. Do NOT uninstall or clear app storage.
+
+          This APK preserves the v4.3.2 Gallery, existing app ID, stable signing certificate,
+          normal local UUID and Android Keystore keys across every in-place update.
+
+          Reinstall/phone replacement: Android deletes app-private credentials and non-exportable
+          Keystore keys on uninstall, so recovering the identical old private key would be insecure.
+          Instead, after logging in, Team taps Request This Phone ONCE; the new UUID and newly signed
+          hardware-backed Photo Key are both marked pending. The Owner completes fresh TOTP AAL2
+          and explicitly approves both in ONE action. A matching old Team installation, when present,
+          is retired after Owner confirmation (historic Cloud purchases, photos and FKs remain).
+          Owner Secure Re-Link also enrolls a fresh Owner photo key within the same MFA window.
+
+          Only two distinct active Team devices per Team account. Old retired phone history
+          no longer exhausts the enrollment request quota. No client-side secrets or bypass.
+          QA migration and server enrollment v2 already deployed; older client RPC behavior preserved.
+
+          Normal future builds continue using stable app ID and signer.
+          The Samsung crash-recovery safeguard remains present.
+          Background photo upload is still PAUSED pending physical-device crash and photo QA;
+          this update does NOT promise that unattended Photo Upload has been restored.
+
+          Build, unit tests and permanent signing verified on source commit
+          66359ff45a9a44a736d2fcaa0112db97f1545532. Actual reinstall recovery
+          must still be verified with Owner/Team phones before calling full QA complete.
+          NOTES
+          gh release create "$TAG" "$APK" --repo "$GITHUB_REPOSITORY" \
+            --target 66359ff45a9a44a736d2fcaa0112db97f1545532 \
+            --prerelease --title 'Market Pro v4.3.3 — Secure Device and Photo Key Recovery QA' \
+            --notes-file /tmp/release-notes.md
+      - name: Confirm published APK digest and byte length
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED="sha256:$(sha256sum "$APK" | cut -d' ' -f1)"
+          ACTUAL="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" \
+            --jq '.assets[] | select(.name=="MarketPro-v4.3.3-SecureDeviceRecovery-QA-signed.apk") | .digest')"
+          SIZE="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" \
+            --jq '.assets[] | select(.name=="MarketPro-v4.3.3-SecureDeviceRecovery-QA-signed.apk") | .size')"
+          test -n "$ACTUAL" && test "$ACTUAL" = "$EXPECTED"
+          test "$SIZE" = "$(stat -c%s "$APK")"
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" \
+            --jq '{tag:.tag_name,prerelease:.prerelease,draft:.draft,assets:[.assets[]|{name,size,digest}]}'
