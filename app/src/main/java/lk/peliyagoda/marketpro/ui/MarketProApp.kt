@@ -215,6 +215,7 @@ fun MarketProApp(vm: MarketViewModel) {
         var cloudStatusOpen by remember { mutableStateOf(false) }
         var ownerLoginOpen by remember { mutableStateOf(false) }
         var boxConnectOpen by remember { mutableStateOf(false) }
+        var photoSecurityOpen by remember { mutableStateOf(false) }
         var helpOpen by remember { mutableStateOf(false) }
         var securityStatusOpen by remember { mutableStateOf(false) }
         var restorePinOpen by remember { mutableStateOf(false) }
@@ -464,6 +465,9 @@ fun MarketProApp(vm: MarketViewModel) {
                 existingOwnerOnly = true
             )
         }
+        if (photoSecurityOpen) {
+            MarketPhotoCloudSetupDialog(onDismiss = { photoSecurityOpen = false })
+        }
         if (boxConnectOpen) {
             BoxCloudConnectDialog(onDismiss = { boxConnectOpen = false })
         }
@@ -609,6 +613,20 @@ fun MarketProApp(vm: MarketViewModel) {
                                         menuOpen = false
                                         ownerLoginOpen = true
                                     })
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text("Photo Cloud Security",
+                                                color = Color(0xFF605B88),
+                                                fontWeight = FontWeight.Bold,
+                                                style = MaterialTheme.typography.bodyLarge)
+                                        },
+                                        enabled = lk.peliyagoda.marketpro.cloud.MarketProActiveRole
+                                            .current(context.applicationContext) != null,
+                                        onClick = {
+                                            menuOpen = false
+                                            photoSecurityOpen = true
+                                        }
+                                    )
                                     DropdownMenuItem(
                                         text = {
                                             Text(
