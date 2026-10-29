@@ -137,9 +137,9 @@ async function acquire(db:any,id:string){
  }
  return lease;
 }
-function today(){
+function today(at=new Date()){
  return new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Colombo",year:"numeric",
- month:"2-digit",day:"2-digit"}).format(new Date());
+ month:"2-digit",day:"2-digit"}).format(at);
 }
 export default {fetch:withSupabase({auth:"user"},async(req:any,ctx:any)=>{
  if(req.method!=="POST")return say(405,"METHOD_NOT_ALLOWED");
@@ -185,8 +185,14 @@ export default {fetch:withSupabase({auth:"user"},async(req:any,ctx:any)=>{
  !Number.isFinite(Date.parse(captured))||bytes.length<100||
  bytes[0]!==255||bytes[1]!==216)return say(400,"INVALID_IMAGE_METADATA");
  const serverToday=today();
- if(day>serverToday||(member.data.role==="editor"&&day!==serverToday))
- return say(403,"HISTORICAL_PHOTOS_OWNER_ONLY");
+ // An approved Staff phone may finish uploading immutable originals captured
+ // during the past seven days. This is PHOTO EVIDENCE ONLY; it never grants
+ // permission to change historic quantities, prices, or other financial rows.
+ const staffCutoff=today(new Date(Date.now()-7*86400000));
+ const originalDay=today(new Date(captured));
+ if(day>serverToday||
+   (member.data.role==="editor"&&(day<staffCutoff||originalDay!==day)))
+ return say(403,"HISTORICAL_PHOTO_EVIDENCE_REJECTED");
  const {data:itemRow,error:itemErr}=await db.from("items").select("id")
  .eq("workspace_id",W).eq("id",item).is("deleted_at",null).maybeSingle();
  if(itemErr||!itemRow)return say(409,"CLOUD_ITEM_NOT_FOUND");
