@@ -60,8 +60,15 @@ export default {fetch:withSupabase({auth:"user"},async(req:any,ctx:any)=>{
   db.from("registered_devices").select("id,user_id,enabled,retired_at,can_write")
   .eq("workspace_id",WORKSPACE).eq("id",device).eq("user_id",usr.id).maybeSingle()
  ]);
+ // Enrolling a fresh *pending* Team key is safe: the Team user must hold an
+ // authenticated, currently registered Device ID and sign with the newly
+ // generated non-exportable P-256 key. Gateway access remains forbidden until
+ // the Owner separately approves the phone AND Photo Key in one MFA operation.
+ // A pending Owner device may not enroll (Owner recovery stays MFA-only).
  if(member.error||phone.error||!["owner","editor"].includes(member.data?.role)||
- !phone.data?.enabled||phone.data.retired_at!==null)return reply(403,"DEVICE_NOT_APPROVED");
+ !phone.data||phone.data.retired_at!==null||
+ (member.data.role==="owner"&&!phone.data.enabled))
+ return reply(403,"DEVICE_NOT_REGISTERED_OR_RETIRED");
  if(action==="enroll"){
   const pub=payload.public_key_spki;
   if(typeof pub!=="string"||pub.length<100||pub.length>250||
