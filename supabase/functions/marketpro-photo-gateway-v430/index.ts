@@ -16,7 +16,7 @@ async function digest(body:Uint8Array,algorithm="SHA-256"){
  return [...b].map(x=>x.toString(16).padStart(2,"0")).join("");
 }
 async function verify(action:string,device:string,ts:number,nonce:string,sig:string,pub:string,sha:string):Promise<boolean>{
- if(!["upload","list","download"].includes(action)||!UUID.test(device)||!DIG.test(sha)||
+ if(!["upload","list","list_day","download"].includes(action)||!UUID.test(device)||!DIG.test(sha)||
  !Number.isSafeInteger(ts)||Math.abs(Date.now()/1000-ts)>60||
  typeof nonce!=="string"||nonce.length<22||nonce.length>64||!/^[A-Za-z0-9_-]+$/.test(nonce))
  return false;
@@ -148,7 +148,7 @@ export default {fetch:withSupabase({auth:"user"},async(req:any,ctx:any)=>{
  jwt.is_anonymous===true||!UUID.test(jwt.session_id||""))
  return say(403,"SIGN_IN_REQUIRED");
  const action=req.headers.get("X-MP-Photo-Action")||"";
- if(!["upload","list","download"].includes(action))return say(400,"UNKNOWN_ACTION");
+ if(!["upload","list","list_day","download"].includes(action))return say(400,"UNKNOWN_ACTION");
  const device=req.headers.get("X-MP-Device")||"";
  const ts=Number(req.headers.get("X-MP-Timestamp")||NaN);
  const nonce=req.headers.get("X-MP-Nonce")||"";
@@ -225,6 +225,34 @@ export default {fetch:withSupabase({auth:"user"},async(req:any,ctx:any)=>{
  .order("captured_at",{ascending:true}).limit(200);
  if(error)return say(503,"PHOTO_LIST_FAILED");
  return say(200,"OK",{photos:items||[]});
+ }
+ // Read-only, authenticated cross-phone gallery. Crucially, this query does
+ // not rely on the viewer phone's local Room item-number/UUID journal.
+ // The existing JWT, registered-device, pinned P-256 proof and nonce guards
+ // above run before this branch; neither Box credentials nor URLs are returned.
+ if(action==="list_day"){
+ const day=body.business_date||"";
+ if(typeof day!=="string"||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(day)||
+ day<"2000-01-01"||day>"2100-12-31")return say(400,"INVALID_DAY");
+ const {data:rows,error}=await db.from("marketpro_item_photos")
+  .select("photo_id,sha256,bytes,captured_at,item_id")
+  .eq("workspace_id",W).eq("business_date",day)
+  .order("captured_at",{ascending:true}).limit(200);
+ if(error)return say(503,"PHOTO_LIST_FAILED");
+ const photos=rows||[];
+ const ids=[...new Set(photos.map((r:any)=>r.item_id).filter((x:any)=>UUID.test(String(x))))];
+ let labels=new Map<string,string>();
+ if(ids.length){
+  const {data:items,error:itemsError}=await db.from("items")
+    .select("id,name").eq("workspace_id",W).in("id",ids);
+  if(itemsError)return say(503,"PHOTO_ITEM_NAMES_UNAVAILABLE");
+  labels=new Map((items||[]).map((r:any)=>[String(r.id),String(r.name||"")]));
+ }
+ return say(200,"OK",{photos:photos.map((r:any)=>({
+  photo_id:r.photo_id,sha256:r.sha256,bytes:r.bytes,
+  captured_at:r.captured_at,item_id:r.item_id,
+  item_name:labels.get(String(r.item_id))||"Unknown Item"
+ }))});
  }
  if(action==="download"){
  if(!UUID.test(body.photo_id||""))return say(400,"INVALID_PHOTO_ID");
