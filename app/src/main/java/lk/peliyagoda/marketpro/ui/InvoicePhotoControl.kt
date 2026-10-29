@@ -127,6 +127,7 @@ fun InvoicePhotoControl(
     }
     var refresh by remember(businessDate, itemId) { mutableIntStateOf(0) }
     var photoDialog by remember(businessDate, itemId) { mutableStateOf(false) }
+    var cloudBrowseOpen by remember(businessDate) { mutableStateOf(false) }
     var fullPreview by remember(businessDate, itemId) { mutableStateOf<File?>(null) }
     var pendingPath by rememberSaveable(businessDate, itemId) { mutableStateOf("") }
 
@@ -156,9 +157,16 @@ fun InvoicePhotoControl(
             val result=runCatching{
                 val uuid=MarketDatabase.get(context).cloudDao()
                     .cloudId("item",itemId.toString())
-                if(uuid==null)emptyList() else gateway.list(uuid,businessDate)
+                if(uuid==null) {
+                    cloudNotice = "Item not linked to Cloud ID yet. Use View Cloud Photos for this date."
+                    emptyList()
+                } else gateway.list(uuid,businessDate)
             }
-            result.onSuccess { cloudPhotos=it }
+            result.onSuccess {
+                cloudPhotos=it
+                if(it.isEmpty() && cloudNotice.isBlank())
+                    cloudNotice="No Box photos linked to this item/date. Browse the date gallery if needed."
+            }
                 .onFailure {
                     cloudPhotos=emptyList()
                     cloudNotice="Cloud Photos Unavailable. Local Originals Are Still Safe."
@@ -325,6 +333,13 @@ fun InvoicePhotoControl(
                             }
                         }
                     }
+                    OutlinedButton(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = {
+                            photoDialog = false
+                            cloudBrowseOpen = true
+                        }
+                    ) { Text("View All Cloud Photos For This Date") }
                     Text("Note: JSON Backup Does Not Include Invoice Images.",
                         color = ProColors.muted,
                         style = MaterialTheme.typography.labelSmall)
@@ -333,6 +348,13 @@ fun InvoicePhotoControl(
             confirmButton = {
                 TextButton(onClick = { photoDialog = false }) { Text("Close") }
             }
+        )
+    }
+
+    if (cloudBrowseOpen) {
+        CloudPhotoGalleryDialog(
+            initialDate = businessDate,
+            onDismiss = { cloudBrowseOpen = false }
         )
     }
 
