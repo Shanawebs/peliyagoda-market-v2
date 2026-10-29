@@ -24,7 +24,7 @@ internal class MarketPhotoLocalStore(private val context:Context,private val db:
     suspend fun registerCapturedOriginal(day:String,itemId:Long,original:File):Result =
         withContext(Dispatchers.IO) {
             lock.withLock {
-                val date=MarketPhotoIdentity.day(day)
+                val date=MarketPhotoIdentity.validateDay(day)
                 require(itemId>0)
                 val expectedFolder=File(File(File(context.filesDir,"invoices"),date),"item-$itemId").canonicalFile
                 val safe=original.canonicalFile
