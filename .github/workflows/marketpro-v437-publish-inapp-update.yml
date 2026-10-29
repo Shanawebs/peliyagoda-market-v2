@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
-      GH_TOKEN: ${{ secrets.MARKETPRO_RELEASE_PAT || github.token }}
+      GH_TOKEN: ${{ github.token }}
       SOURCE_RUN: '40930735941'
       SOURCE_SHA: 191d562d1f9ac597c4152f2c1f2b7c137b38ff59
       SOURCE_ARTIFACT: MarketPro-v4.3.7-PhotoUpload-Signed-QA-NOT-RELEASE
