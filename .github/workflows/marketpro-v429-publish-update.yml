@@ -1,0 +1,108 @@
+name: Publish Market Pro v4.2.9 Verified QA Update
+
+on:
+  push:
+    branches:
+      - feature/marketpro-v429-box-connect-qa
+    paths:
+      - .github/workflows/marketpro-v429-publish-update.yml
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: marketpro-v429-verified-release
+  cancel-in-progress: false
+
+jobs:
+  publish-verified-update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PREVIOUS_TAG: marketpro-phone-manager-qa-v4.2.8
+      TAG: marketpro-box-connect-qa-v4.2.9
+      APK: MarketPro-v4.2.9-BoxConnect-QA-signed.apk
+      SHA256: e8b8c12c468632ce396cf17f25a0b27428b2c0211413359135adc9214cc7f141
+      QA_RUN_ID: '40829434185'
+    steps:
+      - name: Download the already-tested, signed QA APK artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download "$QA_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name MarketPro-v4.2.9-BoxConnect-QA --dir .
+          test -s "$APK"
+          printf '%s  %s\n' "$SHA256" "$APK" | sha256sum --check --status
+
+      - name: Install Android APK verification tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" --install "build-tools;35.0.0" "platform-tools"
+
+      - name: Verify package version, signing, and existing v4.2.8 compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          SIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          "$AAPT" dump badging "$APK" >/tmp/mp429-badging.txt
+          grep -Fq "package: name='lk.peliyagoda.marketpro.staging.fullapp'" /tmp/mp429-badging.txt
+          grep -Fq "versionCode='429'" /tmp/mp429-badging.txt
+          grep -Fq "versionName='4.2.9'" /tmp/mp429-badging.txt
+          grep -Fq "application-label:'Market Pro'" /tmp/mp429-badging.txt
+          ! grep -Fq 'application-debuggable' /tmp/mp429-badging.txt
+          "$SIGNER" verify --print-certs "$APK" >/tmp/mp429-signature.txt
+          grep -Fqi '0a617edb7520deb0255cfc13ee0b2ee8382e2d8e6cb7f8e1dff68b4fbd130c4a' /tmp/mp429-signature.txt
+
+          mkdir -p /tmp/marketpro-v428
+          gh release download "$PREVIOUS_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'MarketPro-v4.2.8-PhoneManager-QA-signed.apk' --dir /tmp/marketpro-v428
+          OLD=/tmp/marketpro-v428/MarketPro-v4.2.8-PhoneManager-QA-signed.apk
+          test -s "$OLD"
+          "$AAPT" dump badging "$OLD" >/tmp/mp428-badging.txt
+          grep -Fq "package: name='lk.peliyagoda.marketpro.staging.fullapp'" /tmp/mp428-badging.txt
+          grep -Fq "versionCode='428'" /tmp/mp428-badging.txt
+          "$SIGNER" verify --print-certs "$OLD" >/tmp/mp428-signature.txt
+          OLD_CERT="$(grep -m1 'Signer #1 certificate SHA-256 digest:' /tmp/mp428-signature.txt | sed 's/.*: //')"
+          NEW_CERT="$(grep -m1 'Signer #1 certificate SHA-256 digest:' /tmp/mp429-signature.txt | sed 's/.*: //')"
+          test -n "$OLD_CERT" && test "$OLD_CERT" = "$NEW_CERT"
+          echo 'PASS: signed v4.2.9 is compatible update to signed v4.2.8'
+
+      - name: Publish exactly one pre-release for Check For Updates
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Release tag already exists. Refusing overwrite."
+            exit 1
+          fi
+          cat > /tmp/marketpro-v429-release-notes.md <<'NOTES'
+          Market Pro v4.2.9 — Box Connect QA.
+
+          Install exclusively through the existing Market Pro app menu:
+          Menu → Check For Updates → Download → Install Update.
+
+          Adds owner-only Box Photo Cloud OAuth login UI, reuses Supabase Owner
+          Authenticator verification, and safely checks Box connection status.
+          Original photo upload/download synchronization is not enabled yet.
+
+          Same staging application ID and permanent Android signing certificate
+          as v4.2.8. No uninstall, data clearing, or side-loading required.
+          Android requires the owner's explicit install approval.
+          NOTES
+          gh release create "$TAG" "$APK" --repo "$GITHUB_REPOSITORY" \
+            --target 1c8df6ee9b2277c608affd850e26a0cdcad1fabe \
+            --prerelease \
+            --title "Market Pro v4.2.9 Box Connect QA" \
+            --notes-file /tmp/marketpro-v429-release-notes.md
+          EXPECTED="sha256:$SHA256"
+          ACTUAL="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" \
+            --jq '.assets[] | select(.name=="MarketPro-v4.2.9-BoxConnect-QA-signed.apk") | .digest')"
+          test "$EXPECTED" = "$ACTUAL"
+          echo 'PASS: GitHub published signed APK with exact SHA-256.'
