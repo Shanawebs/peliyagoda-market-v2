@@ -54,6 +54,10 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import lk.peliyagoda.marketpro.data.MarketDatabase
 import lk.peliyagoda.marketpro.photo.MarketPhotoLocalStore
+import lk.peliyagoda.marketpro.photo.MarketPhotoGatewayClient
+import lk.peliyagoda.marketpro.photo.MarketPhotoSyncScheduler
+import lk.peliyagoda.marketpro.photo.MarketPhotoIdentity
+import lk.peliyagoda.marketpro.cloud.MarketProActiveRole
 import java.io.File
 import java.time.LocalDate
 import java.text.SimpleDateFormat
@@ -136,6 +140,33 @@ fun InvoicePhotoControl(
         }
     }
 
+    var cloudPhotos by remember(businessDate,itemId) {
+        mutableStateOf<List<MarketPhotoGatewayClient.CloudPhoto>>(emptyList())
+    }
+    var loadingCloud by remember(businessDate,itemId) { mutableStateOf(false) }
+    var cloudNotice by remember(businessDate,itemId) { mutableStateOf("") }
+    val gateway=remember(context) {MarketPhotoGatewayClient(context.applicationContext)}
+
+    // The cloud item's canonical UUID comes from the existing Cloud identity journal.
+    // Never substitute local Room itemId as a Box photo filter.
+    LaunchedEffect(photoDialog,businessDate,itemId,refresh) {
+        if(photoDialog){
+            loadingCloud=true
+            cloudNotice=""
+            val result=runCatching{
+                val uuid=MarketDatabase.get(context).cloudDao()
+                    .cloudId("item",itemId.toString())
+                if(uuid==null)emptyList() else gateway.list(uuid,businessDate)
+            }
+            result.onSuccess { cloudPhotos=it }
+                .onFailure {
+                    cloudPhotos=emptyList()
+                    cloudNotice="Cloud Photos Unavailable. Local Originals Are Still Safe."
+                }
+            loadingCloud=false
+        }
+    }
+
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         val file = pendingPath.takeIf { it.isNotBlank() }?.let(::File)
         pendingPath = ""
@@ -151,6 +182,7 @@ fun InvoicePhotoControl(
                 runCatching {
                     photoStore.registerCapturedOriginal(businessDate, itemId, file)
                 }.onSuccess { result ->
+                    MarketPhotoSyncScheduler.onPhotoSaved(context)
                     if (result.gallerySaved) {
                         message("Original And Gallery Copy Saved")
                     } else {
@@ -182,6 +214,7 @@ fun InvoicePhotoControl(
 
     fun captureOriginal() {
         runCatching {
+            MarketProActiveRole.requireBusinessDateEditable(context.applicationContext,businessDate)
             val file = InvoicePhotoStore.newPhoto(context, businessDate, itemId)
             pendingPath = file.absolutePath
             camera.launch(InvoicePhotoStore.cameraUri(context, file))
@@ -189,7 +222,7 @@ fun InvoicePhotoControl(
             pendingPath.takeIf { it.isNotBlank() }?.let(::File)
                 ?.takeIf { it.exists() && it.length() == 0L }?.delete()
             pendingPath = ""
-            message("Could Not Open The Camera")
+            message("Photo Capture Not Allowed Or Camera Unavailable")
         }
     }
 
@@ -197,7 +230,7 @@ fun InvoicePhotoControl(
     IconButton(
         enabled = photos != null,
         onClick = {
-            if (photos.isNullOrEmpty()) captureOriginal() else photoDialog = true
+            photoDialog = true
         }
     ) {
         Icon(
@@ -216,10 +249,34 @@ fun InvoicePhotoControl(
                     Text("Original Photos Are Saved On This Device.",
                         color = ProColors.muted,
                         style = MaterialTheme.typography.bodySmall)
+                    if (loadingCloud) Text("Checking Cloud Photos...")
+                    if (cloudNotice.isNotBlank()) Text(cloudNotice)
                     LazyColumn(
                         modifier = Modifier.fillMaxWidth().heightIn(max = 330.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        items(cloudPhotos.filterNot { remote ->
+                            photos.orEmpty().any { local ->
+                                runCatching {
+                                    MarketPhotoIdentity.id(local,businessDate,itemId)==remote.id
+                                }.getOrDefault(false)
+                            }
+                        }, key = { it.id }) { entry ->
+                            val downloadScope=rememberCoroutineScope()
+                            OutlinedButton(
+                                modifier=Modifier.fillMaxWidth(),
+                                onClick={
+                                    downloadScope.launch {
+                                        runCatching{gateway.download(entry)}
+                                            .onSuccess {fullPreview=it}
+                                            .onFailure {message("Could Not Load Box Photo")}
+                                    }
+                                }
+                            ){
+                                Icon(Icons.Default.PhotoLibrary,contentDescription=null)
+                                Text(" Box Photo • ${entry.capturedAt.take(16)}")
+                            }
+                        }
                         items(photos.orEmpty(), key = { it.absolutePath }) { file ->
                             Row(
                                 modifier = Modifier.fillMaxWidth()
