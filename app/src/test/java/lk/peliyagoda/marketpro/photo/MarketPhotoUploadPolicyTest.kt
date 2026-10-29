@@ -9,10 +9,15 @@ class MarketPhotoUploadPolicyTest {
         assertTrue(MarketPhotoUploadPolicy.eligible("2026-10-29","2026-10-29",false))
         assertTrue(MarketPhotoUploadPolicy.eligible("2026-10-29","2026-10-29",true))
     }
-    @Test fun staffCannotModifyOldDaysThroughPhotoUpload() {
-        assertFalse(MarketPhotoUploadPolicy.eligible("2026-10-28","2026-10-29",false))
-        assertTrue(MarketPhotoUploadPolicy.eligible("2026-10-28","2026-10-29",true))
+    @Test fun immutableDelayedEvidenceCanUploadButFinancialEditsRemainOwnerOnly() {
+        assertTrue(MarketPhotoUploadPolicy.eligible("2026-10-28","2026-10-29",false))
+        assertFalse(MarketPhotoUploadPolicy.eligible("2026-10-21","2026-10-29",false))
+        assertTrue(MarketPhotoUploadPolicy.eligible("2026-10-21","2026-10-29",true))
         assertFalse(MarketPhotoUploadPolicy.eligible("2026-10-30","2026-10-29",true))
+        assertTrue(MarketPhotoUploadPolicy.capturedOnDay(
+            "2026-10-29",java.time.Instant.parse("2026-10-29T18:45:00Z").toEpochMilli()))
+        assertFalse(MarketPhotoUploadPolicy.capturedOnDay(
+            "2026-10-28",java.time.Instant.parse("2026-10-29T18:45:00Z").toEpochMilli()))
     }
     @Test fun invalidDatesAndOversizedFilesNeverUpload() {
         assertFalse(MarketPhotoUploadPolicy.eligible("bad","2026-10-29",true))
