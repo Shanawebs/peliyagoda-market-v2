@@ -24,7 +24,7 @@ internal class MarketPhotoGatewayClient(context:Context) {
     private val app=context.applicationContext
     private val uploadUrl=URL("${BuildConfig.MARKETPRO_SUPABASE_URL}/functions/v1/marketpro-photo-gateway-v430")
     private val enrollUrl=URL("${BuildConfig.MARKETPRO_SUPABASE_URL}/functions/v1/marketpro-photo-key-enroll-v430")
-    data class CloudPhoto(val id:String,val sha256:String,val bytes:Long,val capturedAt:String)
+    data class CloudPhoto(val id:String,val sha256:String,val bytes:Long,val capturedAt:String, val itemId:String?=null, val itemName:String?=null)
 
     private fun uuid(input:String):String=
         UUID.fromString(input).toString().also {require(it==input)}
@@ -158,6 +158,34 @@ internal class MarketPhotoGatewayClient(context:Context) {
                 photo.getLong("bytes"),photo.getString("captured_at"))
         }
     }
+    /**
+     * Signed read-only date gallery. The server determines the item's canonical
+     * cloud UUID and display name; local Room UUID mappings are not required.
+     * The old per-item list endpoint remains unchanged for older APK versions.
+     */
+    suspend fun listDay(day:String):List<CloudPhoto>{
+        require(day.matches(Regex("\\d{4}-\\d{2}-\\d{2}")))
+        require(java.time.LocalDate.parse(day).toString()==day)
+        val payload=JSONObject().put("business_date",day)
+        val reply=requireNotNull(
+            request("list_day",payload.toString().toByteArray(StandardCharsets.UTF_8))
+        )
+        val entries=reply.getJSONArray("photos")
+        require(entries.length()<=200)
+        return (0 until entries.length()).map { i ->
+            val row=entries.getJSONObject(i)
+            val name=row.getString("item_name").trim().take(90)
+            CloudPhoto(
+                id=uuid(row.getString("photo_id")),
+                sha256=row.getString("sha256"),
+                bytes=row.getLong("bytes"),
+                capturedAt=row.getString("captured_at"),
+                itemId=uuid(row.getString("item_id")),
+                itemName=name
+            )
+        }
+    }
+
     suspend fun download(photo:CloudPhoto):File=withContext(Dispatchers.IO){
         require(photo.bytes in 1L..(16L*1024*1024))
         val dir=File(app.cacheDir,"marketpro_box_previews")
