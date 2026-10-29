@@ -22,10 +22,18 @@ import java.time.ZoneId
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
+/**
+ * Recovery mitigation: automatic photo worker is temporarily suspended.
+ * This never deletes an original image or local metadata. Photo Cloud can be
+ * safely re-enabled only after Samsung runtime diagnostics and migration QA.
+ */
+private const val PHOTO_WORKER_PAUSED_FOR_SAMSUNG_RECOVERY = true
+
 /** Separate photo queue. Never modifies the financial sync journal or original files. */
 internal class MarketPhotoSyncWorker(context:Context,parameters:WorkerParameters):
     CoroutineWorker(context,parameters){
     override suspend fun doWork():Result{
+        if (PHOTO_WORKER_PAUSED_FOR_SAMSUNG_RECOVERY) return Result.success()
         val app=applicationContext
         if(BuildConfig.MARKETPRO_LOCAL_PREVIEW || !BuildConfig.MARKETPRO_REQUIRE_CLOUD_ROLE)
             return Result.success()
@@ -80,7 +88,7 @@ internal class MarketPhotoSyncWorker(context:Context,parameters:WorkerParameters
 
 /** Network-constrained retry schedule. No permanent foreground service required. */
 internal object MarketPhotoSyncScheduler {
-    private fun enabled()=!BuildConfig.MARKETPRO_LOCAL_PREVIEW &&
+    private fun enabled()=!PHOTO_WORKER_PAUSED_FOR_SAMSUNG_RECOVERY && !BuildConfig.MARKETPRO_LOCAL_PREVIEW &&
         BuildConfig.MARKETPRO_REQUIRE_CLOUD_ROLE
     private val network=Constraints.Builder()
         .setRequiredNetworkType(NetworkType.CONNECTED).build()
