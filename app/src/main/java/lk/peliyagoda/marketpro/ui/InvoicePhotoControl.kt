@@ -115,7 +115,7 @@ internal object InvoicePhotoStore {
 }
 
 @Composable
-fun InvoicePhotoControl(
+internal fun InvoicePhotoControl(
     businessDate: String,
     itemId: Long,
     itemName: String,
