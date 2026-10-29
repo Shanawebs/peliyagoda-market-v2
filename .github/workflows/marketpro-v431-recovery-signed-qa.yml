@@ -75,7 +75,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: MarketPro-v4.3.1-SamsungRecovery-Signed-QA-NOT-RELEASE
-          path: MarketPro-v4.3.1-PhotoCloud-QA-signed.apk
+          path: MarketPro-v4.3.1-SamsungRecovery-QA-signed.apk
           retention-days: 3
           if-no-files-found: error
       - name: Remove local keystore
