@@ -295,15 +295,17 @@ interface MarketDao {
         CategoryEntity::class, PurchaseAdditionEntity::class,
         DailyCashReceivedEntity::class, DailyOtherExpenseEntity::class, CatalogStateEntity::class,
         CloudOutboxEntity::class, CloudIdentityEntity::class, CloudSyncStateEntity::class,
-        CloudInboxSnapshotEntity::class, CloudInboxCursorEntity::class
+        CloudInboxSnapshotEntity::class, CloudInboxCursorEntity::class,
+        MarketPhotoEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class MarketDatabase : RoomDatabase() {
     abstract fun dao(): MarketDao
     abstract fun cloudDao(): CloudSyncDao
     abstract fun inboxDao(): CloudInboxDao
+    abstract fun photoDao(): MarketPhotoDao
 
     companion object {
         private val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -404,13 +406,22 @@ abstract class MarketDatabase : RoomDatabase() {
             }
         }
 
+        /** Add-only Room 7→8 migration, existing purchases and photos untouched. */
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""CREATE TABLE IF NOT EXISTS `market_photos` (`photoId` TEXT NOT NULL,`businessDate` TEXT NOT NULL,`itemId` INTEGER NOT NULL,`cloudItemId` TEXT,`originDeviceId` TEXT,`localOriginalPath` TEXT NOT NULL,`galleryUri` TEXT,`sha256` TEXT NOT NULL,`bytes` INTEGER NOT NULL,`capturedAtMs` INTEGER NOT NULL,`syncState` TEXT NOT NULL,`boxFileId` TEXT,`retryCount` INTEGER NOT NULL,`lastError` TEXT,`updatedAtMs` INTEGER NOT NULL,PRIMARY KEY(`photoId`))""")
+                db.execSQL("""CREATE INDEX IF NOT EXISTS `index_market_photos_businessDate_itemId` ON `market_photos` (`businessDate`, `itemId`)""")
+                db.execSQL("""CREATE INDEX IF NOT EXISTS `index_market_photos_syncState_capturedAtMs` ON `market_photos` (`syncState`, `capturedAtMs`)""")
+            }
+        }
+
         @Volatile private var instance: MarketDatabase? = null
         fun get(context: Context): MarketDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 MarketDatabase::class.java,
                 "peliyagoda-market-pro.db"
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8).build().also { instance = it }
         }
     }
 }
