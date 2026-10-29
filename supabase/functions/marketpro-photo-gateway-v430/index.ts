@@ -16,7 +16,7 @@ async function digest(body:Uint8Array,algorithm="SHA-256"){
  return [...b].map(x=>x.toString(16).padStart(2,"0")).join("");
 }
 async function verify(action:string,device:string,ts:number,nonce:string,sig:string,pub:string,sha:string):Promise<boolean>{
- if(!["upload","list","list_day","download"].includes(action)||!UUID.test(device)||!DIG.test(sha)||
+ if(!["upload","list","list_day","download","resolve_item"].includes(action)||!UUID.test(device)||!DIG.test(sha)||
  !Number.isSafeInteger(ts)||Math.abs(Date.now()/1000-ts)>60||
  typeof nonce!=="string"||nonce.length<22||nonce.length>64||!/^[A-Za-z0-9_-]+$/.test(nonce))
  return false;
@@ -148,7 +148,7 @@ export default {fetch:withSupabase({auth:"user"},async(req:any,ctx:any)=>{
  jwt.is_anonymous===true||!UUID.test(jwt.session_id||""))
  return say(403,"SIGN_IN_REQUIRED");
  const action=req.headers.get("X-MP-Photo-Action")||"";
- if(!["upload","list","list_day","download"].includes(action))return say(400,"UNKNOWN_ACTION");
+ if(!["upload","list","list_day","download","resolve_item"].includes(action))return say(400,"UNKNOWN_ACTION");
  const device=req.headers.get("X-MP-Device")||"";
  const ts=Number(req.headers.get("X-MP-Timestamp")||NaN);
  const nonce=req.headers.get("X-MP-Nonce")||"";
@@ -217,6 +217,19 @@ export default {fetch:withSupabase({auth:"user"},async(req:any,ctx:any)=>{
  }
  let body:any;
  try{body=JSON.parse(new TextDecoder().decode(bytes));}catch{return say(400,"INVALID_JSON");}
+ // Approved owner/staff phones may resolve EXACT canonical catalog UUIDs.
+ // A local numeric Room ID or an ambiguous name is NEVER trusted.
+ if(action==="resolve_item"){
+  const name=body.item_name;
+  if(typeof name!=="string"||name.length===0||name.length>250||
+    name.trim()!==name)return say(400,"INVALID_ITEM_NAME");
+  const {data:items,error}=await db.from("items").select("id")
+   .eq("workspace_id",W).eq("name",name).is("deleted_at",null).limit(2);
+  if(error)return say(503,"ITEM_LOOKUP_UNAVAILABLE");
+  if(!items||items.length!==1||!UUID.test(String(items[0].id)))
+    return say(200,items&&items.length>1?"AMBIGUOUS_ITEM":"ITEM_NOT_FOUND",{item_id:null});
+  return say(200,"RESOLVED",{item_id:items[0].id});
+ }
  if(action==="list"){
  if(!UUID.test(body.item_id||"")||!/^\d{4}-\d{2}-\d{2}$/.test(body.business_date||""))
  return say(400,"INVALID_FILTER");
