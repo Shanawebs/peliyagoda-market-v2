@@ -1,4 +1,4 @@
-name: Market Pro v4.4.0 QA Only
+name: Market Pro v4.4.1 QA and Signed Candidate
 
 on:
   pull_request:
@@ -7,10 +7,10 @@ on:
       - 'stagingMarket/**'
       - 'gradle/**'
       - '*.gradle.kts'
-      - '.github/workflows/marketpro-v440-qa.yml'
+      - '.github/workflows/marketpro-v441-qa.yml'
   push:
     branches:
-      - feature/marketpro-v440-r2-photo-reliability-qa
+      - feature/marketpro-v441-subs-photo-retry-qa
   workflow_dispatch:
 
 permissions:
@@ -80,11 +80,11 @@ jobs:
           APK="$(find stagingMarket/build/outputs/apk/release -maxdepth 1 -name '*.apk' | head -n 1)"
           test -n "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "package: name='lk.peliyagoda.marketpro.staging.fullapp' versionCode='440' versionName='4.4.0'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "package: name='lk.peliyagoda.marketpro.staging.fullapp' versionCode='441' versionName='4.4.1'"
           sha256sum "$APK" > "$APK.sha256"
       - uses: actions/upload-artifact@v4
         with:
-          name: marketpro-v440-signed-candidate
+          name: marketpro-v441-signed-candidate
           path: |
             stagingMarket/build/outputs/apk/release/*.apk
             stagingMarket/build/outputs/apk/release/*.sha256
@@ -93,47 +93,70 @@ jobs:
         if: always()
         run: rm -f "$RUNNER_TEMP/marketpro-stable.jks"
 
+
   publish-update:
     needs: [android-qa, signed-candidate]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Retrieve signed candidate from verified build
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
-          name: marketpro-v440-signed-candidate
+          name: marketpro-v441-signed-candidate
           path: candidate
-      - name: Verify pinned signed APK digest
+      - name: Verify v4.4.1 signed update
         run: |
           set -euo pipefail
           APK="$(find candidate -name '*.apk' -type f | head -n 1)"
           test -f "$APK"
-          actual="$(sha256sum "$APK" | cut -d ' ' -f 1)"
-          expected="$(cut -d " " -f 1 "$APK.sha256")"
-          test "$actual" = "$expected"
+          test "$(sha256sum "$APK" | cut -d ' ' -f 1)" = "$(cut -d ' ' -f 1 "$APK.sha256")"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$APK"
-          cp "$APK" MarketPro-v4.4.0-stable-signed.apk
-      - name: Publish v4.4.0 for Check For Updates
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "package: name='lk.peliyagoda.marketpro.staging.fullapp' versionCode='441' versionName='4.4.1'"
+          cp "$APK" MarketPro-v4.4.1-stable-signed.apk
+      - name: Publish updater release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if gh release view marketpro-stable-signed-v4.4.0 -R Shanawebs/peliyagoda-market-v2 >/dev/null 2>&1; then
-            gh release view marketpro-stable-signed-v4.4.0 -R Shanawebs/peliyagoda-market-v2 --json isDraft,assets > release.json
-            test "$(jq -r '.isDraft' release.json)" = "false"
-            if jq -e '.assets[] | select(.name == "MarketPro-v4.4.0-stable-signed.apk")' release.json >/dev/null; then
-              echo "Verified non-draft v4.4.0 release already contains updater APK."
-              exit 0
-            fi
-            gh release upload marketpro-stable-signed-v4.4.0 MarketPro-v4.4.0-stable-signed.apk -R Shanawebs/peliyagoda-market-v2
-            echo "Added missing signed APK to existing non-draft release."
-            exit 0
+          if gh release view marketpro-stable-signed-v4.4.1 -R Shanawebs/peliyagoda-market-v2 >/dev/null 2>&1; then
+            gh release view marketpro-stable-signed-v4.4.1 -R Shanawebs/peliyagoda-market-v2 --json isDraft,assets | jq -e '.isDraft == false and any(.assets[]; .name == "MarketPro-v4.4.1-stable-signed.apk")'
+          else
+            gh release create marketpro-stable-signed-v4.4.1 MarketPro-v4.4.1-stable-signed.apk \
+              -R Shanawebs/peliyagoda-market-v2 \
+              --title "Market Pro v4.4.1 Subs Photo Recovery" \
+              --notes "In-place signed upgrade. Improved pending photo retries and diagnostics. Original photos preserved." \
+              --prerelease
           fi
-          gh release create marketpro-stable-signed-v4.4.0 \
-            MarketPro-v4.4.0-stable-signed.apk \
-            --repo Shanawebs/peliyagoda-market-v2 \
-            --title "Market Pro v4.4.0 Stable Signed Update" \
-            --notes "Signed in-place update from v4.3.9. R2-only gallery labels and completed migration button removed. Existing Box backups preserved." \
-            --prerelease
 
+  publish-verified:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Retrieve previous passed QA signed APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api /repos/Shanawebs/peliyagoda-market-v2/actions/artifacts/13000566642/zip > candidate.zip
+          unzip -q candidate.zip -d candidate
+      - name: Validate signature, version and SHA
+        run: |
+          set -euo pipefail
+          APK="$(find candidate -name '*.apk' -type f | head -n 1)"
+          test -f "$APK"
+          test "$(sha256sum "$APK" | cut -d ' ' -f 1)" = "$(cut -d ' ' -f 1 "$APK.sha256")"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "package: name='lk.peliyagoda.marketpro.staging.fullapp' versionCode='441' versionName='4.4.1'"
+          cp "$APK" MarketPro-v4.4.1-stable-signed.apk
+      - name: Release for in-app updates
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG=marketpro-stable-signed-v4.4.1
+          if gh release view "$TAG" -R Shanawebs/peliyagoda-market-v2 >/dev/null 2>&1; then
+            gh release view "$TAG" -R Shanawebs/peliyagoda-market-v2 --json isDraft,assets | jq -e '.isDraft == false and any(.assets[]; .name == "MarketPro-v4.4.1-stable-signed.apk")'
+          else
+            gh release create "$TAG" MarketPro-v4.4.1-stable-signed.apk -R Shanawebs/peliyagoda-market-v2 --title "Market Pro v4.4.1 Subs Photo Retry" --notes "Verified signed in-place update. More frequent photo retry; originals preserved." --prerelease
+          fi
