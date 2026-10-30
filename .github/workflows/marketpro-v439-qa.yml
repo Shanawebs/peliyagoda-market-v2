@@ -1,4 +1,4 @@
-name: Market Pro v4.4.1 QA Only
+name: Market Pro v4.4.1 QA and Signed Candidate
 
 on:
   pull_request:
