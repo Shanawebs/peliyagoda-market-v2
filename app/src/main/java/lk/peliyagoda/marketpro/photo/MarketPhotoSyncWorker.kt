@@ -73,6 +73,9 @@ internal class MarketPhotoSyncWorker(context:Context,parameters:WorkerParameters
             if(cloudId!=null) {
                 dao.bindVerifiedCloudItem(photo.photoId,cloudId,device,
                     System.currentTimeMillis())
+            } else {
+                // Missing cloud catalog linkage must remain retryable.
+                retry=true
             }
         }
 
@@ -90,8 +93,12 @@ internal class MarketPhotoSyncWorker(context:Context,parameters:WorkerParameters
                     File(app.filesDir,"invoices").canonicalPath+File.separator) &&
                 MarketPhotoIdentity.sha256(original)==photo.sha256
             }.getOrDefault(false)
-            if(!valid)continue
-            val itemId=photo.cloudItemId ?: continue
+            if(!valid){
+                retry=true
+                continue
+            }
+            val itemId=photo.cloudItemId
+            if(itemId==null){retry=true;continue}
             if(!runCatching { UUID.fromString(itemId).toString()==itemId }
                 .getOrDefault(false))continue
             if(photo.originDeviceId!=device)continue
@@ -170,7 +177,7 @@ internal object MarketPhotoSyncScheduler {
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL,30L,TimeUnit.SECONDS)
             .build()
         WorkManager.getInstance(context.applicationContext)
-            .enqueueUniqueWork("marketpro_photo_once",ExistingWorkPolicy.KEEP,request)
+            .enqueueUniqueWork("marketpro_photo_once",ExistingWorkPolicy.APPEND_OR_REPLACE,request)
     }
     fun schedule(context:Context){
         if(!enabled())return
