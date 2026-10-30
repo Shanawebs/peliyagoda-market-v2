@@ -84,3 +84,40 @@ jobs:
         run: rm -f "$RUNNER_TEMP/marketpro-stable.jks"
 
 # Release publication is intentionally disabled until QA verification.
+
+  publish-v440:
+    needs: [verify, signed-candidate]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: marketpro-v440-r2-cleanup-signed-candidate
+          path: candidate
+      - name: Verify signed v4.4.0 candidate
+        run: |
+          set -euo pipefail
+          APK="$(find candidate -name '*.apk' -type f | head -n 1)"
+          test -f "$APK"
+          actual="$(sha256sum "$APK" | cut -d ' ' -f 1)"
+          expected="$(cut -d ' ' -f 1 "$APK.sha256")"
+          test "$actual" = "$expected"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "package: name='lk.peliyagoda.marketpro.staging.fullapp' versionCode='440' versionName='4.4.0'"
+          cp "$APK" MarketPro-v4.4.0-stable-signed.apk
+      - name: Publish new version without overwriting existing releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="marketpro-stable-signed-v4.4.0"
+          if gh release view "$TAG" --repo Shanawebs/peliyagoda-market-v2 >/dev/null 2>&1; then
+            echo "v4.4.0 release already exists; no overwrite."
+            exit 0
+          fi
+          gh release create "$TAG" MarketPro-v4.4.0-stable-signed.apk \
+            --repo Shanawebs/peliyagoda-market-v2 \
+            --title "Market Pro v4.4.0 R2 Cleanup" \
+            --notes "In-place update from v4.3.9. Cloudflare R2 gallery labels, completed migration button removed. Box backup retained." \
+            --prerelease
