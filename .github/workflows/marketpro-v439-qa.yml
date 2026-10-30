@@ -134,17 +134,6 @@ jobs:
             MarketPro-v4.4.0-stable-signed.apk \
             --repo Shanawebs/peliyagoda-market-v2 \
             --title "Market Pro v4.4.0 Stable Signed Update" \
-            --notes "Signed in-place update over v4.3.8. Unified photo permissions, R2 sync retry, Owner-only Box-to-R2 migration. Do not disconnect Box until migration verification." \
+            --notes "Signed in-place update from v4.3.9. R2-only gallery labels and completed migration button removed. Existing Box backups preserved." \
             --prerelease
 
-  release-metadata:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Inspect published release asset metadata
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh api repos/Shanawebs/peliyagoda-market-v2/releases/tags/marketpro-stable-signed-v4.4.0 \
-            --jq '.assets[] | select(.name == "MarketPro-v4.4.0-stable-signed.apk") | {name: .name, size: .size, digest: .digest, url: .browser_download_url, state: .state}'
