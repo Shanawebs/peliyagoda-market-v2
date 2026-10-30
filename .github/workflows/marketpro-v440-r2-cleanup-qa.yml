@@ -82,3 +82,5 @@ jobs:
       - name: Erase temporary signing key
         if: always()
         run: rm -f "$RUNNER_TEMP/marketpro-stable.jks"
+
+# Release publication is intentionally disabled until QA verification.
