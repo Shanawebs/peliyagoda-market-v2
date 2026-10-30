@@ -34,12 +34,18 @@ internal object MarketPhotoCardMatchPolicy {
         if (canonical.isNotEmpty()) {
             return PhotoCardMatchResult(canonical, PhotoCardMatchStatus.CANONICAL_ID)
         }
-        val name = localItemName.trim()
+        // Normalize presentation-only whitespace and Unicode composition.
+        // Never use fuzzy or substring matching: a wrong receipt is worse
+        // than an unmatched one, especially across separate owner/team phones.
+        fun normalized(value: String): String =
+            java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFC)
+                .trim().replace(Regex("\\s+"), " ")
+        val name = normalized(localItemName)
         if (name.isEmpty() || name.equals("Unknown Item", ignoreCase = true)) {
             return PhotoCardMatchResult(emptyList(), PhotoCardMatchStatus.NONE)
         }
         val byName = dayPhotos.filter {
-            it.itemId != null && it.itemName?.trim() == name
+            it.itemId != null && it.itemName?.let(::normalized) == name
         }
         if (byName.isEmpty()) {
             return PhotoCardMatchResult(emptyList(), PhotoCardMatchStatus.NONE)
