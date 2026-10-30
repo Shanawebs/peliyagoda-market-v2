@@ -1,6 +1,7 @@
 package lk.peliyagoda.marketpro.photo
 
 import android.content.Context
+import android.util.Log
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
@@ -37,7 +38,7 @@ internal class MarketPhotoSyncWorker(context:Context,parameters:WorkerParameters
         val app=applicationContext
         if(BuildConfig.MARKETPRO_LOCAL_PREVIEW || !BuildConfig.MARKETPRO_REQUIRE_CLOUD_ROLE)
             return@withContext Result.success()
-        val role=MarketProActiveRole.current(app) ?: return@withContext Result.success()
+        val role=MarketProActiveRole.current(app) ?: return@withContext Result.retry()
         val owner=role==TeamRole.OWNER
         val today=LocalDate.now(ZoneId.of("Asia/Colombo")).toString()
         val cutoff=LocalDate.parse(today).minusDays(7).toString()
@@ -51,13 +52,16 @@ internal class MarketPhotoSyncWorker(context:Context,parameters:WorkerParameters
         // Recover originals captured while cloud uploads were intentionally paused.
         // Bounded to 40 files in recent app-private day folders only.
         runCatching { registerRecentOriginals(app,db,today,owner) }
+            .onFailure { Log.w("MarketPhotoSync", "Local photo recovery failed", it) }
         dao.recoverInterruptedUploads(System.currentTimeMillis()-300_000L,
             System.currentTimeMillis())
         val gateway=MarketPhotoGatewayClient(app)
         // A linked phone self-registers its non-exportable signing key.
         // Server authorization remains bound to enabled, writable Team/Owner device.
         // Owner key recovery continues to require owner MFA.
-        val keyReady=runCatching { gateway.enrollThisPhone() }.isSuccess
+        val keyReady=runCatching { gateway.enrollThisPhone() }
+            .onFailure { Log.w("MarketPhotoSync", "Photo key enrollment failed", it) }
+            .isSuccess
         if(!keyReady) return@withContext Result.retry()
         val items=db.dao().allItems().associate { it.id to it.name }
         var retry=false
@@ -115,6 +119,7 @@ internal class MarketPhotoSyncWorker(context:Context,parameters:WorkerParameters
                 check(dao.confirmUploaded(photo.photoId,null,System.currentTimeMillis())==1)
             } catch(e:Exception) {
                 retry=true
+                Log.w("MarketPhotoSync", "Cloud photo upload failed for "+photo.photoId,e)
                 dao.retryUpload(photo.photoId,e.message?.take(140)?:"Cloud unreachable",
                     System.currentTimeMillis())
             }
@@ -186,10 +191,10 @@ internal object MarketPhotoSyncScheduler {
     }
     fun schedule(context:Context){
         if(!enabled())return
-        val periodic=PeriodicWorkRequestBuilder<MarketPhotoSyncWorker>(6,TimeUnit.HOURS)
+        val periodic=PeriodicWorkRequestBuilder<MarketPhotoSyncWorker>(15,TimeUnit.MINUTES)
             .setConstraints(network).build()
         WorkManager.getInstance(context.applicationContext).enqueueUniquePeriodicWork(
-            "marketpro_photo_retry",ExistingPeriodicWorkPolicy.KEEP,periodic)
+            "marketpro_photo_retry",ExistingPeriodicWorkPolicy.UPDATE,periodic)
         // Immediate catch-up on app start, including older paused app versions.
         onPhotoSaved(context)
     }
