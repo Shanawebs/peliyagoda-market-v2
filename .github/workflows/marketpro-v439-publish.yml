@@ -30,7 +30,10 @@ jobs:
           APK="$(find candidate -name '*.apk' -type f | head -n 1)"
           test -f "$APK"
           test -f "$APK.sha256"
-          (cd "$(dirname "$APK")" && sha256sum -c "$(basename "$APK").sha256")
+          ACTUAL="$(sha256sum "$APK" | cut -d " " -f 1)"
+          EXPECTED="$(cut -d " " -f 1 "$APK.sha256")"
+          test "$ACTUAL" = "$EXPECTED"
+          test "$ACTUAL" = "49e6c7b0034ec48585747772e934a0d6c2f930dedd687ad34520d2138f385f5d"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "package: name='lk.peliyagoda.marketpro.staging.fullapp' versionCode='439' versionName='4.3.9'"
           cp "$APK" MarketPro-v4.3.9-stable-signed.apk
