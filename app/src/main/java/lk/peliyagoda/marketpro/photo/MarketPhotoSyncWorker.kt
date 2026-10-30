@@ -68,7 +68,8 @@ internal class MarketPhotoSyncWorker(context:Context,parameters:WorkerParameters
         var retry=false
 
         for(photo in dao.waitingItemLinkEligible(today,cutoff,owner,20)) {
-            val name=items[photo.itemId] ?: run {
+            val name=items[photo.itemId]
+            if(name==null){
                 Log.w("MarketPhotoSync", "Missing local item for pending photo "+photo.photoId)
                 retry=true
                 continue
