@@ -153,7 +153,7 @@ internal fun InvoicePhotoControl(
     var loadingCloud by remember(businessDate, itemId) { mutableStateOf(false) }
     var cloudNotice by remember(businessDate, itemId) { mutableStateOf("") }
     val gateway = remember(context) { MarketPhotoGatewayClient(context.applicationContext) }
-    // Serialize thumbnail downloads to protect the Box refresh lease.
+    // Serialize thumbnail downloads to limit mobile bandwidth.
     val thumbnailMutex = remember(gateway) { Mutex() }
 
     // Photo Card uses the same authenticated server date-gallery as the menu
@@ -323,7 +323,7 @@ internal fun InvoicePhotoControl(
                                     photoScope.launch {
                                         runCatching { gateway.download(entry) }
                                             .onSuccess { fullPreview = it }
-                                            .onFailure { message("Could Not Load Box Photo") }
+                                            .onFailure { message("Could Not Load Cloud Photo") }
                                     }
                                 }
                             )
@@ -396,7 +396,7 @@ internal fun InvoicePhotoControl(
         )
     }
 
-    // Restore the original date-wise, read-only Box gallery from this card.
+    // Date-wise, read-only Cloudflare R2 gallery from this card.
     // Its signed Cloud API and previous/next day navigation stay unchanged.
     if (cloudBrowseOpen) {
         CloudPhotoGalleryDialog(
