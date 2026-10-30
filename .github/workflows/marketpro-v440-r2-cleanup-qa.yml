@@ -1,0 +1,28 @@
+name: Market Pro v4.4.0 R2 Cleanup QA
+
+on:
+  push:
+    branches:
+      - feature/marketpro-v440-r2-only-cleanup-qa
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - name: Build staging debug and run unit tests
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon :stagingMarket:assembleDebug :app:testDebugUnitTest
+      - name: No APK publication
+        run: echo "QA only. No release changes."
