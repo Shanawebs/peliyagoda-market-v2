@@ -43,9 +43,9 @@ import java.io.File
 import java.time.LocalDate
 
 /**
- * Read-only, signed Box photo browser. A photo belongs to a canonical cloud
+ * Read-only, signed R2 photo browser. A photo belongs to a canonical cloud
  * item, regardless of either phone's local Room numeric item ID and UUID links.
- * Never clears data, writes a local purchase, or exposes Box file URLs/tokens.
+ * Never clears data, writes a local purchase, or exposes Cloud storage credentials.
  */
 @Composable
 internal fun CloudPhotoGalleryDialog(
@@ -92,7 +92,7 @@ internal fun CloudPhotoGalleryDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    "Original-quality Box photos • View only",
+                    "Original-quality Cloudflare R2 Photos • View Only",
                     style = MaterialTheme.typography.bodySmall
                 )
                 Row(
@@ -136,7 +136,7 @@ internal fun CloudPhotoGalleryDialog(
                                             selectedName = photo.itemName ?: "Invoice Photo"
                                             selectedFile = file
                                         } catch (e: Exception) {
-                                            notice = "Could not download this Box photo. " +
+                                            notice = "Could not download this Cloud photo. " +
                                                 "The original on the capture phone is unchanged."
                                         } finally {
                                             downloading = false
