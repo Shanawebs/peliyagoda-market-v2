@@ -25,6 +25,15 @@ class MarketPhotoCardMatchPolicyTest {
         assertEquals(1, found.photos.size)
     }
 
+    @Test fun unicodeNormalizedSinhalaNameAndSpacingMatch() {
+        val found = MarketPhotoCardMatchPolicy.match(
+            listOf(photo("p1", "remote-a", "කේල්  කොල")),
+            null, "  කේල් කොල  "
+        )
+        assertEquals(PhotoCardMatchStatus.UNIQUE_NAME, found.status)
+        assertEquals(listOf("p1"), found.photos.map { it.id })
+    }
+
     @Test fun ambiguousCloudNamesNeverCrossAssociate() {
         val found = MarketPhotoCardMatchPolicy.match(
             listOf(photo("p1", "remote-a", "Carrot"), photo("p2", "remote-b", "Carrot")),

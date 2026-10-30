@@ -54,6 +54,11 @@ internal class MarketPhotoSyncWorker(context:Context,parameters:WorkerParameters
         dao.recoverInterruptedUploads(System.currentTimeMillis()-300_000L,
             System.currentTimeMillis())
         val gateway=MarketPhotoGatewayClient(app)
+        // A linked phone self-registers its non-exportable signing key.
+        // Server authorization remains bound to enabled, writable Team/Owner device.
+        // Owner key recovery continues to require owner MFA.
+        val keyReady=runCatching { gateway.enrollThisPhone() }.isSuccess
+        if(!keyReady) return@withContext Result.retry()
         val items=db.dao().allItems().associate { it.id to it.name }
         var retry=false
 
@@ -73,6 +78,9 @@ internal class MarketPhotoSyncWorker(context:Context,parameters:WorkerParameters
             if(cloudId!=null) {
                 dao.bindVerifiedCloudItem(photo.photoId,cloudId,device,
                     System.currentTimeMillis())
+            } else {
+                // Missing cloud catalog linkage must remain retryable.
+                retry=true
             }
         }
 
@@ -90,8 +98,12 @@ internal class MarketPhotoSyncWorker(context:Context,parameters:WorkerParameters
                     File(app.filesDir,"invoices").canonicalPath+File.separator) &&
                 MarketPhotoIdentity.sha256(original)==photo.sha256
             }.getOrDefault(false)
-            if(!valid)continue
-            val itemId=photo.cloudItemId ?: continue
+            if(!valid){
+                retry=true
+                continue
+            }
+            val itemId=photo.cloudItemId
+            if(itemId==null){retry=true;continue}
             if(!runCatching { UUID.fromString(itemId).toString()==itemId }
                 .getOrDefault(false))continue
             if(photo.originDeviceId!=device)continue
@@ -170,7 +182,7 @@ internal object MarketPhotoSyncScheduler {
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL,30L,TimeUnit.SECONDS)
             .build()
         WorkManager.getInstance(context.applicationContext)
-            .enqueueUniqueWork("marketpro_photo_once",ExistingWorkPolicy.KEEP,request)
+            .enqueueUniqueWork("marketpro_photo_once",ExistingWorkPolicy.APPEND_OR_REPLACE,request)
     }
     fun schedule(context:Context){
         if(!enabled())return

@@ -12,6 +12,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.launch
+import lk.peliyagoda.marketpro.cloud.MarketProActiveRole
+import lk.peliyagoda.marketpro.cloud.TeamRole
+import lk.peliyagoda.marketpro.photo.MarketPhotoMigrationClient
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -25,6 +31,10 @@ import lk.peliyagoda.marketpro.BuildConfig
 @Composable
 fun SecurityAndTeamStatusDialog(onDismiss: () -> Unit) {
     var showTeamSetup by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var migrating by remember { mutableStateOf(false) }
+    var migrationStatus by remember { mutableStateOf("") }
 
     if (!showTeamSetup) {
         AlertDialog(
@@ -69,8 +79,39 @@ fun SecurityAndTeamStatusDialog(onDismiss: () -> Unit) {
                         color = ProColors.teal
                     )
                     Text(
+                        "Team Phone එක Approve කළ පසු Data Sync සහ Photo Cloud permissions දෙකම " +
+                            "එකම linked phone එකට ලබාදෙයි. Photo signing key එක " +
+                            "background එකෙන් register වෙයි; වෙනම Team Photo approval අවශ්‍ය නැහැ."
+                    )
+                    Text(
                         "Local Restore PIN එක Restore Backup (JSON) තෝරන විට පරීක්ෂා කරයි."
                     )
+                    if (!BuildConfig.MARKETPRO_LOCAL_PREVIEW &&
+                        MarketProActiveRole.current(context.applicationContext) == TeamRole.OWNER) {
+                        Text(
+                            "One-time migration: copy existing Box originals to date-wise R2 folders, " +
+                                "verify checksums, and retain Box backups. No deletion."
+                        )
+                        Button(enabled = !migrating, onClick = {
+                            migrating = true
+                            migrationStatus = "Checking pending Box photos..."
+                            scope.launch {
+                                runCatching {
+                                    MarketPhotoMigrationClient(context.applicationContext)
+                                        .migrateAll { done, total ->
+                                            migrationStatus = "Verified $done / $total photos"
+                                        }
+                                }.onSuccess { (done, total) ->
+                                    migrationStatus = "R2 migration verified: $done / $total"
+                                }.onFailure {
+                                    migrationStatus = "Migration stopped safely: " +
+                                        (it.message ?: "Unknown error").take(90)
+                                }
+                                migrating = false
+                            }
+                        }) { Text(if (migrating) "Migrating..." else "Migrate Box Photos to R2") }
+                        if (migrationStatus.isNotBlank()) Text(migrationStatus)
+                    }
                     Button(onClick = { showTeamSetup = true }) {
                         Text("Team Login, Phone Linking & Sync")
                     }
