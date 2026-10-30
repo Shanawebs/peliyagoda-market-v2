@@ -1,4 +1,4 @@
-name: Market Pro v4.3.9 QA Only
+name: Market Pro v4.4.0 QA Only
 
 on:
   pull_request:
@@ -7,10 +7,10 @@ on:
       - 'stagingMarket/**'
       - 'gradle/**'
       - '*.gradle.kts'
-      - '.github/workflows/marketpro-v439-qa.yml'
+      - '.github/workflows/marketpro-v440-qa.yml'
   push:
     branches:
-      - feature/marketpro-v439-r2-photo-reliability-qa
+      - feature/marketpro-v440-r2-photo-reliability-qa
   workflow_dispatch:
 
 permissions:
@@ -80,11 +80,11 @@ jobs:
           APK="$(find stagingMarket/build/outputs/apk/release -maxdepth 1 -name '*.apk' | head -n 1)"
           test -n "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "package: name='lk.peliyagoda.marketpro.staging.fullapp' versionCode='439' versionName='4.3.9'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "package: name='lk.peliyagoda.marketpro.staging.fullapp' versionCode='440' versionName='4.4.0'"
           sha256sum "$APK" > "$APK.sha256"
       - uses: actions/upload-artifact@v4
         with:
-          name: marketpro-v439-signed-candidate
+          name: marketpro-v440-signed-candidate
           path: |
             stagingMarket/build/outputs/apk/release/*.apk
             stagingMarket/build/outputs/apk/release/*.sha256
@@ -102,7 +102,7 @@ jobs:
       - name: Retrieve signed candidate from verified build
         uses: actions/download-artifact@v4
         with:
-          name: marketpro-v439-signed-candidate
+          name: marketpro-v440-signed-candidate
           path: candidate
       - name: Verify pinned signed APK digest
         run: |
@@ -113,27 +113,27 @@ jobs:
           expected="$(cut -d " " -f 1 "$APK.sha256")"
           test "$actual" = "$expected"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$APK"
-          cp "$APK" MarketPro-v4.3.9-stable-signed.apk
-      - name: Publish v4.3.9 for Check For Updates
+          cp "$APK" MarketPro-v4.4.0-stable-signed.apk
+      - name: Publish v4.4.0 for Check For Updates
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if gh release view marketpro-stable-signed-v4.3.9 -R Shanawebs/peliyagoda-market-v2 >/dev/null 2>&1; then
-            gh release view marketpro-stable-signed-v4.3.9 -R Shanawebs/peliyagoda-market-v2 --json isDraft,assets > release.json
+          if gh release view marketpro-stable-signed-v4.4.0 -R Shanawebs/peliyagoda-market-v2 >/dev/null 2>&1; then
+            gh release view marketpro-stable-signed-v4.4.0 -R Shanawebs/peliyagoda-market-v2 --json isDraft,assets > release.json
             test "$(jq -r '.isDraft' release.json)" = "false"
-            if jq -e '.assets[] | select(.name == "MarketPro-v4.3.9-stable-signed.apk")' release.json >/dev/null; then
-              echo "Verified non-draft v4.3.9 release already contains updater APK."
+            if jq -e '.assets[] | select(.name == "MarketPro-v4.4.0-stable-signed.apk")' release.json >/dev/null; then
+              echo "Verified non-draft v4.4.0 release already contains updater APK."
               exit 0
             fi
-            gh release upload marketpro-stable-signed-v4.3.9 MarketPro-v4.3.9-stable-signed.apk -R Shanawebs/peliyagoda-market-v2
+            gh release upload marketpro-stable-signed-v4.4.0 MarketPro-v4.4.0-stable-signed.apk -R Shanawebs/peliyagoda-market-v2
             echo "Added missing signed APK to existing non-draft release."
             exit 0
           fi
-          gh release create marketpro-stable-signed-v4.3.9 \
-            MarketPro-v4.3.9-stable-signed.apk \
+          gh release create marketpro-stable-signed-v4.4.0 \
+            MarketPro-v4.4.0-stable-signed.apk \
             --repo Shanawebs/peliyagoda-market-v2 \
-            --title "Market Pro v4.3.9 Stable Signed Update" \
+            --title "Market Pro v4.4.0 Stable Signed Update" \
             --notes "Signed in-place update over v4.3.8. Unified photo permissions, R2 sync retry, Owner-only Box-to-R2 migration. Do not disconnect Box until migration verification." \
             --prerelease
 
@@ -146,5 +146,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh api repos/Shanawebs/peliyagoda-market-v2/releases/tags/marketpro-stable-signed-v4.3.9 \
-            --jq '.assets[] | select(.name == "MarketPro-v4.3.9-stable-signed.apk") | {name: .name, size: .size, digest: .digest, url: .browser_download_url, state: .state}'
+          gh api repos/Shanawebs/peliyagoda-market-v2/releases/tags/marketpro-stable-signed-v4.4.0 \
+            --jq '.assets[] | select(.name == "MarketPro-v4.4.0-stable-signed.apk") | {name: .name, size: .size, digest: .digest, url: .browser_download_url, state: .state}'
