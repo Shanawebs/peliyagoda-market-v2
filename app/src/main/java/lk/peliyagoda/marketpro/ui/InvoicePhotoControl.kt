@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -52,6 +53,7 @@ import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import lk.peliyagoda.marketpro.data.MarketDatabase
 import lk.peliyagoda.marketpro.photo.MarketPhotoLocalStore
 import lk.peliyagoda.marketpro.photo.MarketPhotoGatewayClient
@@ -151,6 +153,8 @@ internal fun InvoicePhotoControl(
     var loadingCloud by remember(businessDate, itemId) { mutableStateOf(false) }
     var cloudNotice by remember(businessDate, itemId) { mutableStateOf("") }
     val gateway = remember(context) { MarketPhotoGatewayClient(context.applicationContext) }
+    // Serialize thumbnail downloads to protect the Box refresh lease.
+    val thumbnailMutex = remember(gateway) { Mutex() }
 
     // Photo Card uses the same authenticated server date-gallery as the menu
     // previously did. Local UUID lookup is OPTIONAL; if Room lookup fails on a
@@ -295,27 +299,34 @@ internal fun InvoicePhotoControl(
                         modifier = Modifier.fillMaxWidth().heightIn(max = 330.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(cloudPhotos.filterNot { remote ->
-                            photos.orEmpty().any { local ->
-                                runCatching {
-                                    MarketPhotoIdentity.id(local,businessDate,itemId)==remote.id
-                                }.getOrDefault(false)
-                            }
-                        }, key = { it.id }) { entry ->
-                            val downloadScope=rememberCoroutineScope()
-                            OutlinedButton(
-                                modifier=Modifier.fillMaxWidth(),
-                                onClick={
-                                    downloadScope.launch {
-                                        runCatching{gateway.download(entry)}
-                                            .onSuccess {fullPreview=it}
-                                            .onFailure {message("Could Not Load Box Photo")}
+                        itemsIndexed(
+                            cloudPhotos.filterNot { remote ->
+                                photos.orEmpty().any { local ->
+                                    runCatching {
+                                        MarketPhotoIdentity.id(local,businessDate,itemId)==remote.id
+                                    }.getOrDefault(false)
+                                }
+                            }, key = { _, photo -> photo.id }
+                        ) { index, entry ->
+                            MarketCloudPhotoRow(
+                                photo = entry,
+                                position = index,
+                                gateway = gateway,
+                                mutex = thumbnailMutex,
+                                showItemName = false,
+                                // Avoid silently downloading an entire large
+                                // date's gallery over mobile data. First four
+                                // visible receipts have previews; all remain
+                                // tappable for individual verified downloads.
+                                autoThumbnail = index < 4,
+                                onClick = {
+                                    photoScope.launch {
+                                        runCatching { gateway.download(entry) }
+                                            .onSuccess { fullPreview = it }
+                                            .onFailure { message("Could Not Load Box Photo") }
                                     }
                                 }
-                            ){
-                                Icon(Icons.Default.PhotoLibrary,contentDescription=null)
-                                Text(" Box Photo • ${entry.capturedAt.take(16)}")
-                            }
+                            )
                         }
                         items(photos.orEmpty(), key = { it.absolutePath }) { file ->
                             Row(

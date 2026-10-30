@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -35,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import lk.peliyagoda.marketpro.photo.MarketPhotoGatewayClient
 import java.io.File
@@ -52,6 +54,7 @@ internal fun CloudPhotoGalleryDialog(
 ) {
     val context = LocalContext.current.applicationContext
     val gateway = remember(context) { MarketPhotoGatewayClient(context) }
+    val thumbnailMutex = remember(gateway) { Mutex() }
     val scope = rememberCoroutineScope()
     var day by remember(initialDate) { mutableStateOf(LocalDate.parse(initialDate)) }
     var refresh by remember { mutableIntStateOf(0) }
@@ -113,36 +116,35 @@ internal fun CloudPhotoGalleryDialog(
                     modifier = Modifier.fillMaxWidth().heightIn(max = 340.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(photos, key = { it.id }) { photo ->
-                        OutlinedButton(
-                            enabled = !downloading,
-                            modifier = Modifier.fillMaxWidth(),
+                    itemsIndexed(photos, key = { _, photo -> photo.id }) { index, photo ->
+                        MarketCloudPhotoRow(
+                            photo = photo,
+                            position = index,
+                            gateway = gateway,
+                            mutex = thumbnailMutex,
+                            showItemName = true,
+                            // Small bounded automatic previews; other rows
+                            // remain accessible using the full-photo action.
+                            autoThumbnail = index < 4,
                             onClick = {
-                                downloading = true
-                                notice = ""
-                                scope.launch {
-                                    try {
-                                        val file = gateway.download(photo)
-                                        selectedName = photo.itemName ?: "Invoice Photo"
-                                        selectedFile = file
-                                    } catch (e: Exception) {
-                                        notice = "Could not download this Box photo. " +
-                                            "The original on the capture phone is unchanged."
-                                    } finally {
-                                        downloading = false
+                                if (!downloading) {
+                                    downloading = true
+                                    notice = ""
+                                    scope.launch {
+                                        try {
+                                            val file = gateway.download(photo)
+                                            selectedName = photo.itemName ?: "Invoice Photo"
+                                            selectedFile = file
+                                        } catch (e: Exception) {
+                                            notice = "Could not download this Box photo. " +
+                                                "The original on the capture phone is unchanged."
+                                        } finally {
+                                            downloading = false
+                                        }
                                     }
                                 }
                             }
-                        ) {
-                            Column(Modifier.fillMaxWidth()) {
-                                Text(photo.itemName ?: "Unknown Item",
-                                    fontWeight = FontWeight.Bold)
-                                Text(
-                                    "${photo.capturedAt.take(16)} • ${photo.bytes / 1024} KB",
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                        }
+                        )
                     }
                 }
                 if (downloading) Text("Downloading and verifying original JPEG...")
