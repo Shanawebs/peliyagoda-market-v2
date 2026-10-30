@@ -69,6 +69,11 @@ fun SecurityAndTeamStatusDialog(onDismiss: () -> Unit) {
                         color = ProColors.teal
                     )
                     Text(
+                        "Team Phone එක Approve කළ පසු Data Sync සහ Photo Cloud permissions දෙකම " +
+                            "එකම linked phone එකට ලබාදෙයි. Photo signing key එක " +
+                            "background එකෙන් register වෙයි; වෙනම Team Photo approval අවශ්‍ය නැහැ."
+                    )
+                    Text(
                         "Local Restore PIN එක Restore Backup (JSON) තෝරන විට පරීක්ෂා කරයි."
                     )
                     Button(onClick = { showTeamSetup = true }) {
