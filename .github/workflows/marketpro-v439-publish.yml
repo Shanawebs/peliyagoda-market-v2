@@ -1,0 +1,51 @@
+name: Publish Market Pro v4.3.9 Check For Updates
+
+on:
+  push:
+    branches:
+      - feature/marketpro-v439-r2-photo-reliability-qa
+    paths:
+      - '.github/workflows/marketpro-v439-publish.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download already verified signed candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -H "Accept: application/vnd.github+json" \
+            /repos/Shanawebs/peliyagoda-market-v2/actions/artifacts/12980552201/zip > candidate.zip
+          unzip -q candidate.zip -d candidate
+          find candidate -name '*.apk' -type f
+      - name: Confirm package, SHA, and signing
+        run: |
+          set -euo pipefail
+          APK="$(find candidate -name '*.apk' -type f | head -n 1)"
+          test -f "$APK"
+          test -f "$APK.sha256"
+          (cd "$(dirname "$APK")" && sha256sum -c "$(basename "$APK").sha256")
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "package: name='lk.peliyagoda.marketpro.staging.fullapp' versionCode='439' versionName='4.3.9'"
+          cp "$APK" MarketPro-v4.3.9-stable-signed.apk
+      - name: Publish GitHub release for in-app updater
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view marketpro-stable-signed-v4.3.9 -R Shanawebs/peliyagoda-market-v2 >/dev/null 2>&1; then
+            echo "Release already exists; refusing overwrite"
+            exit 1
+          fi
+          gh release create marketpro-stable-signed-v4.3.9 \
+            MarketPro-v4.3.9-stable-signed.apk \
+            --repo Shanawebs/peliyagoda-market-v2 \
+            --title "Market Pro v4.3.9 – Stable Signed Update" \
+            --notes "Update over v4.3.8 without uninstall. Unified Team/Photo permissions, R2 photo retry, and Owner-only Box-to-R2 migration control. Keep Box connected until migration is verified." \
+            --prerelease
