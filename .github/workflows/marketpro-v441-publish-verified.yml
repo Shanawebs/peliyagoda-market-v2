@@ -1,0 +1,45 @@
+name: Publish previously verified Market Pro v4.4.1
+
+on:
+  push:
+    branches:
+      - feature/marketpro-v441-subs-photo-retry-qa
+    paths:
+      - '.github/workflows/marketpro-v441-publish-verified.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download QA passed signed artifact from run 41103911451
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api /repos/Shanawebs/peliyagoda-market-v2/actions/artifacts/13000566642/zip > candidate.zip
+          unzip -q candidate.zip -d candidate
+      - name: Verify APK package, version, signature, integrity
+        run: |
+          set -euo pipefail
+          APK="$(find candidate -name '*.apk' -type f | head -n 1)"
+          test -f "$APK"
+          test -f "$APK.sha256"
+          test "$(sha256sum "$APK" | cut -d ' ' -f 1)" = "$(cut -d ' ' -f 1 "$APK.sha256")"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "package: name='lk.peliyagoda.marketpro.staging.fullapp' versionCode='441' versionName='4.4.1'"
+          cp "$APK" MarketPro-v4.4.1-stable-signed.apk
+      - name: Publish only if release is missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG=marketpro-stable-signed-v4.4.1
+          if gh release view "$TAG" -R Shanawebs/peliyagoda-market-v2 >/dev/null 2>&1; then
+            gh release view "$TAG" -R Shanawebs/peliyagoda-market-v2 --json isDraft,assets | jq -e '.isDraft == false and any(.assets[]; .name == "MarketPro-v4.4.1-stable-signed.apk")'
+          else
+            gh release create "$TAG" MarketPro-v4.4.1-stable-signed.apk -R Shanawebs/peliyagoda-market-v2 --title "Market Pro v4.4.1 Subs Photo Retry" --notes "Signed in-place update from v4.4.0. Retains originals; retries pending photos more frequently." --prerelease
+          fi
