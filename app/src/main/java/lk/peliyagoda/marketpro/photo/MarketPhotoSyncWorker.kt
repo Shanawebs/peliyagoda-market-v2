@@ -49,6 +49,7 @@ internal class MarketPhotoSyncWorker(context:Context,parameters:WorkerParameters
         if(!runCatching { UUID.fromString(device).toString()==device }.getOrDefault(false))
             return@withContext Result.failure()
 
+        Log.i("MarketPhotoSync", "Worker started role="+role+" date="+today)
         // Recover originals captured while cloud uploads were intentionally paused.
         // Bounded to 40 files in recent app-private day folders only.
         runCatching { registerRecentOriginals(app,db,today,owner) }
@@ -67,7 +68,12 @@ internal class MarketPhotoSyncWorker(context:Context,parameters:WorkerParameters
         var retry=false
 
         for(photo in dao.waitingItemLinkEligible(today,cutoff,owner,20)) {
-            val name=items[photo.itemId] ?: continue
+            val name=items[photo.itemId]
+            if(name==null){
+                Log.w("MarketPhotoSync", "Missing local item for pending photo "+photo.photoId)
+                retry=true
+                continue
+            }
             val journalId=runCatching {
                 identity.cloudId("item",photo.itemId.toString())
             }.getOrNull()?.takeIf { id ->
@@ -83,6 +89,7 @@ internal class MarketPhotoSyncWorker(context:Context,parameters:WorkerParameters
                 dao.bindVerifiedCloudItem(photo.photoId,cloudId,device,
                     System.currentTimeMillis())
             } else {
+                Log.w("MarketPhotoSync", "Missing cloud item link for "+photo.photoId)
                 // Missing cloud catalog linkage must remain retryable.
                 retry=true
             }
@@ -103,6 +110,7 @@ internal class MarketPhotoSyncWorker(context:Context,parameters:WorkerParameters
                 MarketPhotoIdentity.sha256(original)==photo.sha256
             }.getOrDefault(false)
             if(!valid){
+                Log.w("MarketPhotoSync", "Local original missing or changed for "+photo.photoId)
                 retry=true
                 continue
             }
@@ -110,7 +118,11 @@ internal class MarketPhotoSyncWorker(context:Context,parameters:WorkerParameters
             if(itemId==null){retry=true;continue}
             if(!runCatching { UUID.fromString(itemId).toString()==itemId }
                 .getOrDefault(false))continue
-            if(photo.originDeviceId!=device)continue
+            if(photo.originDeviceId!=device){
+                Log.w("MarketPhotoSync", "Photo origin does not match device "+photo.photoId)
+                retry=true
+                continue
+            }
             if(dao.claimUpload(photo.photoId,System.currentTimeMillis())!=1)continue
             claimed++
             try {
@@ -124,6 +136,7 @@ internal class MarketPhotoSyncWorker(context:Context,parameters:WorkerParameters
                     System.currentTimeMillis())
             }
         }
+        Log.i("MarketPhotoSync", "Worker finished claimed="+claimed+" retry="+retry)
         // Exponential WorkManager backoff avoids a busy retry loop.
         if(retry || (claimed==MarketPhotoUploadPolicy.BATCH &&
             dao.pendingEligibleCount(today,cutoff,owner)>0)) Result.retry()
@@ -187,7 +200,7 @@ internal object MarketPhotoSyncScheduler {
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL,30L,TimeUnit.SECONDS)
             .build()
         WorkManager.getInstance(context.applicationContext)
-            .enqueueUniqueWork("marketpro_photo_once",ExistingWorkPolicy.APPEND_OR_REPLACE,request)
+            .enqueueUniqueWork("marketpro_photo_once",ExistingWorkPolicy.REPLACE,request)
     }
     fun schedule(context:Context){
         if(!enabled())return
