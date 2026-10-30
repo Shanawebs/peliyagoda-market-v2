@@ -92,3 +92,39 @@ jobs:
       - name: Remove temporary key
         if: always()
         run: rm -f "$RUNNER_TEMP/marketpro-stable.jks"
+
+  publish-update:
+    needs: [android-qa, signed-candidate]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Retrieve signed candidate from verified build
+        uses: actions/download-artifact@v4
+        with:
+          name: marketpro-v439-signed-candidate
+          path: candidate
+      - name: Verify pinned signed APK digest
+        run: |
+          set -euo pipefail
+          APK="$(find candidate -name '*.apk' -type f | head -n 1)"
+          test -f "$APK"
+          actual="$(sha256sum "$APK" | cut -d ' ' -f 1)"
+          test "$actual" = "49e6c7b0034ec48585747772e934a0d6c2f930dedd687ad34520d2138f385f5d"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$APK"
+          cp "$APK" MarketPro-v4.3.9-stable-signed.apk
+      - name: Publish v4.3.9 for Check For Updates
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view marketpro-stable-signed-v4.3.9 -R Shanawebs/peliyagoda-market-v2 >/dev/null 2>&1; then
+            echo "Release already exists, refusing overwrite."
+            exit 1
+          fi
+          gh release create marketpro-stable-signed-v4.3.9 \
+            MarketPro-v4.3.9-stable-signed.apk \
+            --repo Shanawebs/peliyagoda-market-v2 \
+            --title "Market Pro v4.3.9 Stable Signed Update" \
+            --notes "Signed in-place update over v4.3.8. Unified photo permissions, R2 sync retry, Owner-only Box-to-R2 migration. Do not disconnect Box until migration verification." \
+            --prerelease
