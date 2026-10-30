@@ -1,0 +1,132 @@
+name: Publish Market Pro v4.3.8 Distinct Cloud Photo Preview In-App Update
+
+on:
+  push:
+    branches:
+      - feature/marketpro-v438-distinct-cloud-photo-thumbnails-qa
+    paths:
+      - .github/workflows/marketpro-v438-update-feed-publish.yml
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: marketpro-v438-update-feed
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      GH_TOKEN: ${{ secrets.MARKETPRO_RELEASE_PAT || github.token }}
+      SOURCE_RUN: '41006863907'
+      SOURCE_SHA: be702c39dcd444d60748404236d97046059b1320
+      SOURCE_ARTIFACT: MarketPro-v4.3.8-DistinctCloudPhotos-Signed-QA-NOT-RELEASE
+      SOURCE_APK: MarketPro-v4.3.8-DistinctCloudPhotos-QA-signed.apk
+      APK: MarketPro-v4.3.8-signed.apk
+      TAG: marketpro-cloud-thumbnails-v4.3.8-update-feed
+      OLD_TAG: marketpro-photo-sync-v4.3.7-update-feed
+      OLD_APK: MarketPro-v4.3.7-signed.apk
+      EXPECTED_PACKAGE: lk.peliyagoda.marketpro.staging.fullapp
+      EXPECTED_CERT: 0a617edb7520deb0255cfc13ee0b2ee8382e2d8e6cb7f8e1dff68b4fbd130c4a
+
+    steps:
+      - name: Wait for the pinned signed QA run and check it passed
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run watch "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" --exit-status --interval 10
+          ACTUAL_SHA="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" --jq '.head_sha')"
+          CONCLUSION="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" --jq '.conclusion')"
+          test "$ACTUAL_SHA" = "$SOURCE_SHA"
+          test "$CONCLUSION" = success
+
+      - name: Obtain exact QA-verified signed APK (never rebuild it)
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" --name "$SOURCE_ARTIFACT" --dir .
+          test -s "$SOURCE_APK"
+          cp "$SOURCE_APK" "$APK"
+
+      - name: Install APK verification tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" --install "build-tools;35.0.0"
+
+      - name: Verify v4.3.8 APK certificate, identity and in-place version upgrade
+        shell: bash
+        run: |
+          set -euo pipefail
+          AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          SIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          "$AAPT" dump badging "$APK" > /tmp/mp-new-badging
+          grep -Fq "package: name='$EXPECTED_PACKAGE'" /tmp/mp-new-badging
+          grep -Fq "versionCode='438'" /tmp/mp-new-badging
+          grep -Fq "versionName='4.3.8'" /tmp/mp-new-badging
+          ! grep -Fq 'application-debuggable' /tmp/mp-new-badging
+          "$SIGNER" verify --print-certs "$APK" > /tmp/mp-new-cert
+          grep -Fqi "$EXPECTED_CERT" /tmp/mp-new-cert
+          mkdir -p /tmp/marketpro-previous
+          gh release download "$OLD_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$OLD_APK" --dir /tmp/marketpro-previous
+          "$AAPT" dump badging "/tmp/marketpro-previous/$OLD_APK" > /tmp/mp-old-badging
+          grep -Fq "package: name='$EXPECTED_PACKAGE'" /tmp/mp-old-badging
+          grep -Fq "versionCode='437'" /tmp/mp-old-badging
+          "$SIGNER" verify --print-certs "/tmp/marketpro-previous/$OLD_APK" > /tmp/mp-old-cert
+          NEW_CERT="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' /tmp/mp-new-cert | head -n1)"
+          OLD_CERT="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' /tmp/mp-old-cert | head -n1)"
+          test -n "$NEW_CERT" && test "$NEW_CERT" = "$OLD_CERT"
+          sha256sum "$APK"
+          test "$(sha256sum "$APK" | cut -d ' ' -f1)" = "677baebf7018021edeba44c6376440f56e8627baf35df4ed6f331b4f0061410b"
+
+
+      - name: Publish a new immutable-name v4.3.8 release for in-app updates
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Release tag already exists; refusing overwrite"
+            exit 1
+          fi
+          cat > /tmp/marketpro-v438-release-notes.md <<'NOTES'
+          # Market Pro v4.3.8 — Distinct Cloud Photos in the Item Card
+
+          Update without uninstalling: Market Pro → Menu → Check For Updates.
+          Keep linked Owner and Team phone credentials and app storage.
+
+          - Displays distinct signed Box Cloud photo thumbnails for each item.
+          - Displays Photo 1 / Photo 2, Sri Lanka time including seconds,
+            individual file size and immutable short Photo ID.
+          - Uses verified SHA-256 download before preview; Box originals unchanged.
+          - Item-specific photos and date-wide Cloud Gallery both improved.
+          - Keeps v4.3.7 upload worker, automatic retries, stable signing,
+            purchase/quantity/price records and linked devices unchanged.
+          - Existing photo files remain in Box; this is a read-only UI upgrade.
+          - Physical Samsung/Owner/Team photo preview acceptance still pending.
+          - Verified source commit be702c39dcd444d60748404236d97046059b1320.
+          - Successful GitHub Android QA run 41006863907.
+          - Signed APK SHA-256 677baebf7018021edeba44c6376440f56e8627baf35df4ed6f331b4f0061410b.
+          - Docs-only release feed anchor 330f7aaa6787c1290c66d67f9dc7f48dcb1d6d7c;
+            release tag anchor is not the APK source.
+          NOTES
+          gh release create "$TAG" "$APK" --repo "$GITHUB_REPOSITORY" \
+            --target "330f7aaa6787c1290c66d67f9dc7f48dcb1d6d7c" --prerelease \
+            --title 'Market Pro v4.3.8 — Distinct Cloud Photos In-App QA' \
+            --notes-file /tmp/marketpro-v438-release-notes.md
+
+      - name: Verify uploaded APK digest and length against signed QA original
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED="sha256:$(sha256sum "$APK" | cut -d' ' -f1)"
+          ACTUAL="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '.assets[] | select(.name=="MarketPro-v4.3.8-signed.apk") | .digest')"
+          SIZE="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '.assets[] | select(.name=="MarketPro-v4.3.8-signed.apk") | .size')"
+          test -n "$ACTUAL" && test "$ACTUAL" = "$EXPECTED"
+          test "$SIZE" = "$(stat -c%s "$APK")"
+          echo "Verified APK: $EXPECTED"
