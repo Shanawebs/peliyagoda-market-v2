@@ -93,3 +93,37 @@ jobs:
         if: always()
         run: rm -f "$RUNNER_TEMP/marketpro-stable.jks"
 
+
+  publish-update:
+    needs: [android-qa, signed-candidate]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: marketpro-v441-signed-candidate
+          path: candidate
+      - name: Verify v4.4.1 signed update
+        run: |
+          set -euo pipefail
+          APK="$(find candidate -name '*.apk' -type f | head -n 1)"
+          test -f "$APK"
+          test "$(sha256sum "$APK" | cut -d ' ' -f 1)" = "$(cut -d ' ' -f 1 "$APK.sha256")"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "package: name='lk.peliyagoda.marketpro.staging.fullapp' versionCode='441' versionName='4.4.1'"
+          cp "$APK" MarketPro-v4.4.1-stable-signed.apk
+      - name: Publish updater release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view marketpro-stable-signed-v4.4.1 -R Shanawebs/peliyagoda-market-v2 >/dev/null 2>&1; then
+            gh release view marketpro-stable-signed-v4.4.1 -R Shanawebs/peliyagoda-market-v2 --json isDraft,assets | jq -e '.isDraft == false and any(.assets[]; .name == "MarketPro-v4.4.1-stable-signed.apk")'
+          else
+            gh release create marketpro-stable-signed-v4.4.1 MarketPro-v4.4.1-stable-signed.apk \
+              -R Shanawebs/peliyagoda-market-v2 \
+              --title "Market Pro v4.4.1 Subs Photo Recovery" \
+              --notes "In-place signed upgrade. Improved pending photo retries and diagnostics. Original photos preserved." \
+              --prerelease
+          fi
