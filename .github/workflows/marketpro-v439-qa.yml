@@ -29,8 +29,8 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: gradle
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Validate runner Android SDK
+        run: test -d "$ANDROID_HOME" && test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" || test -d "$ANDROID_HOME/platforms"
       - name: Check Gradle wrapper
         run: test -f ./gradlew && chmod +x ./gradlew
       - name: Compile Market Pro staging and run regression tests
