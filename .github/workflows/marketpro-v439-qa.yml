@@ -120,8 +120,15 @@ jobs:
         run: |
           set -euo pipefail
           if gh release view marketpro-stable-signed-v4.3.9 -R Shanawebs/peliyagoda-market-v2 >/dev/null 2>&1; then
-            echo "Release already exists, refusing overwrite."
-            exit 1
+            gh release view marketpro-stable-signed-v4.3.9 -R Shanawebs/peliyagoda-market-v2 --json isDraft,assets > release.json
+            test "$(jq -r '.isDraft' release.json)" = "false"
+            if jq -e '.assets[] | select(.name == "MarketPro-v4.3.9-stable-signed.apk")' release.json >/dev/null; then
+              echo "Verified non-draft v4.3.9 release already contains updater APK."
+              exit 0
+            fi
+            gh release upload marketpro-stable-signed-v4.3.9 MarketPro-v4.3.9-stable-signed.apk -R Shanawebs/peliyagoda-market-v2
+            echo "Added missing signed APK to existing non-draft release."
+            exit 0
           fi
           gh release create marketpro-stable-signed-v4.3.9 \
             MarketPro-v4.3.9-stable-signed.apk \
