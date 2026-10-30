@@ -110,7 +110,8 @@ jobs:
           APK="$(find candidate -name '*.apk' -type f | head -n 1)"
           test -f "$APK"
           actual="$(sha256sum "$APK" | cut -d ' ' -f 1)"
-          test "$actual" = "49e6c7b0034ec48585747772e934a0d6c2f930dedd687ad34520d2138f385f5d"
+          expected="$(cut -d " " -f 1 "$APK.sha256")"
+          test "$actual" = "$expected"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$APK"
           cp "$APK" MarketPro-v4.3.9-stable-signed.apk
       - name: Publish v4.3.9 for Check For Updates
