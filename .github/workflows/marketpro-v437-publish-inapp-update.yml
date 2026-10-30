@@ -83,6 +83,7 @@ jobs:
           OLD_CERT="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' /tmp/mp-old-cert | head -n1)"
           test -n "$NEW_CERT" && test "$NEW_CERT" = "$OLD_CERT"
           sha256sum "$APK"
+          test "$(sha256sum "$APK" | cut -d ' ' -f1)" = "07670c24aec98b781a6e0d647dc69fa209757c24d026f9b38137d4b5caa06ca5"
 
 
       - name: Publish a new immutable-name v4.3.7 release for in-app updates
@@ -112,9 +113,14 @@ jobs:
           - Retains v4.3.6 gallery, photo icons, and Completed item sorting.
           - This is staging QA; Android unit tests and signing verified; observed
             uploads from physical devices are not yet independently confirmed.
+          - Reproducible artifact provenance: exact approved GitHub Actions build
+            #40930735941 from commit 191d562d1f9ac597c4152f2c1f2b7c137b38ff59.
+            Signed APK SHA-256 07670c24aec98b781a6e0d647dc69fa209757c24d026f9b38137d4b5caa06ca5.
+          - GitHub Release tag targets default branch to comply with workflow
+            token permissions; source of binary is pinned above, not the tag.
           NOTES
           gh release create "$TAG" "$APK" --repo "$GITHUB_REPOSITORY" \
-            --target "$SOURCE_SHA" --prerelease \
+            --target "main" --prerelease \
             --title 'Market Pro v4.3.7 — Reliable Photo Sync QA' \
             --notes-file /tmp/marketpro-v437-release-notes.md
 
