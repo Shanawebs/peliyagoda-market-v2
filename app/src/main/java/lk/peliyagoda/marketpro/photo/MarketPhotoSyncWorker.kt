@@ -54,6 +54,11 @@ internal class MarketPhotoSyncWorker(context:Context,parameters:WorkerParameters
         dao.recoverInterruptedUploads(System.currentTimeMillis()-300_000L,
             System.currentTimeMillis())
         val gateway=MarketPhotoGatewayClient(app)
+        // A linked phone self-registers its non-exportable signing key.
+        // Server authorization remains bound to enabled, writable Team/Owner device.
+        // Owner key recovery continues to require owner MFA.
+        val keyReady=runCatching { gateway.enrollThisPhone() }.isSuccess
+        if(!keyReady) return@withContext Result.retry()
         val items=db.dao().allItems().associate { it.id to it.name }
         var retry=false
 
