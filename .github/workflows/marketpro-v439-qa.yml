@@ -129,3 +129,17 @@ jobs:
           else
             gh release create "$TAG" MarketPro-v4.4.5-stable-signed.apk -R Shanawebs/peliyagoda-market-v2 --title "Market Pro v4.4.5 Secure Photo Delete" --notes "Signed in-place update. Photo viewer delete confirmation; Admin any date, Subs own same-day photo only. Cloud reversible tombstones; no purchase records deleted." --prerelease
           fi
+
+
+  check-release-v445:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify actual public GitHub release asset digest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release view marketpro-stable-signed-v4.4.5 -R Shanawebs/peliyagoda-market-v2 --json assets --jq '.assets[] | [.name,.size,.digest] | @tsv'
+          gh release download marketpro-stable-signed-v4.4.5 -R Shanawebs/peliyagoda-market-v2 --pattern 'MarketPro-v4.4.5-stable-signed.apk' --dir /tmp/marketproverify
+          sha256sum /tmp/marketproverify/MarketPro-v4.4.5-stable-signed.apk
+          stat -c '%s' /tmp/marketproverify/MarketPro-v4.4.5-stable-signed.apk
