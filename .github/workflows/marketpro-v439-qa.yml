@@ -102,7 +102,7 @@ jobs:
 
 
   publish-verified-v447:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/feature/marketpro-v447-session-stable-release-qa'
+    if: github.event_name == 'pull_request'
     needs: [android-qa, signed-candidate]
     runs-on: ubuntu-latest
     permissions:
@@ -112,7 +112,7 @@ jobs:
         run: |
           set -euo pipefail
           CURRENT="$(git ls-remote https://github.com/Shanawebs/peliyagoda-market-v2.git refs/heads/feature/marketpro-v447-session-stable-release-qa | cut -f 1)"
-          test "$CURRENT" = "$GITHUB_SHA"
+          test "$CURRENT" = "${{ github.event.pull_request.head.sha }}"
       - uses: actions/download-artifact@v4
         with:
           name: marketpro-v447-signed-candidate
