@@ -1,4 +1,4 @@
-name: Market Pro v4.4.3 QA and Signed Candidate
+name: Market Pro v4.4.4 QA and Signed Candidate
 
 on:
   pull_request:
@@ -7,10 +7,10 @@ on:
       - 'stagingMarket/**'
       - 'gradle/**'
       - '*.gradle.kts'
-      - '.github/workflows/marketpro-v443-qa.yml'
+      - '.github/workflows/marketpro-v444-qa.yml'
   push:
     branches:
-      - feature/marketpro-v443-photo-viewer-qa
+      - feature/marketpro-v444-update-fallback-qa
   workflow_dispatch:
 
 permissions:
@@ -80,11 +80,11 @@ jobs:
           APK="$(find stagingMarket/build/outputs/apk/release -maxdepth 1 -name '*.apk' | head -n 1)"
           test -n "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "package: name='lk.peliyagoda.marketpro.staging.fullapp' versionCode='443' versionName='4.4.3'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "package: name='lk.peliyagoda.marketpro.staging.fullapp' versionCode='444' versionName='4.4.4'"
           sha256sum "$APK" > "$APK.sha256"
       - uses: actions/upload-artifact@v4
         with:
-          name: marketpro-v443-signed-candidate
+          name: marketpro-v444-signed-candidate
           path: |
             stagingMarket/build/outputs/apk/release/*.apk
             stagingMarket/build/outputs/apk/release/*.sha256
@@ -96,47 +96,32 @@ jobs:
 
 
 
-  publish-verified-v443:
+
+  publish-verified-v444:
+    needs: [android-qa, signed-candidate]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Retrieve successfully tested v4.4.3 signed artifact
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: marketpro-v444-signed-candidate
+          path: candidate
+      - name: Verify signed updater APK
         run: |
           set -euo pipefail
-          gh api /repos/Shanawebs/peliyagoda-market-v2/actions/artifacts/13035115244/zip > candidate.zip
-          unzip -q candidate.zip -d candidate
-      - name: Verify signed APK checksum and version
-        run: |
-          set -euo pipefail
-          APK=candidate/stagingMarket-release.apk
+          APK="$(find candidate -type f -name '*.apk' | head -n 1)"
           test -s "$APK"
-          test "$(stat -c %s "$APK")" = "13172991"
-          test "$(sha256sum "$APK" | cut -d ' ' -f 1)" = "2de77e9642079c3619a9703668ca689d7a0e919ddfae3adbfd00e4de22626d8f"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "versionCode='443' versionName='4.4.3'"
-          cp "$APK" MarketPro-v4.4.3-stable-signed.apk
-      - name: Publish GitHub release
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "versionCode='444' versionName='4.4.4'"
+          SHA="$(sha256sum "$APK" | cut -d ' ' -f 1)"
+          SIZE="$(stat -c %s "$APK")"
+          echo "Verified SHA256=$SHA SIZE=$SIZE"
+          cp "$APK" MarketPro-v4.4.4-stable-signed.apk
+      - name: Publish signed GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG=marketpro-stable-signed-v4.4.3
-          if gh release view "$TAG" -R Shanawebs/peliyagoda-market-v2 >/dev/null 2>&1; then
-            gh release view "$TAG" -R Shanawebs/peliyagoda-market-v2 --json assets | jq -e 'any(.assets[]; .name == "MarketPro-v4.4.3-stable-signed.apk")'
-          else
-            gh release create "$TAG" MarketPro-v4.4.3-stable-signed.apk -R Shanawebs/peliyagoda-market-v2 --title "Market Pro v4.4.3 Photo Viewer" --notes "Signed in-place update. Adds pinch zoom/pan and EXIF-correct photo display. Original JPEG unchanged. Photo deletion is not yet available." --prerelease
-          fi
-
-  updater-audit:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Print updater code file paths and safe snippets
-        run: |
-          echo '=== UPDATER FILE PATHS ==='
-          grep -RIlE 'Check For Updates|marketpro_public_update_channel|marketpro-staging|DownloadManager|apk_url' app/src stagingMarket/src || true
-          echo '=== UPDATER RELEVANT LINES ==='
-          grep -RnE -C 2 'marketpro_public_update_channel|marketpro-staging|apk_url|DownloadManager|Check For Updates' app/src stagingMarket/src | head -160 || true
+          TAG=marketpro-stable-signed-v4.4.4
+          gh release create "$TAG" MarketPro-v4.4.4-stable-signed.apk -R Shanawebs/peliyagoda-market-v2 --title "Market Pro v4.4.4 Reliable In-App Updates" --notes "In-place signed update. Fixes Check For Updates when GitHub API succeeds without eligible assets; Supabase update channel is always checked." --prerelease
