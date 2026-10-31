@@ -147,3 +147,23 @@ jobs:
           cmp MarketPro-v4.4.7-stable-signed.apk release-verify/MarketPro-v4.4.7-stable-signed.apk
           echo "RELEASE_SHA256=$(sha256sum release-verify/MarketPro-v4.4.7-stable-signed.apk | cut -d ' ' -f 1)"
           echo "RELEASE_BYTES=$(stat -c %s release-verify/MarketPro-v4.4.7-stable-signed.apk)"
+
+
+  verify-published-v447:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Inspect exact public release APK metadata and signature
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release view marketpro-stable-signed-v4.4.7 -R Shanawebs/peliyagoda-market-v2 --json assets --jq '.assets[] | [.name,.size,.digest] | @tsv'
+          mkdir -p verified
+          gh release download marketpro-stable-signed-v4.4.7 -R Shanawebs/peliyagoda-market-v2 --pattern 'MarketPro-v4.4.7-stable-signed.apk' --dir verified
+          APK=verified/MarketPro-v4.4.7-stable-signed.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "package: name='lk.peliyagoda.marketpro.staging.fullapp' versionCode='447' versionName='4.4.7'"
+          echo "PUBLIC_SHA256=$(sha256sum "$APK" | cut -d ' ' -f 1)"
+          echo "PUBLIC_BYTES=$(stat -c %s "$APK")"
