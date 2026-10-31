@@ -292,9 +292,19 @@ internal object MarketProAutoUpdater {
 
     private fun readLatest(): Candidate? {
         val github = runCatching { networkRetry { readGithubLatest() } }
-        if (github.isSuccess) return github.getOrNull()
+        // A successful GitHub API response can contain no eligible asset (for
+        // example, digest metadata is missing). Never hide the published
+        // Supabase update channel in that case.
+        val githubCandidate = github.getOrNull()
         val cloud = runCatching { networkRetry { readCloudLatest() } }
-        if (cloud.isSuccess) return cloud.getOrNull()
+        val cloudCandidate = cloud.getOrNull()
+        if (githubCandidate != null && cloudCandidate != null) {
+            return if (githubCandidate.version >= cloudCandidate.version)
+                githubCandidate else cloudCandidate
+        }
+        if (cloudCandidate != null) return cloudCandidate
+        if (githubCandidate != null) return githubCandidate
+        if (github.isSuccess || cloud.isSuccess) return null
         throw IOException(
             "Both GitHub and Cloud update checks failed. " +
             "Try Wi-Fi or check the mobile network connection.")
