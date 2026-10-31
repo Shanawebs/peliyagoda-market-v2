@@ -135,7 +135,7 @@ internal class CloudStaffAuth(context: Context) {
         requireActivatedAuth()
         require(route in setOf("/auth/v1/token?grant_type=password",
             "/auth/v1/token?grant_type=refresh_token",
-            "/auth/v1/user","/auth/v1/logout"))
+            "/auth/v1/user","/auth/v1/logout?scope=local"))
         require(method == "GET" || method == "POST")
         val base = URL(BuildConfig.MARKETPRO_SUPABASE_URL)
         require(base.protocol == "https" && base.host == HOST &&
@@ -318,7 +318,7 @@ internal class CloudStaffAuth(context: Context) {
                 BuildConfig.MARKETPRO_TEAM_PULL_RPC_DEPLOYED
             )) {
                 try {
-                    request("/auth/v1/logout","POST",bearer=old.accessToken)
+                    request("/auth/v1/logout?scope=local","POST",bearer=old.accessToken)
                 } catch (_: Exception) {
                     // Server-side device revocation must still be enforced by
                     // every RPC; this local signout is not a global revoke.
