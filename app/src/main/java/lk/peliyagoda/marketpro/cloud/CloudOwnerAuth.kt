@@ -44,6 +44,7 @@ class CloudOwnerAuth(private val app: Context) {
 
     data class Account(val email: String, val userId: String)
     private data class AuthTokens(val email: String, val accessToken: String, val refreshToken: String)
+    private class SessionNeedsSignIn : IOException("Cloud Owner Session Expired — Please Sign In Again")
 
     private val prefs = app.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     private val authMutex = sharedAuthMutex
@@ -122,11 +123,14 @@ class CloudOwnerAuth(private val app: Context) {
                 reader.readText().take(32768)
             } ?: ""
             if (status !in 200..299) {
-                // Never surface service error payloads: they may contain identity details.
+                // Never include response bodies or bearer tokens in UI/logs.
+                if ((path == "/auth/v1/user" && status in setOf(400, 401, 403)) ||
+                    (path.contains("grant_type=refresh_token") && status in setOf(400, 401, 403))
+                ) throw SessionNeedsSignIn()
                 throw IOException(if (status in 400..499) {
-                    "Authentication was not accepted. Check your email verification and credentials (HTTP $status)."
+                    "Authentication request rejected (HTTP $status)."
                 } else {
-                    "Supabase temporarily unavailable (HTTP $status)."
+                    "Cloud Auth temporarily unavailable (HTTP $status). Your saved login is retained."
                 })
             }
             return if (response.isBlank()) JSONObject() else JSONObject(response)
@@ -168,28 +172,50 @@ class CloudOwnerAuth(private val app: Context) {
         Account(email, userId)
     } }
 
+    /**
+     * Refresh tokens rotate on each successful use. Persist the newly rotated
+     * pair immediately, before any separate /user request can fail offline.
+     * Never silently destroy encrypted credentials due to transient failures.
+     */
+    private fun refreshAndPersist(old: AuthTokens): AuthTokens {
+        val response = request(
+            "/auth/v1/token?grant_type=refresh_token", "POST",
+            JSONObject().put("refresh_token", old.refreshToken)
+        )
+        val rotated = AuthTokens(
+            old.email,
+            response.getString("access_token"),
+            response.getString("refresh_token")
+        )
+        check(rotated.accessToken.isNotBlank() && rotated.refreshToken.isNotBlank())
+        remember(rotated)
+        return rotated
+    }
+
     suspend fun currentAccount(): Account? = withContext(Dispatchers.IO) { authMutex.withLock {
-        val old = saved() ?: return@withLock null
-        val first = runCatching { request("/auth/v1/user", "GET", accessToken = old.accessToken) }
-        var profile = first.getOrNull()
-        if (profile == null) {
-            val refreshed = request(
-                "/auth/v1/token?grant_type=refresh_token", "POST",
-                JSONObject().put("refresh_token", old.refreshToken)
-            )
-            val tokens = AuthTokens(
-                old.email,
-                refreshed.getString("access_token"),
-                refreshed.getString("refresh_token")
-            )
-            profile = request("/auth/v1/user", "GET", accessToken = tokens.accessToken)
-            remember(tokens)
+        val previous = saved() ?: return@withLock null
+        var active = previous
+        if (MarketProSessionExpiry.shouldRefresh(active.accessToken)) {
+            active = refreshAndPersist(active)
+        }
+        val profile = try {
+            request("/auth/v1/user", "GET", accessToken = active.accessToken)
+        } catch (error: SessionNeedsSignIn) {
+            // An unexpected token revocation can happen before its exp claim.
+            // One serialized refresh, never a loop and never on a network timeout.
+            active = refreshAndPersist(active)
+            request("/auth/v1/user", "GET", accessToken = active.accessToken)
         }
         val account = Account(
             email = normalizedEmail(profile.getString("email")),
             userId = profile.getString("id")
         )
-        check(account.email == old.email) { "Saved account did not match authenticated identity." }
+        check(account.email == previous.email) { "Cloud Owner identity changed. Please Sign In Again." }
+        if (BuildConfig.MARKETPRO_REQUIRE_CLOUD_ROLE) {
+            check(account.userId == CloudSyncConfig.OWNER_USER_ID) {
+                "Cloud Owner account is not authorized."
+            }
+        }
         account
     } }
 
