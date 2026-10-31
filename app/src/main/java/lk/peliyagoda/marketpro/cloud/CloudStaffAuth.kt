@@ -162,7 +162,7 @@ internal class CloudStaffAuth(context: Context) {
             }
             val status=connection.responseCode
             if (status==401 || status==403 ||
-                (status==400 && route.contains("grant_type=refresh_token"))) throw InvalidAuth()
+                (status==400 && (route.contains("grant_type=refresh_token") || route=="/auth/v1/user"))) throw InvalidAuth()
             if (status !in 200..299) throw IOException(
                 if (status in 400..499) "Staff Auth request was rejected (HTTP $status)"
                 else "Staff Auth temporarily unavailable (HTTP $status)"
