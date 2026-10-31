@@ -151,6 +151,10 @@ internal fun InvoicePhotoControl(
     var photoDialog by remember(businessDate, itemId) { mutableStateOf(false) }
     var cloudBrowseOpen by remember(businessDate, itemId) { mutableStateOf(false) }
     var fullPreview by remember(businessDate, itemId) { mutableStateOf<File?>(null) }
+    var selectedCloudPhoto by remember(businessDate, itemId) { mutableStateOf<MarketPhotoGatewayClient.CloudPhoto?>(null) }
+    var deleteConfirmation by remember(businessDate, itemId) { mutableStateOf(false) }
+    var deletingPhoto by remember(businessDate, itemId) { mutableStateOf(false) }
+    var selectedOriginal by remember(businessDate, itemId) { mutableStateOf<File?>(null) }
     var pendingPath by rememberSaveable(businessDate, itemId) { mutableStateOf("") }
 
     // Per-card directory reads are expensive while fling-scrolling, even
@@ -338,7 +342,7 @@ internal fun InvoicePhotoControl(
                                 onClick = {
                                     photoScope.launch {
                                         runCatching { gateway.download(entry) }
-                                            .onSuccess { fullPreview = it }
+                                            .onSuccess { selectedOriginal = null; selectedCloudPhoto = entry; fullPreview = it }
                                             .onFailure { message("Could Not Load Cloud Photo") }
                                     }
                                 }
@@ -347,7 +351,13 @@ internal fun InvoicePhotoControl(
                         items(photos.orEmpty(), key = { it.absolutePath }) { file ->
                             Row(
                                 modifier = Modifier.fillMaxWidth()
-                                    .clickable { fullPreview = file }
+                                    .clickable {
+                                        selectedOriginal = file
+                                        selectedCloudPhoto = cloudPhotos.firstOrNull { cloud ->
+                                            runCatching { MarketPhotoIdentity.id(file,businessDate,itemId)==cloud.id }.getOrDefault(false)
+                                        }
+                                        fullPreview = file
+                                    }
                                     .padding(vertical = 4.dp),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
@@ -440,8 +450,63 @@ internal fun InvoicePhotoControl(
                     ZoomableInvoiceImage(previewBitmap, "Captured Invoice Photo")
                 }
             },
+            dismissButton = {
+                TextButton(enabled = !deletingPhoto && selectedCloudPhoto != null,
+                    onClick = { deleteConfirmation = true }) {
+                    Text("Delete Photo", color = MaterialTheme.colorScheme.error)
+                }
+            },
             confirmButton = {
-                TextButton(onClick = { fullPreview = null }) { Text("Back To Photos") }
+                TextButton(enabled = !deletingPhoto, onClick = { fullPreview = null }) {
+                    Text("Back To Photos")
+                }
+            }
+        )
+    }
+    if (deleteConfirmation) {
+        AlertDialog(
+            onDismissRequest = { if (!deletingPhoto) deleteConfirmation = false },
+            title = { Text("Delete Invoice Photo?") },
+            text = { Text("Remove this photo from Admin and Subs Cloud Galleries? Admin may delete any date; Subs may delete only their own photo from today. Permission is checked by Cloud.") },
+            dismissButton = {
+                TextButton(enabled = !deletingPhoto, onClick = { deleteConfirmation = false }) {
+                    Text("Cancel")
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = !deletingPhoto, onClick = {
+                    val cloud = selectedCloudPhoto
+                    if (cloud != null) {
+                        deletingPhoto = true
+                        photoScope.launch {
+                            try {
+                                check(gateway.deletePhoto(cloud.id))
+                                val original = selectedOriginal
+                                if (original != null && original.isFile) {
+                                    withContext(Dispatchers.IO) {
+                                        val trash = File(context.filesDir, "photo_deleted_backup")
+                                        if (trash.isDirectory || trash.mkdirs()) {
+                                            original.renameTo(File(trash, cloud.id + ".jpg"))
+                                        }
+                                    }
+                                }
+                                cloudPhotos = cloudPhotos.filterNot { it.id == cloud.id }
+                                fullPreview = null
+                                selectedCloudPhoto = null
+                                selectedOriginal = null
+                                refresh++
+                                cloudRefresh++
+                                message("Photo Removed From Cloud")
+                            } catch (_: Exception) {
+                                message("Delete Failed Or Permission Denied")
+                            } finally {
+                                deletingPhoto = false
+                                deleteConfirmation = false
+                            }
+                        }
+                    }
+                }) { Text(if (deletingPhoto) "Deleting..." else "Delete Photo",
+                    color = MaterialTheme.colorScheme.error) }
             }
         )
     }
