@@ -1,4 +1,4 @@
-name: Market Pro v4.4.2 QA and Signed Candidate
+name: Market Pro v4.4.3 QA and Signed Candidate
 
 on:
   pull_request:
@@ -7,10 +7,10 @@ on:
       - 'stagingMarket/**'
       - 'gradle/**'
       - '*.gradle.kts'
-      - '.github/workflows/marketpro-v442-qa.yml'
+      - '.github/workflows/marketpro-v443-qa.yml'
   push:
     branches:
-      - feature/marketpro-v442-subs-upload-recovery-qa
+      - feature/marketpro-v443-photo-viewer-qa
   workflow_dispatch:
 
 permissions:
@@ -80,11 +80,11 @@ jobs:
           APK="$(find stagingMarket/build/outputs/apk/release -maxdepth 1 -name '*.apk' | head -n 1)"
           test -n "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "package: name='lk.peliyagoda.marketpro.staging.fullapp' versionCode='442' versionName='4.4.2'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "package: name='lk.peliyagoda.marketpro.staging.fullapp' versionCode='443' versionName='4.4.3'"
           sha256sum "$APK" > "$APK.sha256"
       - uses: actions/upload-artifact@v4
         with:
-          name: marketpro-v442-signed-candidate
+          name: marketpro-v443-signed-candidate
           path: |
             stagingMarket/build/outputs/apk/release/*.apk
             stagingMarket/build/outputs/apk/release/*.sha256
@@ -95,34 +95,3 @@ jobs:
 
 
 
-  publish-verified-v442:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Retrieve already QA-passed signed APK
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          gh api /repos/Shanawebs/peliyagoda-market-v2/actions/artifacts/13002464166/zip > candidate.zip
-          unzip -q candidate.zip -d candidate
-      - name: Verify exact candidate
-        run: |
-          set -euo pipefail
-          APK=candidate/stagingMarket-release.apk
-          test "$(sha256sum "$APK" | cut -d ' ' -f 1)" = "e1bd7fa7abc97d382595c987b8b8ecf81e68885a6a1741b47e027c94aec6485b"
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "versionCode='442' versionName='4.4.2'"
-          cp "$APK" MarketPro-v4.4.2-stable-signed.apk
-      - name: Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          TAG=marketpro-stable-signed-v4.4.2
-          if gh release view "$TAG" -R Shanawebs/peliyagoda-market-v2 >/dev/null 2>&1; then
-            gh release view "$TAG" -R Shanawebs/peliyagoda-market-v2 --json assets | jq -e 'any(.assets[]; .name == "MarketPro-v4.4.2-stable-signed.apk")'
-          else
-            gh release create "$TAG" MarketPro-v4.4.2-stable-signed.apk -R Shanawebs/peliyagoda-market-v2 --title "Market Pro v4.4.2 Subs Photo Upload Recovery" --notes "In-place signed upgrade; pending photo recovery diagnostics." --prerelease
-          fi
