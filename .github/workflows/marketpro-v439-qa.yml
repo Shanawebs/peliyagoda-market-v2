@@ -1,4 +1,4 @@
-name: Market Pro v4.4.5 QA and Signed Candidate
+name: Market Pro v4.4.6 QA and Signed Candidate
 
 on:
   pull_request:
@@ -7,10 +7,10 @@ on:
       - 'stagingMarket/**'
       - 'gradle/**'
       - '*.gradle.kts'
-      - '.github/workflows/marketpro-v445-qa.yml'
+      - '.github/workflows/marketpro-v446-qa.yml'
   push:
     branches:
-      - feature/marketpro-v445-secure-photo-delete-qa
+      - feature/marketpro-v446-durable-owner-staff-session-qa
   workflow_dispatch:
 
 permissions:
@@ -80,11 +80,11 @@ jobs:
           APK="$(find stagingMarket/build/outputs/apk/release -maxdepth 1 -name '*.apk' | head -n 1)"
           test -n "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "package: name='lk.peliyagoda.marketpro.staging.fullapp' versionCode='445' versionName='4.4.5'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "package: name='lk.peliyagoda.marketpro.staging.fullapp' versionCode='446' versionName='4.4.6'"
           sha256sum "$APK" > "$APK.sha256"
       - uses: actions/upload-artifact@v4
         with:
-          name: marketpro-v445-signed-candidate
+          name: marketpro-v446-signed-candidate
           path: |
             stagingMarket/build/outputs/apk/release/*.apk
             stagingMarket/build/outputs/apk/release/*.sha256
@@ -99,7 +99,9 @@ jobs:
 
 
 
-  publish-verified-v445:
+
+
+  publish-verified-v446:
     needs: [android-qa, signed-candidate]
     runs-on: ubuntu-latest
     permissions:
@@ -107,39 +109,35 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: marketpro-v445-signed-candidate
+          name: marketpro-v446-signed-candidate
           path: candidate
-      - name: Verify APK identity
+      - name: Verify package and signature
         run: |
           set -euo pipefail
           APK="$(find candidate -type f -name '*.apk' | head -n 1)"
           test -s "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "versionCode='445' versionName='4.4.5'"
-          cp "$APK" MarketPro-v4.4.5-stable-signed.apk
-          echo "SHA256=$(sha256sum "$APK" | cut -d ' ' -f 1) SIZE=$(stat -c %s "$APK")"
-      - name: Publish versioned release
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "versionCode='446' versionName='4.4.6'"
+          cp "$APK" MarketPro-v4.4.6-stable-signed.apk
+          sha256sum "$APK"
+      - name: Publish signed QA release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG=marketpro-stable-signed-v4.4.5
-          if gh release view "$TAG" -R Shanawebs/peliyagoda-market-v2 > /dev/null 2>&1; then
-            echo "Release already exists; no overwrite"
+          TAG=marketpro-stable-signed-v4.4.6
+          if gh release view "$TAG" -R Shanawebs/peliyagoda-market-v2 >/dev/null 2>&1; then
+            echo "Release already exists; will not overwrite an existing signed asset"
           else
-            gh release create "$TAG" MarketPro-v4.4.5-stable-signed.apk -R Shanawebs/peliyagoda-market-v2 --title "Market Pro v4.4.5 Secure Photo Delete" --notes "Signed in-place update. Photo viewer delete confirmation; Admin any date, Subs own same-day photo only. Cloud reversible tombstones; no purchase records deleted." --prerelease
+            gh release create "$TAG" MarketPro-v4.4.6-stable-signed.apk -R Shanawebs/peliyagoda-market-v2 --title "Market Pro v4.4.6 Durable Owner and Subs Sessions" --notes "Signed, in-place update. Automatic access token renewal, safe encrypted refresh-token rotation, cross-worker serialization, periodic best-effort keepalive and per-device manual logout. Existing finance data and invoice photos preserved. Server-side revocation still takes priority." --prerelease
           fi
-
-
-  check-release-v445:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Verify actual public GitHub release asset digest
+      - name: Independently verify release download digest
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh release view marketpro-stable-signed-v4.4.5 -R Shanawebs/peliyagoda-market-v2 --json assets --jq '.assets[] | [.name,.size,.digest] | @tsv'
-          gh release download marketpro-stable-signed-v4.4.5 -R Shanawebs/peliyagoda-market-v2 --pattern 'MarketPro-v4.4.5-stable-signed.apk' --dir /tmp/marketproverify
-          sha256sum /tmp/marketproverify/MarketPro-v4.4.5-stable-signed.apk
-          stat -c '%s' /tmp/marketproverify/MarketPro-v4.4.5-stable-signed.apk
+          mkdir -p release-verify
+          gh release download marketpro-stable-signed-v4.4.6 -R Shanawebs/peliyagoda-market-v2 --pattern 'MarketPro-v4.4.6-stable-signed.apk' --dir release-verify
+          cmp MarketPro-v4.4.6-stable-signed.apk release-verify/MarketPro-v4.4.6-stable-signed.apk
+          echo "RELEASE_SHA256=$(sha256sum release-verify/MarketPro-v4.4.6-stable-signed.apk | cut -d ' ' -f 1)"
+          echo "RELEASE_BYTES=$(stat -c %s release-verify/MarketPro-v4.4.6-stable-signed.apk)"
