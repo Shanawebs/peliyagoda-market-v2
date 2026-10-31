@@ -7,7 +7,7 @@ plugins {
 
 // Android package version is intentionally separate from the launcher label.
 // Keep the home-screen name as "Market Pro" regardless of the release version.
-val marketProDisplayVersion = "4.4.2"
+val marketProDisplayVersion = "4.4.3"
 
 // STAGING ONLY: protected persistent signing key comes from GitHub Actions secrets.
 // Do not commit .jks files or credentials to this public repository.
@@ -68,7 +68,7 @@ android {
         applicationId = "lk.peliyagoda.marketpro.staging.fullapp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 442
+        versionCode = 443
         versionName = marketProDisplayVersion
         // Version metadata remains in the APK for Android Settings > App Info.
         // The launcher title below must NEVER include a version or build channel.
@@ -136,6 +136,7 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.0")
     implementation("androidx.core:core-ktx:1.16.0")
+    implementation("androidx.exifinterface:exifinterface:1.4.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("androidx.work:work-runtime-ktx:2.12.0")
     implementation("androidx.room:room-runtime:2.7.2")

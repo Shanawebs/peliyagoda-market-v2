@@ -3,6 +3,8 @@ package lk.peliyagoda.marketpro.ui
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import androidx.exifinterface.media.ExifInterface
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -107,12 +109,26 @@ internal object InvoicePhotoStore {
                bounds.outHeight / factor > maxPixels * 3 / 2) {
             factor *= 2
         }
-        return BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply {
+        val decoded = BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply {
             inSampleSize = factor
             // Camera invoices do not need a 32-bit alpha channel for preview.
             // Halves preview bitmap RAM without re-encoding original JPEGs.
             inPreferredConfig = Bitmap.Config.RGB_565
-        })
+        }) ?: return null
+        val rotation = runCatching {
+            when(ExifInterface(file.absolutePath).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+                ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                else -> 0f
+            }
+        }.getOrDefault(0f)
+        if(rotation == 0f) return decoded
+        return runCatching {
+            val matrix = Matrix().apply { postRotate(rotation) }
+            Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
+                .also { if(it !== decoded) decoded.recycle() }
+        }.getOrElse { decoded }
     }
 }
 
@@ -421,12 +437,7 @@ internal fun InvoicePhotoControl(
                 if (previewBitmap == null) {
                     Text("Loading Invoice Preview…")
                 } else {
-                    Image(
-                        bitmap = previewBitmap.asImageBitmap(),
-                        contentDescription = "Captured Invoice Photo",
-                        modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp),
-                        contentScale = ContentScale.Fit
-                    )
+                    ZoomableInvoiceImage(previewBitmap, "Captured Invoice Photo")
                 }
             },
             confirmButton = {

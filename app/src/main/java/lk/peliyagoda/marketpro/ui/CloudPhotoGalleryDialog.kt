@@ -173,12 +173,7 @@ internal fun CloudPhotoGalleryDialog(
                 if (bitmap == null) {
                     Text("Loading verified original photo...")
                 } else {
-                    Image(
-                        bitmap = bitmap!!.asImageBitmap(),
-                        contentDescription = "Cloud invoice photo",
-                        modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp),
-                        contentScale = ContentScale.Fit
-                    )
+                    ZoomableInvoiceImage(bitmap!!, "Cloud invoice photo")
                 }
             },
             confirmButton = {
