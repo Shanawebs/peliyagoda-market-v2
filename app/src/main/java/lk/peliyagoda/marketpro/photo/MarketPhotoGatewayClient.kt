@@ -197,6 +197,13 @@ internal class MarketPhotoGatewayClient(context:Context) {
         }
     }
 
+    suspend fun deletePhoto(photoId:String):Boolean {
+        val payload=JSONObject().put("photo_id",uuid(photoId)).toString()
+            .toByteArray(StandardCharsets.UTF_8)
+        val reply=requireNotNull(request("delete_photo",payload))
+        return reply.optString("code") in setOf("DELETED","ALREADY_DELETED")
+    }
+
     suspend fun download(photo:CloudPhoto):File=withContext(Dispatchers.IO){
         require(photo.bytes in 1L..(16L*1024*1024))
         val dir=File(app.cacheDir,"marketpro_box_previews")
