@@ -129,3 +129,14 @@ jobs:
           else
             gh release create "$TAG" MarketPro-v4.4.3-stable-signed.apk -R Shanawebs/peliyagoda-market-v2 --title "Market Pro v4.4.3 Photo Viewer" --notes "Signed in-place update. Adds pinch zoom/pan and EXIF-correct photo display. Original JPEG unchanged. Photo deletion is not yet available." --prerelease
           fi
+
+  updater-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Print updater code file paths and safe snippets
+        run: |
+          echo '=== UPDATER FILE PATHS ==='
+          rg -l 'Check For Updates|marketpro_public_update_channel|marketpro-staging|DownloadManager|apk_url' app/src stagingMarket/src || true
+          echo '=== UPDATER RELEVANT LINES ==='
+          rg -n -C 2 'marketpro_public_update_channel|marketpro-staging|apk_url|DownloadManager|Check For Updates' app/src stagingMarket/src | head -160 || true
