@@ -47,6 +47,7 @@ class CloudOwnerAuth(private val app: Context) {
 
     private val prefs = app.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     private val authMutex = sharedAuthMutex
+    private class RejectedSession : IOException("Cloud Owner Session Expired - Please Sign In Again")
 
     private fun aesKey(): SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -122,6 +123,8 @@ class CloudOwnerAuth(private val app: Context) {
                 reader.readText().take(32768)
             } ?: ""
             if (status !in 200..299) {
+                if ((status == 401 || status == 403) && accessToken != null) throw RejectedSession()
+                if (status == 400 && path.contains("grant_type=refresh_token")) throw RejectedSession()
                 // Never surface service error payloads: they may contain identity details.
                 throw IOException(if (status in 400..499) {
                     "Authentication was not accepted. Check your email verification and credentials (HTTP $status)."
@@ -170,9 +173,9 @@ class CloudOwnerAuth(private val app: Context) {
 
     suspend fun currentAccount(): Account? = withContext(Dispatchers.IO) { authMutex.withLock {
         val old = saved() ?: return@withLock null
-        val first = runCatching { request("/auth/v1/user", "GET", accessToken = old.accessToken) }
-        var profile = first.getOrNull()
-        if (profile == null) {
+        val profile = try {
+            request("/auth/v1/user", "GET", accessToken = old.accessToken)
+        } catch (_: RejectedSession) {
             val refreshed = request(
                 "/auth/v1/token?grant_type=refresh_token", "POST",
                 JSONObject().put("refresh_token", old.refreshToken)
@@ -182,8 +185,13 @@ class CloudOwnerAuth(private val app: Context) {
                 refreshed.getString("access_token"),
                 refreshed.getString("refresh_token")
             )
-            profile = request("/auth/v1/user", "GET", accessToken = tokens.accessToken)
+            val verified = request("/auth/v1/user", "GET", accessToken = tokens.accessToken)
+            check(normalizedEmail(verified.getString("email")) == old.email &&
+                verified.getString("id") == CloudSyncConfig.OWNER_USER_ID) {
+                "Owner identity changed during session renewal"
+            }
             remember(tokens)
+            verified
         }
         val account = Account(
             email = normalizedEmail(profile.getString("email")),
