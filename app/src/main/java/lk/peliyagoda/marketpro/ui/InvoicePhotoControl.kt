@@ -95,6 +95,32 @@ internal object InvoicePhotoStore {
         return File.createTempFile("invoice_${System.currentTimeMillis()}_", ".jpg", dir)
     }
 
+    /**
+     * Archive a deleted Cloud photo's matching private original without
+     * destroying bytes. Stops the scanner showing it in the item card.
+     */
+    fun archiveDeletedCloudOriginal(context: Context, day: String, cloudPhotoId: String): Boolean {
+        val dateFolder = File(File(context.filesDir, "invoices"), day)
+        val trash = File(context.filesDir, "photo_deleted_backup")
+        for (itemFolder in dateFolder.listFiles().orEmpty()) {
+            if (!itemFolder.isDirectory || !itemFolder.name.startsWith("item-")) continue
+            val localId = itemFolder.name.removePrefix("item-").toLongOrNull() ?: continue
+            if (localId <= 0L || itemFolder.name != "item-$localId") continue
+            for (file in itemFolder.listFiles().orEmpty()) {
+                if (!file.isFile || !file.extension.equals("jpg", true)) continue
+                val matches = runCatching {
+                    MarketPhotoIdentity.id(file, day, localId) == cloudPhotoId
+                }.getOrDefault(false)
+                if (matches) {
+                    if (!trash.isDirectory && !trash.mkdirs()) return false
+                    val target = File(trash, cloudPhotoId + ".jpg")
+                    return target.exists() || file.renameTo(target)
+                }
+            }
+        }
+        return false
+    }
+
     fun cameraUri(context: Context, file: File) =
         FileProvider.getUriForFile(context, "${context.packageName}.invoiceprovider", file)
 
@@ -481,14 +507,9 @@ internal fun InvoicePhotoControl(
                         photoScope.launch {
                             try {
                                 check(gateway.deletePhoto(cloud.id))
-                                val original = selectedOriginal
-                                if (original != null && original.isFile) {
-                                    withContext(Dispatchers.IO) {
-                                        val trash = File(context.filesDir, "photo_deleted_backup")
-                                        if (trash.isDirectory || trash.mkdirs()) {
-                                            original.renameTo(File(trash, cloud.id + ".jpg"))
-                                        }
-                                    }
+                                withContext(Dispatchers.IO) {
+                                    InvoicePhotoStore.archiveDeletedCloudOriginal(
+                                        context, businessDate, cloud.id)
                                 }
                                 cloudPhotos = cloudPhotos.filterNot { it.id == cloud.id }
                                 fullPreview = null
