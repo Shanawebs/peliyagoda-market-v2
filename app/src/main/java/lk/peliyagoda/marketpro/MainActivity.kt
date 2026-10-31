@@ -12,6 +12,7 @@ import androidx.activity.viewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.work.WorkManager
 import kotlinx.coroutines.launch
+import lk.peliyagoda.marketpro.cloud.MarketProSessionMaintenance
 import lk.peliyagoda.marketpro.data.MarketDatabase
 import lk.peliyagoda.marketpro.data.MarketRepository
 import lk.peliyagoda.marketpro.ui.MarketProApp
@@ -46,6 +47,7 @@ class MainActivity : ComponentActivity() {
             showRecoveryDialog()
             return
         }
+        MarketProSessionMaintenance.schedule(applicationContext)
         setContent { MarketProApp(model) }
     }
 
