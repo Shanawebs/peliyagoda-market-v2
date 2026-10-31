@@ -220,6 +220,7 @@ fun MarketProApp(vm: MarketViewModel) {
         var ownerLoginOpen by remember { mutableStateOf(false) }
         var helpOpen by remember { mutableStateOf(false) }
         var securityStatusOpen by remember { mutableStateOf(false) }
+    var fiveSubsOpen by remember { mutableStateOf(false) }
         var restorePinOpen by remember { mutableStateOf(false) }
         var restoreAuthorized by remember { mutableStateOf(false) }
         val restorePinGuard = remember(context) { RestorePinGuard(context.applicationContext) }
@@ -391,6 +392,9 @@ fun MarketProApp(vm: MarketViewModel) {
 
         if (securityStatusOpen) {
             SecurityAndTeamStatusDialog(onDismiss = { securityStatusOpen = false })
+        }
+        if (fiveSubsOpen) {
+            FiveSubsManagementDialog(onDismiss = { fiveSubsOpen = false })
         }
         if (restorePinOpen) {
             RestorePinDialog(
@@ -613,6 +617,15 @@ fun MarketProApp(vm: MarketViewModel) {
                                         menuOpen = false
                                         cloudStatusOpen = true
                                     })
+                                }
+                                if (!BuildConfig.MARKETPRO_LOCAL_PREVIEW) {
+                                    DropdownMenuItem(
+                                        text = { Text("Manage Subs (Up To 5)", color = Color(0xFF605B88), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge) },
+                                        onClick = {
+                                            menuOpen = false
+                                            fiveSubsOpen = true
+                                        }
+                                    )
                                 }
                                 DropdownMenuItem(
                                     text = {
