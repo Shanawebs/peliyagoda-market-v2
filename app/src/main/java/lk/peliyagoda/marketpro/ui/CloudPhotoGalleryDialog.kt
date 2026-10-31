@@ -65,6 +65,9 @@ internal fun CloudPhotoGalleryDialog(
     }
     var notice by remember(day) { mutableStateOf("") }
     var selectedFile by remember { mutableStateOf<File?>(null) }
+    var selectedPhoto by remember { mutableStateOf<MarketPhotoGatewayClient.CloudPhoto?>(null) }
+    var confirmDelete by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf(false) }
     var selectedName by remember { mutableStateOf("") }
 
     LaunchedEffect(day, refresh) {
@@ -76,9 +79,17 @@ internal fun CloudPhotoGalleryDialog(
                 photos = rows
                 if (rows.isEmpty()) notice = "No Cloud photos for this date."
             }
-            .onFailure {
-                notice = "Could not retrieve Cloud photos. Verify Team login, " +
-                    "approved Phone Photo Key and Internet connection."
+            .onFailure { error ->
+                // Keep diagnosis useful on Owner and Subs, without exposing
+                // access tokens, request bodies, private keys or server payloads.
+                notice = when (error) {
+                    is java.io.IOException -> error.message?.take(180)
+                        ?: "Cloud connection unavailable. Check Internet."
+                    is IllegalStateException -> "Cloud Owner or Subs login session unavailable. Open Cloud login and verify the current session."
+                    is SecurityException -> "Photo key or device authorization failed."
+                    else -> "Cloud photo request failed (" +
+                        error.javaClass.simpleName.take(40) + ")."
+                }
             }
         loading = false
     }
@@ -134,6 +145,7 @@ internal fun CloudPhotoGalleryDialog(
                                         try {
                                             val file = gateway.download(photo)
                                             selectedName = photo.itemName ?: "Invoice Photo"
+                                            selectedPhoto = photo
                                             selectedFile = file
                                         } catch (e: Exception) {
                                             notice = "Could not download this Cloud photo. " +
@@ -176,9 +188,57 @@ internal fun CloudPhotoGalleryDialog(
                     ZoomableInvoiceImage(bitmap!!, "Cloud invoice photo")
                 }
             },
+            dismissButton = {
+                TextButton(enabled = !deleting && selectedPhoto != null,
+                    onClick = { confirmDelete = true }) {
+                    Text("Delete Photo", color = MaterialTheme.colorScheme.error)
+                }
+            },
             confirmButton = {
                 TextButton(onClick = { selectedFile = null }) { Text("Back To Gallery") }
             }
         )
     }
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { if (!deleting) confirmDelete = false },
+            title = { Text("Delete Cloud Photo?") },
+            text = { Text("The photo will disappear from Admin and Subs Cloud Galleries. The Cloud verifies deletion permissions.") },
+            dismissButton = {
+                TextButton(enabled = !deleting, onClick = { confirmDelete = false }) {
+                    Text("Cancel")
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = !deleting, onClick = {
+                    val photo = selectedPhoto
+                    if (photo != null) {
+                        deleting = true
+                        scope.launch {
+                            try {
+                                check(gateway.deletePhoto(photo.id))
+                                withContext(Dispatchers.IO) {
+                                    InvoicePhotoStore.archiveDeletedCloudOriginal(
+                                        context, day.toString(), photo.id)
+                                }
+                                photos = photos.filterNot { it.id == photo.id }
+                                selectedFile = null
+                                selectedPhoto = null
+                                notice = "Photo removed from Cloud."
+                                refresh++
+                            } catch (_: Exception) {
+                                notice = "Delete failed or permission denied."
+                            } finally {
+                                deleting = false
+                                confirmDelete = false
+                            }
+                        }
+                    }
+                }) {
+                    Text("Delete Photo", color = MaterialTheme.colorScheme.error)
+                }
+            }
+        )
+    }
+
 }
