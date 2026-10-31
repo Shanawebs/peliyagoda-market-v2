@@ -96,3 +96,32 @@ jobs:
 
 
 
+
+  publish-verified-v444:
+    needs: [android-qa, signed-candidate]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: marketpro-v444-signed-candidate
+          path: candidate
+      - name: Verify signed updater APK
+        run: |
+          set -euo pipefail
+          APK="$(find candidate -type f -name '*.apk' | head -n 1)"
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "versionCode='444' versionName='4.4.4'"
+          SHA="$(sha256sum "$APK" | cut -d ' ' -f 1)"
+          SIZE="$(stat -c %s "$APK")"
+          echo "Verified SHA256=$SHA SIZE=$SIZE"
+          cp "$APK" MarketPro-v4.4.4-stable-signed.apk
+      - name: Publish signed GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG=marketpro-stable-signed-v4.4.4
+          gh release create "$TAG" MarketPro-v4.4.4-stable-signed.apk -R Shanawebs/peliyagoda-market-v2 --title "Market Pro v4.4.4 Reliable In-App Updates" --notes "In-place signed update. Fixes Check For Updates when GitHub API succeeds without eligible assets; Supabase update channel is always checked." --prerelease
