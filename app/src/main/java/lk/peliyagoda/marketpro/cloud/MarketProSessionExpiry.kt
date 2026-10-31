@@ -1,6 +1,6 @@
 package lk.peliyagoda.marketpro.cloud
 
-import android.util.Base64
+import java.util.Base64
 import org.json.JSONObject
 
 /**
@@ -14,7 +14,7 @@ internal object MarketProSessionExpiry {
             val parts = accessToken.split('.')
             if (parts.size != 3) return true
             val decoded = String(
-                Base64.decode(parts[1], Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING),
+                Base64.getUrlDecoder().decode(parts[1]),
                 Charsets.UTF_8
             )
             val expiration = JSONObject(decoded).optLong("exp", 0L)
