@@ -7,7 +7,7 @@ import java.util.Base64
  * authorization: Supabase /auth/v1/user and RLS/device checks are authoritative.
  */
 internal object MarketProSessionExpiry {
-    private val expiry = Regex("""(?:^|[,{\}s])"exp"\s*:\s*(\d{1,15})(?=[,}\s]|$)""")
+    private val expiry = Regex("""[,{]\s*"exp"\s*:\s*(\d{1,15})""")
 
     fun shouldRefresh(accessToken: String, nowMs: Long = System.currentTimeMillis()): Boolean {
         return try {
