@@ -1,0 +1,21 @@
+name: Market Pro updater source audit
+on:
+  push:
+    branches:
+      - feature/marketpro-v443-photo-viewer-qa
+    paths:
+      - '.github/workflows/marketpro-updater-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Identify updater implementation without exposing credentials
+        run: |
+          echo '=== UPDATER SOURCE PATHS ==='
+          rg -l 'Check For Updates|marketpro_public_update_channel|marketpro-staging|DownloadManager|ACTION_VIEW|ACTION_INSTALL_PACKAGE|apk_url' app/src stagingMarket/src || true
+          echo '=== SOURCE RELEVANT SNIPPETS ==='
+          rg -n -C 3 'marketpro_public_update_channel|marketpro-staging|apk_url|DownloadManager|checkForUpdate|Check For Updates' app/src stagingMarket/src | head -220 || true
