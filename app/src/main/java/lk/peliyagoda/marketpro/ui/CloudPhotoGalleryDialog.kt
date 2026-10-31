@@ -209,6 +209,10 @@ internal fun CloudPhotoGalleryDialog(
                         scope.launch {
                             try {
                                 check(gateway.deletePhoto(photo.id))
+                                withContext(Dispatchers.IO) {
+                                    InvoicePhotoStore.archiveDeletedCloudOriginal(
+                                        context, day.toString(), photo.id)
+                                }
                                 photos = photos.filterNot { it.id == photo.id }
                                 selectedFile = null
                                 selectedPhoto = null
