@@ -95,3 +95,37 @@ jobs:
 
 
 
+
+  publish-verified-v443:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Retrieve successfully tested v4.4.3 signed artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api /repos/Shanawebs/peliyagoda-market-v2/actions/artifacts/13035115244/zip > candidate.zip
+          unzip -q candidate.zip -d candidate
+      - name: Verify signed APK checksum and version
+        run: |
+          set -euo pipefail
+          APK=candidate/stagingMarket-release.apk
+          test -s "$APK"
+          test "$(stat -c %s "$APK")" = "13172991"
+          test "$(sha256sum "$APK" | cut -d ' ' -f 1)" = "2de77e9642079c3619a9703668ca689d7a0e919ddfae3adbfd00e4de22626d8f"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "versionCode='443' versionName='4.4.3'"
+          cp "$APK" MarketPro-v4.4.3-stable-signed.apk
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG=marketpro-stable-signed-v4.4.3
+          if gh release view "$TAG" -R Shanawebs/peliyagoda-market-v2 >/dev/null 2>&1; then
+            gh release view "$TAG" -R Shanawebs/peliyagoda-market-v2 --json assets | jq -e 'any(.assets[]; .name == "MarketPro-v4.4.3-stable-signed.apk")'
+          else
+            gh release create "$TAG" MarketPro-v4.4.3-stable-signed.apk -R Shanawebs/peliyagoda-market-v2 --title "Market Pro v4.4.3 Photo Viewer" --notes "Signed in-place update. Adds pinch zoom/pan and EXIF-correct photo display. Original JPEG unchanged. Photo deletion is not yet available." --prerelease
+          fi
