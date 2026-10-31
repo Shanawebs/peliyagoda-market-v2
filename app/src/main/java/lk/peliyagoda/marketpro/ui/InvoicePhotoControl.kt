@@ -437,12 +437,7 @@ internal fun InvoicePhotoControl(
                 if (previewBitmap == null) {
                     Text("Loading Invoice Preview…")
                 } else {
-                    Image(
-                        bitmap = previewBitmap.asImageBitmap(),
-                        contentDescription = "Captured Invoice Photo",
-                        modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp),
-                        contentScale = ContentScale.Fit
-                    )
+                    ZoomableInvoiceImage(previewBitmap, "Captured Invoice Photo")
                 }
             },
             confirmButton = {
