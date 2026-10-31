@@ -8,6 +8,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -20,6 +22,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import lk.peliyagoda.marketpro.BuildConfig
 import lk.peliyagoda.marketpro.cloud.CloudPhoneRegistryClient
+import lk.peliyagoda.marketpro.cloud.MarketProActiveRole
+import lk.peliyagoda.marketpro.cloud.MarketProSubsAdminClient
+import lk.peliyagoda.marketpro.cloud.TeamRole
 import lk.peliyagoda.marketpro.cloud.OneMarketProPullSessionProvider
 import lk.peliyagoda.marketpro.cloud.TeamInboxDownloadCoordinator
 import lk.peliyagoda.marketpro.cloud.TeamPullRequestPolicy
@@ -61,6 +66,9 @@ internal fun CloudPhoneManagementPanel() {
         verticalArrangement=Arrangement.spacedBy(8.dp)) {
         HorizontalDivider()
         Text("Cloud Phone Linking",fontWeight=FontWeight.Bold)
+        if (MarketProActiveRole.current(context) == TeamRole.OWNER) {
+            OwnerFiveSubsProvisioningPanel()
+        }
         Text("එකම Market Pro APK එකෙන් Owner/Team Login වෙන්න. " +
             "Ownerට එක active phone එකයි. Team phones කිහිපයක් Approve කළ හැකියි.")
         Button(
@@ -151,5 +159,41 @@ internal fun CloudPhoneManagementPanel() {
             client = client,
             onClose = { showPhoneManager = false }
         )
+    }
+}
+
+/** Server validates the Owner, device, fresh MFA and five-account limit. */
+@Composable
+private fun OwnerFiveSubsProvisioningPanel() {
+    val context = LocalContext.current.applicationContext
+    val scope = rememberCoroutineScope()
+    val client = remember(context) { MarketProSubsAdminClient(context) }
+    var email by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var confirmed by remember { mutableStateOf(false) }
+    var notice by remember { mutableStateOf("") }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Owner — Manage Up To 5 Subscribers", style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold)
+        Text("First create and verify each separate Subs login. Owner approval requires a fresh Authenticator MFA verification. Phone and Photo Key approval are separate steps.",
+            style = MaterialTheme.typography.bodySmall)
+        OutlinedTextField(value = email, onValueChange = { email = it.trim().take(254); confirmed = false },
+            label = { Text("Verified Subs Email") }, singleLine = true,
+            modifier = Modifier.fillMaxWidth(), enabled = !busy)
+        androidx.compose.material3.Checkbox(checked = confirmed, onCheckedChange = { confirmed = it }, enabled = !busy)
+        Text("I confirm that this verified account belongs to an authorized Subs user.",
+            style = MaterialTheme.typography.bodySmall)
+        Button(enabled = !busy && confirmed && email.contains('@') &&
+            !BuildConfig.MARKETPRO_LOCAL_PREVIEW, onClick = {
+            busy = true
+            notice = ""
+            val target = email
+            scope.launch {
+                try { notice = client.approveVerifiedMember(target); email = ""; confirmed = false }
+                catch (e: Exception) { notice = e.message ?: "Subs approval failed" }
+                finally { busy = false }
+            }
+        }, modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Checking..." else "Approve Subs Account") }
+        if (notice.isNotBlank()) Text(notice, style = MaterialTheme.typography.bodySmall)
     }
 }
