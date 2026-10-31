@@ -36,10 +36,12 @@ internal class CloudStaffAuth(context: Context) {
     private val app = context.applicationContext
     private val prefs = app.getSharedPreferences("marketpro_cloud_staff_session_v1",
         Context.MODE_PRIVATE)
-    private val mutex = Mutex()
+    private val mutex = sharedSessionMutex
 
     companion object {
         private const val KEY = "encrypted_staff_tokens_v1"
+        // One mutex across every worker/UI instance; rotation is single-use.
+        private val sharedSessionMutex = Mutex()
         private const val ALIAS = "marketpro_staff_aes256_gcm_v1"
         private val HOST = BuildConfig.MARKETPRO_SUPABASE_HOST
         private const val RESPONSE_BYTES = 32768
@@ -54,7 +56,7 @@ internal class CloudStaffAuth(context: Context) {
         override fun toString(): String =
             "StaffEncryptedSession(userId=$userId, email=$email, tokens=[REDACTED])"
     }
-    private class InvalidAuth : IOException("Staff sign-in expired or was rejected")
+    private class InvalidAuth : IOException("Subs Session Expired — Please Sign In Again")
 
     private fun requireActivatedAuth() {
         check(StaffAuthSafetyPolicy.allowIdentityLogin(
@@ -159,7 +161,8 @@ internal class CloudStaffAuth(context: Context) {
                 connection.outputStream.use { it.write(bytes) }
             }
             val status=connection.responseCode
-            if (status==401 || status==403) throw InvalidAuth()
+            if (status==401 || status==403 ||
+                (status==400 && route.contains("grant_type=refresh_token"))) throw InvalidAuth()
             if (status !in 200..299) throw IOException(
                 if (status in 400..499) "Staff Auth request was rejected (HTTP $status)"
                 else "Staff Auth temporarily unavailable (HTTP $status)"
@@ -252,10 +255,7 @@ internal class CloudStaffAuth(context: Context) {
             }
         }
 
-    /**
-     * Refreshes expired session under one mutex. A verified *same* JWT subject
-     * is required after refresh. Server separately checks workspace/device.
-     */
+    /** Preserve existing Team Pull feature gating and permissions. */
     suspend fun verifiedPullSession(): TeamPullSession {
         check(BuildConfig.MARKETPRO_TEAM_PULL_RPC_DEPLOYED) {
             "Team cloud downloads are not released yet"
@@ -263,30 +263,38 @@ internal class CloudStaffAuth(context: Context) {
         return verifiedPhoneSession()
     }
 
-    /** Safe identity-only verification for pairing; does NOT enable Cloud Pull. */
+    /**
+     * Store every successful rotated token pair BEFORE subsequent network calls.
+     * A transient /user timeout must never discard the only valid refresh token.
+     */
+    private fun refreshAndPersist(old: Session): Session {
+        val refreshed = request("/auth/v1/token?grant_type=refresh_token", "POST",
+            JSONObject().put("refresh_token", old.refreshToken))
+        val rotated = old.copy(
+            accessToken = refreshed.getString("access_token"),
+            refreshToken = refreshed.getString("refresh_token")
+        )
+        check(rotated.accessToken.isNotBlank() && rotated.refreshToken.isNotBlank())
+        store(rotated)
+        return rotated
+    }
+
+    /** Verified session for phone linking and photo access. */
     suspend fun verifiedPhoneSession(): TeamPullSession = withContext(Dispatchers.IO) {
         mutex.withLock {
             requireActivatedAuth()
-            val old=readStored() ?: error("Sign in with the dedicated Staff account")
-            var active=old
-            val profile=try {
-                request("/auth/v1/user","GET",bearer=old.accessToken)
-            } catch (_: InvalidAuth) {
-                val refreshed=try {
-                    request("/auth/v1/token?grant_type=refresh_token","POST",
-                        JSONObject().put("refresh_token",old.refreshToken))
-                } catch (e:InvalidAuth) {
-                    prefs.edit().remove(KEY).commit()
-                    throw e
-                }
-                active=old.copy(
-                    accessToken=refreshed.getString("access_token"),
-                    refreshToken=refreshed.getString("refresh_token")
-                )
-                request("/auth/v1/user","GET",bearer=active.accessToken)
+            val old = readStored() ?: error("Subs Session Expired — Please Sign In Again")
+            var active = old
+            if (MarketProSessionExpiry.shouldRefresh(active.accessToken)) {
+                active = refreshAndPersist(active)
             }
-            validateProfile(profile,old.email,old.userId)
-            if (active != old) store(active)
+            val profile = try {
+                request("/auth/v1/user", "GET", bearer=active.accessToken)
+            } catch (error: InvalidAuth) {
+                active = refreshAndPersist(active)
+                request("/auth/v1/user", "GET", bearer=active.accessToken)
+            }
+            validateProfile(profile, old.email, old.userId)
             TeamPullSession(
                 accessToken=active.accessToken,
                 authenticatedUserId=old.userId,
