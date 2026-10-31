@@ -406,7 +406,7 @@ class CloudOwnerAuth(private val app: Context) {
     suspend fun signOut() = withContext(Dispatchers.IO) { authMutex.withLock {
         val old = saved()
         try {
-            if (old != null) request("/auth/v1/logout", "POST", accessToken = old.accessToken)
+            if (old != null) request("/auth/v1/logout?scope=local", "POST", accessToken = old.accessToken)
         } catch (_: Exception) {
             // Offline sign out still clears this device's encrypted credentials.
             // Remote tokens expire according to the project's Auth settings.
