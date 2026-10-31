@@ -79,9 +79,17 @@ internal fun CloudPhotoGalleryDialog(
                 photos = rows
                 if (rows.isEmpty()) notice = "No Cloud photos for this date."
             }
-            .onFailure {
-                notice = "Could not retrieve Cloud photos. Verify Team login, " +
-                    "approved Phone Photo Key and Internet connection."
+            .onFailure { error ->
+                // Keep diagnosis useful on Owner and Subs, without exposing
+                // access tokens, request bodies, private keys or server payloads.
+                notice = when (error) {
+                    is java.io.IOException -> error.message?.take(180)
+                        ?: "Cloud connection unavailable. Check Internet."
+                    is IllegalStateException -> "Cloud Owner or Subs login session unavailable. Open Cloud login and verify the current session."
+                    is SecurityException -> "Photo key or device authorization failed."
+                    else -> "Cloud photo request failed (" +
+                        error.javaClass.simpleName.take(40) + ")."
+                }
             }
         loading = false
     }
