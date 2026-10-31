@@ -137,6 +137,6 @@ jobs:
       - name: Print updater code file paths and safe snippets
         run: |
           echo '=== UPDATER FILE PATHS ==='
-          rg -l 'Check For Updates|marketpro_public_update_channel|marketpro-staging|DownloadManager|apk_url' app/src stagingMarket/src || true
+          grep -RIlE 'Check For Updates|marketpro_public_update_channel|marketpro-staging|DownloadManager|apk_url' app/src stagingMarket/src || true
           echo '=== UPDATER RELEVANT LINES ==='
-          rg -n -C 2 'marketpro_public_update_channel|marketpro-staging|apk_url|DownloadManager|Check For Updates' app/src stagingMarket/src | head -160 || true
+          grep -RnE -C 2 'marketpro_public_update_channel|marketpro-staging|apk_url|DownloadManager|Check For Updates' app/src stagingMarket/src | head -160 || true
