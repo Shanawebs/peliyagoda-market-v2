@@ -36,9 +36,10 @@ internal class CloudStaffAuth(context: Context) {
     private val app = context.applicationContext
     private val prefs = app.getSharedPreferences("marketpro_cloud_staff_session_v1",
         Context.MODE_PRIVATE)
-    private val mutex = Mutex()
+    private val mutex = sharedStaffAuthMutex
 
     companion object {
+        private val sharedStaffAuthMutex = Mutex()
         private const val KEY = "encrypted_staff_tokens_v1"
         private const val ALIAS = "marketpro_staff_aes256_gcm_v1"
         private val HOST = BuildConfig.MARKETPRO_SUPABASE_HOST
@@ -159,7 +160,8 @@ internal class CloudStaffAuth(context: Context) {
                 connection.outputStream.use { it.write(bytes) }
             }
             val status=connection.responseCode
-            if (status==401 || status==403) throw InvalidAuth()
+            if (status==401 || status==403 ||
+                (status==400 && route.contains("grant_type=refresh_token"))) throw InvalidAuth()
             if (status !in 200..299) throw IOException(
                 if (status in 400..499) "Staff Auth request was rejected (HTTP $status)"
                 else "Staff Auth temporarily unavailable (HTTP $status)"
@@ -276,7 +278,8 @@ internal class CloudStaffAuth(context: Context) {
                     request("/auth/v1/token?grant_type=refresh_token","POST",
                         JSONObject().put("refresh_token",old.refreshToken))
                 } catch (e:InvalidAuth) {
-                    prefs.edit().remove(KEY).commit()
+                    // Do not silently log out or delete encrypted credentials.
+                    // A revoked refresh token requires manual reauthentication.
                     throw e
                 }
                 active=old.copy(
