@@ -131,3 +131,17 @@ jobs:
           else
             gh release create "$TAG" MarketPro-v4.4.6-stable-signed.apk -R Shanawebs/peliyagoda-market-v2 --title "Market Pro v4.4.6 Session Reliability" --notes "In-place signed update. Owner and Subs session refresh improvements without never-expiring credentials. Sign-in needed only if session revoked/invalidated." --prerelease
           fi
+
+
+  verify-public-release-v446:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify immutable public release download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release view marketpro-stable-signed-v4.4.6 -R Shanawebs/peliyagoda-market-v2 --json assets --jq '.assets[] | [.name,.size,.digest] | @tsv'
+          gh release download marketpro-stable-signed-v4.4.6 -R Shanawebs/peliyagoda-market-v2 --pattern 'MarketPro-v4.4.6-stable-signed.apk' --dir /tmp/marketproverify
+          sha256sum /tmp/marketproverify/MarketPro-v4.4.6-stable-signed.apk
+          stat -c '%s' /tmp/marketproverify/MarketPro-v4.4.6-stable-signed.apk
